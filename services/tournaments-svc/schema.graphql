@@ -1,0 +1,179 @@
+type Query {
+  health: String!
+  version: String!
+  tournaments: [Tournament!]!
+  tournament(id: ID!): Tournament
+}
+
+enum TournamentStatus {
+  draft
+  published
+}
+
+enum InscriptionMode {
+  public
+  invitation
+}
+
+type Mutation {
+  createTournament(
+    name: String!
+    sport: String!
+    season: String
+    venue: String
+    organizer: String
+    participantType: String
+    inscriptionMode: InscriptionMode!
+    status: TournamentStatus!
+  ): Tournament!
+  createCompetition(tournamentId: ID!, name: String!, order: Int!): Competition!
+  addStage(
+    competitionId: ID!,
+    name: String!,
+    order: Int!,
+    format: StageFormat!,
+    configJson: String,
+    childrenJson: String
+  ): Stage!
+  addTransitionTopN(fromStageId: ID!, toStageId: ID!, topN: Int!): Transition!
+  addTransition(
+    fromStageId: ID!,
+    toStageId: ID,
+    label: String!,
+    selectionKind: String!,
+    topN: Int,
+    rangeFrom: Int,
+    rangeTo: Int,
+    bottomN: Int,
+    toExternalTournamentId: String,
+    toExternalStageId: String,
+    toExternalTournamentName: String,
+    carryOverJson: String
+  ): Transition!
+  addGroup(stageId: ID!, name: String!, order: Int!): Group!
+  addTeamToGroup(groupId: ID!, teamId: ID!): Boolean!
+  addCompetitorToGroup(
+    groupId: ID!,
+    competitorId: ID!,
+    kind: CompetitorKind!,
+    displayName: String!,
+    shortName: String,
+    avatarUrl: String,
+    badgeUrl: String
+  ): Boolean!
+  upsertCompetitor(
+    competitorId: ID!,
+    kind: CompetitorKind!,
+    displayName: String!,
+    shortName: String,
+    avatarUrl: String,
+    badgeUrl: String
+  ): Competitor!
+  createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
+  addKey(stageId: ID!, name: String!, order: Int!): Key!
+  linkGroupToKey(keyId: ID!, groupId: ID!): Boolean!
+}
+
+type Tournament {
+  id: ID!
+  name: String!
+  sport: String!
+  season: String
+  venue: String
+  organizer: String
+  participantType: String
+  inscriptionMode: InscriptionMode!
+  status: TournamentStatus!
+  competitions: [Competition!]!
+}
+
+enum StageFormat {
+  league
+  groups
+  elimination
+  composed
+}
+
+type Stage {
+  id: ID!
+  name: String!
+  order: Int!
+  format: StageFormat!
+  configJson: String
+  childrenJson: String
+  transitions: [Transition!]!
+  groups: [Group!]!
+  keys: [Key!]!
+  matches: [Match!]!
+}
+
+type Competition {
+  id: ID!
+  name: String!
+  order: Int!
+  stages: [Stage!]!
+}
+
+type Transition {
+  id: ID!
+  type: String!
+  label: String
+  selectionKind: String
+  topN: Int
+  rangeFrom: Int
+  rangeTo: Int
+  bottomN: Int
+  toExternalTournamentId: String
+  toExternalStageId: String
+  toExternalTournamentName: String
+  carryOverJson: String
+}
+
+type Group {
+  id: ID!
+  name: String!
+  order: Int!
+  competitorIds: [ID!]!
+  competitors: [Competitor!]!
+}
+
+type Match {
+  id: ID!
+  round: Int
+  leg: Int
+  scheduledAt: String
+  homeTeamId: ID!
+  awayTeamId: ID!
+  homeCompetitor: Competitor
+  awayCompetitor: Competitor
+}
+
+type Key {
+  id: ID!
+  name: String!
+  order: Int!
+  groupIds: [ID!]!
+}
+
+type Team {
+  id: ID!
+}
+
+enum CompetitorKind {
+  team
+  participant
+}
+
+type Competitor {
+  id: ID!
+  kind: CompetitorKind!
+  displayName: String!
+  shortName: String
+  avatarUrl: String
+  badgeUrl: String
+  source: String
+  updatedAt: String
+}
+
+
+
