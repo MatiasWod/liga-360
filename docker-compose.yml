@@ -27,6 +27,19 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
+  auth-svc:
+    build: ./services/auth-svc
+    container_name: liga360-auth-svc
+    environment:
+      - PORT=4003
+      - JWT_SECRET=devsecret
+      - POSTGRES_URL=postgresql://liga:liga@postgres:5432/liga360
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+    ports:
+      - '4003:4003'
+
   tournaments-svc:
     build: ./services/tournaments-svc
     container_name: liga360-tournaments-svc
@@ -54,16 +67,7 @@ services:
     ports:
       - '4002:4002'
 
-  auth-svc:
-    build: ./services/auth-svc
-    container_name: liga360-auth-svc
-    environment:
-      - PORT=4003
-      - JWT_SECRET=devsecret
-      - POSTGRES_URL=postgresql://liga:liga@postgres:5432/liga360
-      - NODE_ENV=production
-    ports:
-      - '4003:4003'
+
 
   inscriptions-svc:
     build: ./services/inscriptions-svc
