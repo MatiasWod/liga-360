@@ -11,6 +11,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
 const { Pool } = pkg;
 const pool = new Pool({ connectionString: POSTGRES_URL });
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/f540be8d-4922-4ed3-93a4-5ecb0b6235b8';
+
+function sendDebugLog(payload) {
+  fetch(DEBUG_LOG_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, timestamp: Date.now() })
+  }).catch(() => {});
+}
 
 async function ensureSchema() {
   await pool.query(`
@@ -39,6 +48,15 @@ async function ensureSchema() {
       PRIMARY KEY (id_team, id_participant)
     );
   `);
+  // #region agent log
+  sendDebugLog({
+    runId: 'initial',
+    hypothesisId: 'H1',
+    location: 'services/auth-svc/src/index.js:ensureSchema-complete',
+    message: 'Schema initialization completed',
+    data: { status: 'ok' }
+  });
+  // #endregion
 }
 
 const app = express();
@@ -52,6 +70,20 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.post('/register', async (req, res) => {
   try {
     const { mode, username, password, name } = req.body || {};
+    // #region agent log
+    sendDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H3',
+      location: 'services/auth-svc/src/index.js:register-entry',
+      message: 'Register request received',
+      data: {
+        mode,
+        username,
+        hasPassword: Boolean(password),
+        nameLength: typeof name === 'string' ? name.length : 0
+      }
+    });
+    // #endregion
     const normalized = (mode || '').toString().toLowerCase();
     // Aceptamos alias en español
     const modeMap = {
@@ -64,9 +96,27 @@ app.post('/register', async (req, res) => {
     if (!username || !password || !name) return res.status(400).json({ error: 'username, password, name required' });
 
     const hashed = await bcrypt.hash(password, 10);
+    // #region agent log
+    sendDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H2',
+      location: 'services/auth-svc/src/index.js:before-pool-connect',
+      message: 'Attempting postgres connection',
+      data: { hasPostgresUrl: Boolean(POSTGRES_URL) }
+    });
+    // #endregion
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // #region agent log
+      sendDebugLog({
+        runId: 'initial',
+        hypothesisId: 'H5',
+        location: 'services/auth-svc/src/index.js:transaction-begin',
+        message: 'Register transaction started',
+        data: { kind, username }
+      });
+      // #endregion
       let refId;
       if (kind === 'team') {
         const r = await client.query('INSERT INTO "Team"(name) VALUES ($1) RETURNING id', [name]);
@@ -83,9 +133,33 @@ app.post('/register', async (req, res) => {
         [username, hashed, kind, refId]
       );
       await client.query('COMMIT');
+      // #region agent log
+      sendDebugLog({
+        runId: 'initial',
+        hypothesisId: 'H5',
+        location: 'services/auth-svc/src/index.js:transaction-commit',
+        message: 'Register transaction committed',
+        data: { kind, username, refId }
+      });
+      // #endregion
       return res.status(201).json({ user: u.rows[0] });
     } catch (e) {
       await client.query('ROLLBACK');
+      // #region agent log
+      sendDebugLog({
+        runId: 'initial',
+        hypothesisId: 'H4',
+        location: 'services/auth-svc/src/index.js:transaction-error',
+        message: 'Register transaction failed',
+        data: {
+          code: e?.code || null,
+          message: e?.message || null,
+          detail: e?.detail || null,
+          table: e?.table || null,
+          constraint: e?.constraint || null
+        }
+      });
+      // #endregion
       if (e.code === '23505') return res.status(409).json({ error: 'username already exists' });
       console.error('[auth-svc] register error', e);
       return res.status(500).json({ error: 'internal_error' });
@@ -93,6 +167,18 @@ app.post('/register', async (req, res) => {
       client.release();
     }
   } catch (e) {
+    // #region agent log
+    sendDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H2',
+      location: 'services/auth-svc/src/index.js:register-outer-error',
+      message: 'Register outer try/catch failed',
+      data: {
+        code: e?.code || null,
+        message: e?.message || null
+      }
+    });
+    // #endregion
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -111,7 +197,21 @@ app.post('/login', async (req, res) => {
 });
 
 app.listen(PORT, async () => {
-  await ensureSchema().catch((e) => console.error('[auth-svc] schema init error', e));
+  await ensureSchema().catch((e) => {
+    // #region agent log
+    sendDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H1',
+      location: 'services/auth-svc/src/index.js:ensureSchema-error',
+      message: 'Schema initialization failed',
+      data: {
+        code: e?.code || null,
+        message: e?.message || null
+      }
+    });
+    // #endregion
+    console.error('[auth-svc] schema init error', e);
+  });
   console.log(`[auth-svc] running on http://0.0.0.0:${PORT}`);
 });
 

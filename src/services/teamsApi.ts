@@ -95,6 +95,7 @@ export async function getMyTeams(): Promise<TeamInfo[]> {
     id: String(team.id),
     name: team.name,
     badgeUrl: team.badge_url || null,
+    inviteCode: team.invite_code || null,
     isOwner: me ? Number(team.owner_user_id) === Number(me.id) : false,
     secretCode: undefined,
   }));
@@ -113,6 +114,7 @@ export async function createTeam(name: string, badgeUrl?: string) {
       id: String(json.team.id),
       name: json.team.name,
       badgeUrl: json.team.badge_url || null,
+      inviteCode: json.team.invite_code || null,
       isOwner: me ? Number(json.team.owner_user_id) === Number(me.id) : true,
       secretCode: json.accessCode,
     } as TeamInfo,
@@ -160,6 +162,7 @@ export async function getTeamDetail(teamId: string) {
     id: String(json.team.id),
     name: json.team.name,
     badgeUrl: json.team.badge_url || null,
+    inviteCode: json.team.invite_code || null,
     isOwner: me ? Number(json.team.owner_user_id) === Number(me.id) : false,
     secretCode: undefined,
   };
@@ -183,6 +186,25 @@ export async function rotateTeamCode(teamId: string) {
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || 'No se pudo rotar codigo');
   return String(json.accessCode);
+}
+
+export async function getMyTeamInviteCode() {
+  const res = await fetch(`${TEAMS_BASE}/teams/me/invite-code`, { headers: authHeaders() });
+  const json = await parseJsonResponse(res, 'No se pudo obtener codigo de invitacion de equipo');
+  return {
+    teamId: String(json.teamId),
+    teamName: String(json.teamName),
+    inviteCode: String(json.inviteCode),
+  };
+}
+
+export async function resolveTeamByInviteCode(code: string) {
+  const safeCode = String(code || '').trim().toUpperCase();
+  const res = await fetch(`${TEAMS_BASE}/teams/resolve-by-invite-code/${encodeURIComponent(safeCode)}`, {
+    headers: authHeaders(),
+  });
+  const json = await parseJsonResponse(res, 'No se pudo resolver equipo por codigo');
+  return json.team;
 }
 
 export async function createParticipant(payload: {
