@@ -21,6 +21,7 @@ export interface TeamInfo {
   name: string;
   badgeUrl?: string | null;
   secretCode?: string;
+  inviteCode?: string | null;
   isOwner: boolean;
 }
 

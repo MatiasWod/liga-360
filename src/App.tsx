@@ -392,7 +392,7 @@ export const App: React.FC = () => {
         );
       }
       if (activeNav === 'torneos') {
-        return <TeamTournamentsPage activeTeamId={activeTeam?.id || null} />;
+        return <TeamTournamentsPage activeTeamId={activeTeam?.id || null} activeTeamName={activeTeam?.name || null} />;
       }
       if (activeNav === 'perfil') {
         return (
