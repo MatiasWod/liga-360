@@ -14,6 +14,16 @@ const pool = new Pool({ connectionString: POSTGRES_URL });
 
 async function ensureSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS "Team" (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS "Participant" (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS "Person_Profile" (
       id SERIAL PRIMARY KEY,
       user_id INTEGER UNIQUE NOT NULL,
@@ -35,6 +45,7 @@ async function ensureSchema() {
     ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS owner_user_id INTEGER;
     ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS badge_url TEXT;
     ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS access_code_hash TEXT;
+    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS invite_code TEXT;
     ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
     ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
@@ -50,7 +61,34 @@ async function ensureSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_participant_dni ON "Participant"(dni);
     CREATE INDEX IF NOT EXISTS idx_team_member_participant ON "Team_Member"(participant_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_invite_code_unique ON "Team"(invite_code);
   `);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const missingCodes = await client.query(
+      `SELECT id, name
+       FROM "Team"
+       WHERE invite_code IS NULL OR trim(invite_code) = ''
+       ORDER BY id`
+    );
+    for (const row of missingCodes.rows) {
+      const inviteCode = await generateUniqueInviteCode(client, row.name);
+      await client.query(
+        `UPDATE "Team"
+         SET invite_code = $2,
+             updated_at = $3
+         WHERE id = $1`,
+        [row.id, inviteCode, nowIso()]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 function normalizeDni(rawDni) {
@@ -75,6 +113,33 @@ function generateTeamCode(length = 8) {
   let out = '';
   for (let i = 0; i < length; i++) out += alphabet[bytes[i] % alphabet.length];
   return out;
+}
+
+function normalizeInvitePrefix(name) {
+  const cleaned = String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  const base = (cleaned || 'TEAM').slice(0, 3);
+  return base.padEnd(3, 'X');
+}
+
+function randomThreeDigits() {
+  return String(crypto.randomInt(0, 1000)).padStart(3, '0');
+}
+
+async function generateUniqueInviteCode(client, name, maxAttempts = 50) {
+  const prefix = normalizeInvitePrefix(name);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const inviteCode = `${prefix}-${randomThreeDigits()}`;
+    const exists = await client.query(
+      `SELECT 1 FROM "Team" WHERE invite_code = $1 LIMIT 1`,
+      [inviteCode]
+    );
+    if (exists.rows.length === 0) return inviteCode;
+  }
+  throw new Error('INVITE_CODE_GENERATION_FAILED');
 }
 
 function optionalAuthMiddleware(req, _res, next) {
@@ -150,7 +215,7 @@ app.get('/teams', requireAuthMiddleware, async (req, res) => {
   try {
     if (!onlyMine) {
       const all = await client.query(
-        `SELECT id, name, owner_user_id, badge_url, created_at, updated_at
+        `SELECT id, name, owner_user_id, badge_url, invite_code, created_at, updated_at
          FROM "Team"
          ORDER BY id DESC`
       );
@@ -158,12 +223,12 @@ app.get('/teams', requireAuthMiddleware, async (req, res) => {
     }
     const mine = await client.query(
       `WITH owned AS (
-         SELECT t.id, t.name, t.owner_user_id, t.badge_url, t.created_at, t.updated_at
+         SELECT t.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.created_at, t.updated_at
          FROM "Team" t
          WHERE t.owner_user_id = $1
        ),
        linked AS (
-         SELECT DISTINCT t.id, t.name, t.owner_user_id, t.badge_url, t.created_at, t.updated_at
+         SELECT DISTINCT t.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.created_at, t.updated_at
          FROM "Team" t
          JOIN "Team_Member" tm ON tm.team_id = t.id
          JOIN "Participant" p ON p.id = tm.participant_id
@@ -191,17 +256,24 @@ app.post('/teams', requireAuthMiddleware, async (req, res) => {
   const { name, badgeUrl } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   const accessCode = generateTeamCode();
+  const client = await pool.connect();
   try {
-    const r = await pool.query(
-      `INSERT INTO "Team"(name, owner_user_id, badge_url, access_code_hash, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $5)
-       RETURNING id, name, owner_user_id, badge_url, created_at, updated_at`,
-      [String(name).trim(), req.user.sub, badgeUrl || null, hashTeamCode(accessCode), nowIso()]
+    await client.query('BEGIN');
+    const inviteCode = await generateUniqueInviteCode(client, String(name).trim());
+    const r = await client.query(
+      `INSERT INTO "Team"(name, owner_user_id, badge_url, access_code_hash, invite_code, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $6)
+       RETURNING id, name, owner_user_id, badge_url, invite_code, created_at, updated_at`,
+      [String(name).trim(), req.user.sub, badgeUrl || null, hashTeamCode(accessCode), inviteCode, nowIso()]
     );
+    await client.query('COMMIT');
     return res.status(201).json({ team: r.rows[0], accessCode });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[teams-svc] create team error', e);
     return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
   }
 });
 
@@ -222,7 +294,7 @@ app.patch('/teams/:id', async (req, res) => {
              badge_url = COALESCE($3, badge_url),
              updated_at = $4
          WHERE id = $1
-         RETURNING id, name, owner_user_id, badge_url, created_at, updated_at`,
+         RETURNING id, name, owner_user_id, badge_url, invite_code, created_at, updated_at`,
         [teamId, name?.trim() || null, badgeUrl || null, nowIso()]
       );
       return res.json({ team: r.rows[0] });
@@ -557,7 +629,7 @@ app.get('/teams/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     const teamRes = await client.query(
-      `SELECT id, name, owner_user_id, badge_url, created_at, updated_at
+      `SELECT id, name, owner_user_id, badge_url, invite_code, created_at, updated_at
        FROM "Team"
        WHERE id = $1
        LIMIT 1`,
@@ -598,6 +670,53 @@ app.post('/teams/:id/access-code/rotate', requireAuthMiddleware, async (req, res
     return res.json({ teamId, accessCode });
   } catch (e) {
     console.error('[teams-svc] rotate access code error', e);
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/teams/me/invite-code', requireAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const found = await client.query(
+      `SELECT id, name, invite_code
+       FROM "Team"
+       WHERE owner_user_id = $1
+       ORDER BY id
+       LIMIT 1`,
+      [req.user.sub]
+    );
+    if (found.rows.length === 0) return res.status(404).json({ error: 'team not found for current user' });
+    return res.json({
+      teamId: found.rows[0].id,
+      teamName: found.rows[0].name,
+      inviteCode: found.rows[0].invite_code,
+    });
+  } catch (e) {
+    console.error('[teams-svc] get team invite code error', e);
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req, res) => {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  if (!/^[A-Z]{3}-\d{3}$/.test(code)) return res.status(400).json({ error: 'invalid invite code format' });
+  const client = await pool.connect();
+  try {
+    const found = await client.query(
+      `SELECT id, name, badge_url, invite_code
+       FROM "Team"
+       WHERE invite_code = $1
+       LIMIT 1`,
+      [code]
+    );
+    if (found.rows.length === 0) return res.status(404).json({ error: 'team not found' });
+    return res.json({ team: found.rows[0] });
+  } catch (e) {
+    console.error('[teams-svc] resolve by invite code error', e);
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();

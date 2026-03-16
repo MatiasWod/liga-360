@@ -93,6 +93,7 @@ services:
       - PORT=4004
       - JWT_SECRET=devsecret
       - POSTGRES_URL=postgresql://liga:liga@postgres:5432/liga360
+      - TOURNAMENTS_GRAPHQL_URL=http://gateway:4000/graphql
       - NODE_ENV=production
     depends_on:
       postgres:

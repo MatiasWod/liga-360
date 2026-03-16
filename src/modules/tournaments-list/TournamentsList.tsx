@@ -8,13 +8,19 @@ type Tournament = {
 	venue?: string | null;
 	organizer?: string | null;
 	participantType?: string | null;
+	inscriptionMode?: 'public' | 'invitation' | null;
 	competitions: Competition[];
 };
 
-export const TournamentsList: React.FC<{ onOpen?: (id: string) => void; organizerFilter?: string }> = ({ onOpen, organizerFilter }) => {
+export const TournamentsList: React.FC<{
+	onOpen?: (id: string, name?: string) => void;
+	organizerFilter?: string;
+	inscriptionModeFilter?: 'public' | 'invitation';
+}> = ({ onOpen, organizerFilter, inscriptionModeFilter }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [items, setItems] = React.useState<Tournament[]>([]);
+	const currentOrganizer = (organizerFilter || '').trim().toLowerCase();
 
 	function StageIcon({ format }: { format: Stage['format'] }) {
 		const common = 'w-3.5 h-3.5';
@@ -67,12 +73,11 @@ export const TournamentsList: React.FC<{ onOpen?: (id: string) => void; organize
 		);
 	}
 
-	React.useEffect(() => {
-		async function load() {
+	async function load() {
 			setLoading(true); setError(null);
 			try {
 				const query = `
-					{ tournaments { id name venue organizer participantType competitions { id name order stages { id name order format } } } }
+					{ tournaments { id name venue organizer participantType inscriptionMode competitions { id name order stages { id name order format } } } }
 				`;
 				const res = await fetch('http://localhost:4000/graphql', {
 					method: 'POST',
@@ -82,20 +87,42 @@ export const TournamentsList: React.FC<{ onOpen?: (id: string) => void; organize
 				const json = await res.json();
 				if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
 				const all = json.data.tournaments as Tournament[];
+				let filtered = all;
 				if (organizerFilter?.trim()) {
 					const needle = organizerFilter.trim().toLowerCase();
-					setItems(all.filter((t) => (t.organizer || '').trim().toLowerCase() === needle));
-				} else {
-					setItems(all);
+					filtered = filtered.filter((t) => (t.organizer || '').trim().toLowerCase() === needle);
 				}
+				if (inscriptionModeFilter) {
+					filtered = filtered.filter((t) => (t.inscriptionMode || 'public') === inscriptionModeFilter);
+				}
+				setItems(filtered);
 			} catch (e: any) {
 				setError(e?.message || 'Error al cargar torneos');
 			} finally {
 				setLoading(false);
 			}
-		}
+	}
+
+	async function deleteTournament(id: string) {
+		const token = localStorage.getItem('liga360:token');
+		const res = await fetch('http://localhost:4000/graphql', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+			body: JSON.stringify({
+				query: `mutation DeleteTournament($id: ID!) { deleteTournament(id: $id) }`,
+				variables: { id },
+			}),
+		});
+		const json = await res.json();
+		if (json.errors) throw new Error(json.errors?.[0]?.message || 'No se pudo eliminar torneo');
+	}
+
+	React.useEffect(() => {
 		load();
-	}, [organizerFilter]);
+	}, [organizerFilter, inscriptionModeFilter]);
 
 	if (loading) return <div className="text-sm opacity-80">Cargando torneos…</div>;
 	if (error) return <div className="text-sm text-red-300">{error}</div>;
@@ -110,7 +137,7 @@ export const TournamentsList: React.FC<{ onOpen?: (id: string) => void; organize
 				<div
 					key={t.id}
 					className="card p-6 shadow-sm hover:shadow transition-shadow cursor-pointer"
-					onClick={() => onOpen?.(t.id)}
+					onClick={() => onOpen?.(t.id, t.name)}
 				>
 					<header className="flex items-start justify-between gap-3 mb-4">
 						<div>
@@ -126,7 +153,28 @@ export const TournamentsList: React.FC<{ onOpen?: (id: string) => void; organize
 								<div><span className="opacity-70">Participantes:</span> {t.participantType || 'N/D'}</div>
 							</div>
 						</div>
-						<span className="text-[10px] px-2 py-1 rounded-full border border-white/10 bg-white/5 self-start">{t.id}</span>
+						<div className="flex flex-col items-end gap-2">
+							<span className="text-[10px] px-2 py-1 rounded-full border border-white/10 bg-white/5 self-start">{t.id}</span>
+							{currentOrganizer && (t.organizer || '').trim().toLowerCase() === currentOrganizer && (
+								<button
+									type="button"
+									className="rounded-md border border-red-300 px-2 py-1 text-[11px] text-red-600 hover:bg-red-50"
+									onClick={async (e) => {
+										e.stopPropagation();
+										const ok = window.confirm(`¿Eliminar torneo "${t.name}"? Esta acción no se puede deshacer.`);
+										if (!ok) return;
+										try {
+											await deleteTournament(t.id);
+											await load();
+										} catch (err: any) {
+											setError(err?.message || 'No se pudo eliminar torneo');
+										}
+									}}
+								>
+									Eliminar
+								</button>
+							)}
+						</div>
 					</header>
 
 					{/* Competencias como cards dentro del torneo */}

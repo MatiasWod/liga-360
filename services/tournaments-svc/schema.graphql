@@ -3,6 +3,7 @@ type Query {
   version: String!
   tournaments: [Tournament!]!
   tournament(id: ID!): Tournament
+  competition(id: ID!): Competition
 }
 
 enum TournamentStatus {
@@ -21,14 +22,35 @@ type Mutation {
     sport: String!
     season: String
     venue: String
-    organizer: String
+    participantType: String
+    maxSlots: Int
+    inscriptionMode: InscriptionMode!
+    status: TournamentStatus!
+  ): Tournament!
+  updateTournament(
+    id: ID!
+    name: String!
+    sport: String!
+    season: String
+    venue: String
     participantType: String
     inscriptionMode: InscriptionMode!
     status: TournamentStatus!
   ): Tournament!
-  createCompetition(tournamentId: ID!, name: String!, order: Int!): Competition!
+  deleteTournament(id: ID!): Boolean!
+  createCompetition(tournamentId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
+  updateCompetition(competitionId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
+  updateCompetitionMaxSlots(competitionId: ID!, maxSlots: Int): Competition!
   addStage(
     competitionId: ID!,
+    name: String!,
+    order: Int!,
+    format: StageFormat!,
+    configJson: String,
+    childrenJson: String
+  ): Stage!
+  updateStage(
+    stageId: ID!,
     name: String!,
     order: Int!,
     format: StageFormat!,
@@ -51,6 +73,7 @@ type Mutation {
     carryOverJson: String
   ): Transition!
   addGroup(stageId: ID!, name: String!, order: Int!): Group!
+  syncStageGroups(stageId: ID!, totalGroups: Int!): [Group!]!
   addTeamToGroup(groupId: ID!, teamId: ID!): Boolean!
   addCompetitorToGroup(
     groupId: ID!,
@@ -61,6 +84,18 @@ type Mutation {
     avatarUrl: String,
     badgeUrl: String
   ): Boolean!
+  assignInscriptionToGroup(
+    stageId: ID!
+    groupId: ID!
+    inscriptionId: ID!
+    tournamentId: ID!
+    displayName: String!
+  ): Boolean!
+  unassignInscriptionFromGroup(
+    groupId: ID!
+    inscriptionId: ID!
+    tournamentId: ID!
+  ): Boolean!
   upsertCompetitor(
     competitorId: ID!,
     kind: CompetitorKind!,
@@ -69,9 +104,33 @@ type Mutation {
     avatarUrl: String,
     badgeUrl: String
   ): Competitor!
+  ensureEliminationBracket(stageId: ID!, totalSlots: Int!): [Match!]!
+  assignInscriptionToMatchSlot(
+    stageId: ID!
+    matchId: ID!
+    slotRole: String!
+    inscriptionId: ID
+    tournamentId: ID!
+    displayName: String
+  ): Boolean!
   createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
   addKey(stageId: ID!, name: String!, order: Int!): Key!
   linkGroupToKey(keyId: ID!, groupId: ID!): Boolean!
+  assignInscriptionToStage(
+    stageId: ID!
+    inscriptionId: ID!
+    tournamentId: ID!
+    displayName: String!
+  ): Boolean!
+  unassignInscriptionFromStage(
+    stageId: ID!
+    inscriptionId: ID!
+    tournamentId: ID!
+  ): Boolean!
+  clearInscriptionAssignments(
+    inscriptionId: ID!
+    tournamentId: ID!
+  ): Boolean!
 }
 
 type Tournament {
@@ -82,6 +141,7 @@ type Tournament {
   venue: String
   organizer: String
   participantType: String
+  maxSlots: Int!
   inscriptionMode: InscriptionMode!
   status: TournamentStatus!
   competitions: [Competition!]!
@@ -99,6 +159,8 @@ type Stage {
   name: String!
   order: Int!
   format: StageFormat!
+  isInitial: Boolean!
+  assignedInscriptions: [AssignedInscription!]!
   configJson: String
   childrenJson: String
   transitions: [Transition!]!
@@ -111,6 +173,8 @@ type Competition {
   id: ID!
   name: String!
   order: Int!
+  maxSlots: Int
+  effectiveMaxSlots: Int!
   stages: [Stage!]!
 }
 
@@ -118,6 +182,7 @@ type Transition {
   id: ID!
   type: String!
   label: String
+  toStageId: String
   selectionKind: String
   topN: Int
   rangeFrom: Int
@@ -135,6 +200,8 @@ type Group {
   order: Int!
   competitorIds: [ID!]!
   competitors: [Competitor!]!
+  assignedInscriptions: [AssignedInscription!]!
+  capacity: Int
 }
 
 type Match {
@@ -146,6 +213,8 @@ type Match {
   awayTeamId: ID!
   homeCompetitor: Competitor
   awayCompetitor: Competitor
+  homeAssignedInscription: AssignedInscription
+  awayAssignedInscription: AssignedInscription
 }
 
 type Key {
@@ -173,6 +242,12 @@ type Competitor {
   badgeUrl: String
   source: String
   updatedAt: String
+}
+
+type AssignedInscription {
+  inscriptionId: ID!
+  tournamentId: ID!
+  displayName: String!
 }
 
 

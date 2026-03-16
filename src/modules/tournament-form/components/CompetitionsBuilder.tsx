@@ -4,6 +4,7 @@ import { StageBuilder, type StageDraft, type CrossCompetitionOption } from './st
 export interface CompetitionMeta {
 	id: string;
 	name: string;
+	maxSlots?: number | null;
 	stages: StageDraft[];
 }
 
@@ -43,6 +44,7 @@ export const CompetitionsBuilder: React.FC<CompetitionsBuilderProps> = ({
 		const next: CompetitionMeta = {
 			id: crypto.randomUUID(),
 			name: name.trim(),
+			maxSlots: null,
 			stages: [],
 		};
 		setCompetitions((prev) => [...prev, next]);
@@ -114,6 +116,21 @@ export const CompetitionsBuilder: React.FC<CompetitionsBuilderProps> = ({
 								onChange={(e) => updateCompetition(activeIdx, { name: e.currentTarget.value })}
 								className="rounded-lg bg-white/10 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-brand-green/60 placeholder-white/50 text-sm"
 								placeholder="Ej: Apertura, Fase Regular, Copa de Invierno…"
+							/>
+						</label>
+						<label className="flex flex-col gap-1">
+							<span className="text-sm opacity-90">Cupo manual (opcional)</span>
+							<input
+								type="number"
+								min={1}
+								value={competitions[activeIdx]?.maxSlots ?? ''}
+								onChange={(e) => {
+									const raw = e.currentTarget.value;
+									const parsed = Number(raw);
+									updateCompetition(activeIdx, { maxSlots: raw === '' ? null : (Number.isInteger(parsed) && parsed > 0 ? parsed : null) });
+								}}
+								className="rounded-lg bg-white/10 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-brand-green/60 placeholder-white/50 text-sm"
+								placeholder="Se deriva de formato si queda vacío"
 							/>
 						</label>
 					</div>
