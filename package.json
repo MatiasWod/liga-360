@@ -6,20 +6,40 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "hooks:install": "node scripts/setup-hooks.mjs",
+    "test:changed:guard": "node scripts/check-tests-required.mjs",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:integration": "npm run test --prefix services/inscriptions-svc && npm run test --prefix services/tournaments-svc",
+    "test:e2e": "playwright test --project=smoke",
+    "test:e2e:smoke": "playwright test --project=smoke",
+    "test:e2e:critical": "playwright test --project=critical",
+    "test:e2e:all": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:ci": "npm run test:unit && npm run test:integration",
+    "test:ci:full": "npm run test:unit && npm run test:integration && npm run test:e2e:smoke"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "autoprefixer": "^10.4.19",
+    "jsdom": "^26.1.0",
+    "msw": "^2.11.2",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.4.5",
     "vite": "^5.4.0",
-    "@vitejs/plugin-react": "^4.3.1"
+    "@vitejs/plugin-react": "^4.3.1",
+    "vitest": "^3.2.4"
   }
 } 

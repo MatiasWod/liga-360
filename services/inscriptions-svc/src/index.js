@@ -1336,10 +1336,26 @@ app.post('/teams/me/invites/:id/reject', requireTeamUser, async (req, res) => {
   }
 });
 
-app.listen(PORT, async () => {
-  await ensureSchema().catch((e) => console.error('[inscriptions-svc] schema init error', e));
-  console.log(`[inscriptions-svc] running on http://0.0.0.0:${PORT}`);
-});
+export async function startServer() {
+  return new Promise((resolve) => {
+    const server = app.listen(PORT, async () => {
+      await ensureSchema().catch((e) => console.error('[inscriptions-svc] schema init error', e));
+      console.log(`[inscriptions-svc] running on http://0.0.0.0:${PORT}`);
+      resolve(server);
+    });
+  });
+}
+
+export {
+  app,
+  ensureInviteUsable,
+  generatePublicInviteCode,
+  generateTargetedInviteToken,
+};
+
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
 
 
 
