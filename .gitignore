@@ -20,6 +20,7 @@ node_modules/
 dist/
 build/
 coverage/
+test-results/
 *.tsbuildinfo
 
 # Env / secrets
@@ -38,4 +39,7 @@ temp/
 # Keep only main README markdown
 **/*.md
 !README.md
+
+# Local notes (never push)
+local-notes/
 

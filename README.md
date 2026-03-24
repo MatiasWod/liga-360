@@ -185,6 +185,35 @@ docker compose up -d --build teams-svc inscriptions-svc
 └── README.md
 ```
 
+## 9) Política de testing y gating (recomendada)
+
+Para minimizar regresiones en features nuevas:
+
+- Cambios de lógica de negocio deben traer tests nuevos o actualizados.
+- El push local corre validaciones con hook `pre-push`:
+  - guard de cambios de lógica sin tests,
+  - `npm run test:ci`,
+  - `npm run test:e2e:smoke`.
+- En remoto, el PR debe quedar en verde con:
+  - Build + Unit + Integration,
+  - E2E Smoke.
+
+### Instalación del hook local
+
+```bash
+npm run hooks:install
+```
+
+### Bypass excepcional (emergencias)
+
+Si realmente es necesario, se puede saltar hooks locales:
+
+```bash
+git push --no-verify
+```
+
+Esto **no** evita los checks remotos del pipeline para mergear a ramas protegidas.
+
 ---
 
 Si seguis estos pasos deberias poder levantar y usar el flujo completo de Liga360 localmente sin configuracion adicional.
