@@ -1,6 +1,32 @@
 import React from 'react';
+import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
 
-type Stage = { id: string; name: string; order: number; format: 'league' | 'groups' | 'elimination' };
+type MatchRow = {
+	id: string;
+	round?: number | null;
+	leg?: number | null;
+	slotIndex?: number | null;
+	fixtureCode?: string | null;
+	groupId?: string | null;
+	homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
+	awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
+};
+
+type GroupBlock = {
+	id: string;
+	name: string;
+	order: number;
+	matches?: MatchRow[];
+};
+
+type Stage = {
+	id: string;
+	name: string;
+	order: number;
+	format: 'league' | 'groups' | 'elimination';
+	matches?: MatchRow[];
+	groups?: GroupBlock[];
+};
 type Competition = { id: string; name: string; order: number; stages: Stage[] };
 type Tournament = {
 	id: string;
@@ -8,6 +34,7 @@ type Tournament = {
 	venue?: string | null;
 	organizer?: string | null;
 	participantType?: string | null;
+	status?: string | null;
 	competitions: Competition[];
 };
 
@@ -77,8 +104,26 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 				const query = `
 					query($id:ID!){
 						tournament(id:$id){
-							id name venue organizer participantType
-							competitions { id name order stages { id name order format } }
+							id name venue organizer participantType status
+							competitions {
+								id name order
+								stages {
+									id name order format
+									matches {
+										id round leg slotIndex fixtureCode groupId
+										homeAssignedInscription { inscriptionId displayName }
+										awayAssignedInscription { inscriptionId displayName }
+									}
+									groups {
+										id name order
+										matches {
+											id round leg slotIndex fixtureCode groupId
+											homeAssignedInscription { inscriptionId displayName }
+											awayAssignedInscription { inscriptionId displayName }
+										}
+									}
+								}
+							}
 						}
 					}
 				`;
@@ -154,6 +199,53 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 							</div>
 						))}
 					</div>
+
+					{String(t.status || '').toLowerCase() === 'published' ? (
+						<div className="rounded-xl border border-white/10 bg-white/10 p-6">
+							<h3 className="text-lg font-semibold mb-3">Fixture</h3>
+							<div className="space-y-8">
+								{t.competitions
+									.slice()
+									.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+									.map((c) => (
+										<div key={`fix-${c.id}`}>
+											<p className="text-sm font-medium text-white/90 mb-3">{c.name}</p>
+											<div className="space-y-6">
+												{c.stages
+													.filter((s) => s.format === 'league' || s.format === 'elimination' || s.format === 'groups')
+													.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+													.map((s) => {
+														const built = buildScheduleFromStage({
+															format: s.format,
+															matches: s.matches,
+															groups: s.groups,
+														});
+														if (!built) return null;
+														const has =
+															s.format === 'groups'
+																? (s.groups || []).some((g) => (g.matches || []).length > 0)
+																: (s.matches || []).length > 0;
+														if (!has) return null;
+														return (
+															<div key={s.id} className="mb-2">
+																<p className="text-xs text-white/60 mb-2">
+																	{s.order}. {s.name}
+																	{s.format === 'league'
+																		? ' · Liga'
+																		: s.format === 'groups'
+																			? ' · Grupos'
+																			: ' · Eliminación'}
+																</p>
+																<TournamentSchedule type={built.type} data={built.data} theme="dark" />
+															</div>
+														);
+													})}
+											</div>
+										</div>
+									))}
+							</div>
+						</div>
+					) : null}
 				</div>
 			)}
 		</div>
