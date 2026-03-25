@@ -11,6 +11,35 @@ const DEFAULT_SHIELD_SRC = '/predeterminado.png';
 const MIN_LOGO_ZOOM = 0.3;
 const MAX_LOGO_ZOOM = 3;
 
+function logoEditSourceKey(teamId: string) {
+  return `liga360:teamLogoOriginal:${teamId}`;
+}
+
+function logoEditStateKey(teamId: string) {
+  return `liga360:teamLogoEditState:${teamId}`;
+}
+
+function readPersistedLogoState(teamId: string) {
+  try {
+    const raw = localStorage.getItem(logoEditStateKey(teamId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const zoom = Number(parsed?.zoom);
+    const offsetX = Number(parsed?.offsetX);
+    const offsetY = Number(parsed?.offsetY);
+    if (!Number.isFinite(zoom) || !Number.isFinite(offsetX) || !Number.isFinite(offsetY)) {
+      return null;
+    }
+    return {
+      zoom: Math.min(MAX_LOGO_ZOOM, Math.max(MIN_LOGO_ZOOM, zoom)),
+      offsetX,
+      offsetY,
+    };
+  } catch {
+    return null;
+  }
+}
+
 interface TeamParticipantsPageProps {
   team: TeamInfo | null;
   participants: TeamParticipant[];
@@ -73,13 +102,25 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
 
   React.useEffect(() => {
     const fallback = team?.badgeUrl || DEFAULT_SHIELD_SRC;
+    const savedOriginal = team?.id ? localStorage.getItem(logoEditSourceKey(team.id)) : null;
+    const savedState = team?.id ? readPersistedLogoState(team.id) : null;
     setLogoUrl(fallback);
-    setLogoSource(fallback);
+    setLogoSource(savedOriginal || fallback);
     setLogoRenderedPreview(fallback);
-    setLogoZoom(1);
-    setLogoOffsetX(0);
-    setLogoOffsetY(0);
-  }, [team?.badgeUrl]);
+    setLogoZoom(savedState?.zoom ?? 1);
+    setLogoOffsetX(savedState?.offsetX ?? 0);
+    setLogoOffsetY(savedState?.offsetY ?? 0);
+  }, [team?.id, team?.badgeUrl]);
+
+  React.useEffect(() => {
+    if (!team?.id) return;
+    const state = {
+      zoom: Math.min(MAX_LOGO_ZOOM, Math.max(MIN_LOGO_ZOOM, logoZoom)),
+      offsetX: logoOffsetX,
+      offsetY: logoOffsetY,
+    };
+    localStorage.setItem(logoEditStateKey(team.id), JSON.stringify(state));
+  }, [team?.id, logoZoom, logoOffsetX, logoOffsetY]);
 
   if (loading) return <Card>Cargando plantilla del equipo...</Card>;
   if (!team) return <Card>No hay equipo activo para gestionar participantes.</Card>;
@@ -265,6 +306,9 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
               const renderedLogo = await renderShieldFromPreview(logoSource || logoUrl || DEFAULT_SHIELD_SRC);
               setLogoUrl(renderedLogo);
               setLogoRenderedPreview(renderedLogo);
+              if (team?.id) {
+                localStorage.setItem(logoEditSourceKey(team.id), logoSource || logoUrl || DEFAULT_SHIELD_SRC);
+              }
               await onUpdateTeamLogo(renderedLogo);
               setLogoModalOpen(false);
             } catch (err: any) {
@@ -277,25 +321,15 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
             }
           }}
         >
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <Avatar name={team.name} imageUrl={logoRenderedPreview || DEFAULT_SHIELD_SRC} size="xl" />
-            <div>
-              <p className="text-sm font-medium text-slate-800">{team.name}</p>
-              <p className="text-xs text-slate-500">Asi se vera en el resto de la pagina</p>
-            </div>
-          </div>
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <div className="mx-auto relative h-36 w-36 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
               <img
-                src={logoSource || logoUrl || team.badgeUrl || DEFAULT_SHIELD_SRC}
+                src={logoRenderedPreview || DEFAULT_SHIELD_SRC}
                 alt="Previsualizacion escudo"
-                className="absolute inset-0 h-full w-full object-contain"
-                style={{
-                  transform: `translate(${logoOffsetX}px, ${logoOffsetY}px) scale(${logoZoom})`,
-                  transformOrigin: 'center center',
-                }}
+                className="absolute inset-0 h-full w-full object-cover"
               />
             </div>
+            <p className="mt-2 text-center text-xs text-slate-500">Vista final del escudo</p>
             <div className="mt-3 space-y-3">
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-slate-600">Zoom</span>
@@ -352,6 +386,9 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
                   const source = await readFileAsDataUrl(file);
                   setLogoError('');
                   setLogoSource(source);
+                  if (team?.id) {
+                    localStorage.setItem(logoEditSourceKey(team.id), source);
+                  }
                   setLogoZoom(1);
                   setLogoOffsetX(0);
                   setLogoOffsetY(0);
@@ -368,6 +405,9 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
               onClick={() => {
                 setLogoUrl(DEFAULT_SHIELD_SRC);
                 setLogoSource(DEFAULT_SHIELD_SRC);
+                if (team?.id) {
+                  localStorage.setItem(logoEditSourceKey(team.id), DEFAULT_SHIELD_SRC);
+                }
                 setLogoZoom(1);
                 setLogoOffsetX(0);
                 setLogoOffsetY(0);

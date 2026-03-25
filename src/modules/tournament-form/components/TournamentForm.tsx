@@ -5,10 +5,11 @@ import { SelectField } from './atoms/SelectField';
 import { CompetitionsBuilder, type CompetitionMeta } from './CompetitionsBuilder';
 
 interface TournamentFormProps {
+    organizerName: string;
     onCreated?: (payload: { id: string; name: string }) => void;
 }
 
-export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => {
+export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, onCreated }) => {
     type ParticipantType = 'teams' | 'individuals';
     type InscriptionMode = 'public' | 'invitation';
 
@@ -24,7 +25,6 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
     interface FormErrors {
         name?: string;
         sport?: string;
-        organizer?: string;
     }
 
     const STORAGE_KEY = 'liga360:tournamentDraft:v1';
@@ -33,7 +33,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
         name: '',
         sport: 'football',
         venue: '',
-        organizer: '',
+        organizer: organizerName || '',
         participantType: 'teams',
         inscriptionMode: 'public',
     });
@@ -49,10 +49,19 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return;
             const parsed = JSON.parse(raw) as { general?: GeneralInfo; competitions?: CompetitionMeta[] };
-            if (parsed?.general) setGeneral(parsed.general);
+            if (parsed?.general) {
+                setGeneral({
+                    ...parsed.general,
+                    organizer: organizerName || '',
+                });
+            }
             if (parsed?.competitions && parsed.competitions.length > 0) setCompetitions(parsed.competitions);
         } catch {}
-    }, []);
+    }, [organizerName]);
+
+    React.useEffect(() => {
+        setGeneral((prev) => ({ ...prev, organizer: organizerName || '' }));
+    }, [organizerName]);
 
     React.useEffect(() => {
         try {
@@ -65,7 +74,6 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
         const next: FormErrors = {};
         if (!general.name.trim()) next.name = 'El nombre es requerido';
         if (!general.sport.trim()) next.sport = 'El deporte es requerido';
-        if (!general.organizer.trim()) next.organizer = 'El organizador es requerido';
         setErrors(next);
         return Object.keys(next).length === 0;
     }
@@ -129,6 +137,14 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
                         }
                     ).then(r => r.addStage);
                     stageIdMap.set(st.id, createdStage.id);
+                    if (format === 'elimination') {
+                        await gql(
+                            `mutation GenerateEliminationBracket($stageId: ID!) {
+                                generateEliminationBracket(stageId: $stageId) { id }
+                            }`,
+                            { stageId: createdStage.id }
+                        );
+                    }
                 }
             }
 
@@ -286,10 +302,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
                             label="Deporte"
                             name="sport"
                             value={general.sport}
-                            onChange={(e) => {
-                                const target = e?.currentTarget;
-                                if (!target) return;
-                                const v = target.value ?? 'football';
+                            onChange={(value) => {
+                                const v = value || 'football';
                                 setGeneral((g) => ({ ...g, sport: v }));
                             }}
                             options={[
@@ -311,29 +325,18 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
                             setGeneral((g) => ({ ...g, venue: v }));
                         }}
                     />
-                    <div>
-                        <TextField
-                            label="Organizador"
-                            placeholder="Ej: Liga 360"
-                            name="organizer"
-                            value={general.organizer}
-                            onChange={(e) => {
-                                const target = e?.currentTarget;
-                                if (!target) return;
-                                const v = target.value ?? '';
-                                setGeneral((g) => ({ ...g, organizer: v }));
-                            }}
-                        />
-                        {errors.organizer && <div className="text-xs text-red-300 mt-1">{errors.organizer}</div>}
+                    <div className="space-y-1">
+                        <span className="text-sm font-medium text-slate-700">Organizador</span>
+                        <p className="text-sm font-semibold text-slate-800">
+                            {organizerName?.trim() || general.organizer?.trim() || 'Organizador'}
+                        </p>
                     </div>
                     <SelectField
                         label="Tipo de participantes"
                         name="participantType"
                         value={general.participantType}
-                        onChange={(e) => {
-                            const target = e?.currentTarget;
-                            if (!target) return;
-                            const v = (target.value ?? 'teams') as ParticipantType;
+                        onChange={(value) => {
+                            const v = (value || 'teams') as ParticipantType;
                             setGeneral((g) => ({ ...g, participantType: v }));
                         }}
                         options={[{ label: 'Equipos', value: 'teams' }, { label: 'Participantes', value: 'individuals' }]}
@@ -342,10 +345,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated }) => 
                         label="Tipo de inscripción"
                         name="inscriptionMode"
                         value={general.inscriptionMode}
-                        onChange={(e) => {
-                            const target = e?.currentTarget;
-                            if (!target) return;
-                            const v = (target.value ?? 'public') as InscriptionMode;
+                        onChange={(value) => {
+                            const v = (value || 'public') as InscriptionMode;
                             setGeneral((g) => ({ ...g, inscriptionMode: v }));
                         }}
                         options={[{ label: 'Pública', value: 'public' }, { label: 'Por invitación', value: 'invitation' }]}

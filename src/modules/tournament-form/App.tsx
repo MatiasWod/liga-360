@@ -33,7 +33,7 @@ export const App: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 				</div>
 				<div className="rounded-xl border border-slate-200 bg-white p-4 shadow-md">
 					{route === 'home' && <Home onNavigate={setRoute} />}
-					{route === 'create' && <TournamentForm />}
+					{route === 'create' && <TournamentForm organizerName={navUser?.username || 'Organizador'} />}
 					{route === 'list' && <TournamentsList onOpen={(id) => { setSelectedId(id); setRoute('detail'); }} />}
 					{route === 'detail' && selectedId && <TournamentDetail id={selectedId} onBack={() => setRoute('list')} />}
 				</div>
@@ -71,7 +71,7 @@ export const App: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 				{/* Contenido corre a la derecha del sidebar en md+ */}
 				<main className="px-4 py-6 md:ml-60 w-full">
 					{route === 'home' && <Home onNavigate={setRoute} />}
-					{route === 'create' && <TournamentForm />}
+					{route === 'create' && <TournamentForm organizerName={navUser?.username || 'Organizador'} />}
 					{route === 'list' && <TournamentsList onOpen={(id) => { setSelectedId(id); setRoute('detail'); }} />}
 					{route === 'detail' && selectedId && <TournamentDetail id={selectedId} onBack={() => setRoute('list')} />}
 				</main>

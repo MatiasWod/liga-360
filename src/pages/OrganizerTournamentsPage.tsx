@@ -17,8 +17,23 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
   const [selectedTournamentName, setSelectedTournamentName] = React.useState<string>('');
   const [feedback, setFeedback] = React.useState<string>('');
 
+  const isViewing = mode === 'visualizacion';
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button
+          onClick={() => {
+            setSelectedTournamentId(null);
+            setSelectedTournamentName('');
+            setFeedback('');
+            setMode((prev) => (prev === 'visualizacion' ? 'creacion' : 'visualizacion'));
+          }}
+        >
+          {isViewing ? '+ Crear nuevo torneo' : '← Volver a torneos'}
+        </Button>
+      </div>
+
       {feedback && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {feedback}
@@ -38,6 +53,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
       {mode === 'creacion' && (
         <Card>
           <TournamentForm
+            organizerName={organizerName}
             onCreated={({ id, name }) => {
               setSelectedTournamentId(id);
               setSelectedTournamentName(name);
@@ -66,18 +82,6 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
           </div>
         </Card>
       )}
-
-      <Button
-        onClick={() => {
-          setSelectedTournamentId(null);
-          setSelectedTournamentName('');
-          setFeedback('');
-          setMode((prev) => (prev === 'visualizacion' ? 'creacion' : 'visualizacion'));
-        }}
-        className="fixed bottom-6 right-6 z-40 rounded-full px-7 py-4 text-base font-semibold shadow-md"
-      >
-        {mode === 'visualizacion' ? '+ Crear nuevo torneo' : '← Volver a torneos'}
-      </Button>
     </div>
   );
 };
