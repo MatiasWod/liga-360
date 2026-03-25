@@ -36,7 +36,7 @@ describe('CompetitionPhaseFilter', () => {
     await user.click(screen.getByRole('button', { name: 'No mostrar' }));
 
     await waitFor(() => {
-      const lastCallArg = onChange.mock.calls.at(-1)?.[0];
+      const lastCallArg = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0];
       expect(lastCallArg).toEqual({
         mode: 'exclude',
         selections: [{ competitionId: 'comp-1', phaseId: 'fase-a' }],
@@ -54,7 +54,7 @@ describe('CompetitionPhaseFilter', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar todas las fases de Primera Division' }));
 
     await waitFor(() => {
-      const lastCallArg = onChange.mock.calls.at(-1)?.[0];
+      const lastCallArg = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0];
       expect(lastCallArg?.selections).toEqual(
         expect.arrayContaining([
           { competitionId: 'comp-1', phaseId: 'fase-a' },

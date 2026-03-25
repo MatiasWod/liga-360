@@ -56,9 +56,20 @@ interface StageBuilderProps {
 	onChangeStages?: (next: StageDraft[]) => void;
 	crossOptions?: CrossCompetitionOption[]; // otras solapas
     maxStages?: number;
+	/** Etapas de todas las competencias del torneo (resumen y etiquetas de destino cruzado). */
+	allStagesGlobal?: StageDraft[];
+	/** Quitar relación del estado cuando el origen puede estar en otra competencia. */
+	onRemoveRelationGlobal?: (fromStageId: string, relationId: string) => void;
 }
 
-export const StageBuilder: React.FC<StageBuilderProps> = ({ value, onChangeStages, crossOptions, maxStages }) => {
+export const StageBuilder: React.FC<StageBuilderProps> = ({
+	value,
+	onChangeStages,
+	crossOptions,
+	maxStages,
+	allStagesGlobal,
+	onRemoveRelationGlobal,
+}) => {
 	const [local, setLocal] = React.useState<StageDraft[]>([]);
 	const stages = value ?? local;
 
@@ -93,6 +104,23 @@ export const StageBuilder: React.FC<StageBuilderProps> = ({ value, onChangeStage
 		setStages((prev) => prev.filter((s) => s.id !== id));
 	}
 
+	function removeRelation(fromStageId: string, relationId: string) {
+		if (onRemoveRelationGlobal) {
+			onRemoveRelationGlobal(fromStageId, relationId);
+			return;
+		}
+		setStages((prev) =>
+			prev.map((s) =>
+				s.id === fromStageId
+					? { ...s, relations: (s.relations || []).filter((r) => r.id !== relationId) }
+					: s
+			)
+		);
+	}
+
+	const lookupPool = allStagesGlobal && allStagesGlobal.length > 0 ? allStagesGlobal : stages;
+	const relationScanStages = allStagesGlobal && allStagesGlobal.length > 0 ? allStagesGlobal : stages;
+
 	return (
 		<div id="stage-builder-root" className="relative">
 			<div className="space-y-3">
@@ -102,9 +130,17 @@ export const StageBuilder: React.FC<StageBuilderProps> = ({ value, onChangeStage
 					</div>
 				)}
 				{stages.map((stage) => (
-					<StageCard key={stage.id} stage={stage} allStages={stages} crossOptions={crossOptions} onChange={updateStage} onRemove={removeStage} />
+					<StageCard
+						key={stage.id}
+						stage={stage}
+						allStages={stages}
+						lookupStages={lookupPool}
+						crossOptions={crossOptions}
+						onChange={updateStage}
+						onRemove={removeStage}
+					/>
 				))}
-				<GlobalRelationsSummary stages={stages} />
+				<GlobalRelationsSummary stages={relationScanStages} lookupStages={lookupPool} onRemoveRelation={removeRelation} />
 			</div>
 			<StagePalette onAdd={handleAdd} />
 		</div>

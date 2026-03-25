@@ -28,4 +28,9 @@ test('schema incluye mutaciones de inicializacion avanzada', async () => {
   assert.equal(mutationFields.has('assignInscriptionToGroup'), true);
   assert.equal(mutationFields.has('ensureEliminationBracket'), true);
   assert.equal(mutationFields.has('assignInscriptionToMatchSlot'), true);
+  assert.equal(mutationFields.has('generateLeagueRoundRobin'), true);
+  assert.equal(mutationFields.has('generateSingleEliminationBracket'), true);
+  assert.equal(mutationFields.has('generateGroupsStageRoundRobin'), true);
+  assert.equal(mutationFields.has('deleteTransition'), true);
+  assert.equal(mutationFields.has('updateMatchScheduling'), true);
 });

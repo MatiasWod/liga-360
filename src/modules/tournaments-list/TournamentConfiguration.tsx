@@ -12,8 +12,9 @@ import {
   type InscriptionItem,
   updateInscriptionStatus,
 } from '../../services/inscriptionsApi';
+import { FixturePlanningPanel } from './FixturePlanningPanel';
 
-type Tab = 'gestion' | 'inicializacion';
+type Tab = 'gestion' | 'inicializacion' | 'fixture';
 
 type Stage = {
   id: string;
@@ -43,11 +44,27 @@ type Stage = {
     order: number;
     capacity?: number | null;
     assignedInscriptions?: Array<{ inscriptionId: string; displayName: string }>;
+    matches?: Array<{
+      id: string;
+      round?: number | null;
+      leg?: number | null;
+      slotIndex?: number | null;
+      fixtureCode?: string | null;
+      groupId?: string | null;
+      leagueHomeSeed?: number | null;
+      leagueAwaySeed?: number | null;
+      homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
+      awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
+    }>;
   }>;
   matches?: Array<{
     id: string;
     round?: number | null;
     leg?: number | null;
+    slotIndex?: number | null;
+    fixtureCode?: string | null;
+    leagueHomeSeed?: number | null;
+    leagueAwaySeed?: number | null;
     homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
     awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
   }>;
@@ -103,6 +120,179 @@ function teamsPerGroup(stage: Stage): number | null {
   const cfg = parseJsonSafe(stage.configJson || null) || {};
   const perGroup = Number(cfg.teamsPerGroup);
   return Number.isInteger(perGroup) && perGroup > 0 ? perGroup : null;
+}
+
+type StageTransition = Stage['transitions'][number];
+
+function countTeamsFromTransition(tr: StageTransition, fromStage: Stage): number {
+  const kind = String(tr.selectionKind || 'top').toLowerCase();
+  const cfg = parseJsonSafe(fromStage.configJson || null) || {};
+  if (kind === 'range') {
+    const from = Number(tr.rangeFrom) || 0;
+    const to = Number(tr.rangeTo) || 0;
+    return Math.max(0, to - from + 1);
+  }
+  if (kind === 'bottom') {
+    const b = Number(tr.bottomN) || 0;
+    if (fromStage.format === 'groups') {
+      const numGroups = (fromStage.groups || []).length || Number(cfg.numGroups) || 0;
+      const perGroup = Math.min(b, Number(cfg.teamsPerGroup) || b);
+      return numGroups > 0 ? numGroups * perGroup : b;
+    }
+    return b;
+  }
+  const t = Number(tr.topN) || 0;
+  if (fromStage.format === 'groups') {
+    const numGroups = (fromStage.groups || []).length || Number(cfg.numGroups) || 0;
+    const teamsPerG = Number(cfg.teamsPerGroup) || 0;
+    if (numGroups <= 0) return t;
+    const perGroup = Math.min(t, teamsPerG || t);
+    return perGroup * numGroups;
+  }
+  return t;
+}
+
+function describeSelectionNatural(tr: StageTransition, fromStage: Stage): string {
+  const kind = String(tr.selectionKind || 'top').toLowerCase();
+  if (kind === 'range') {
+    const from = Number(tr.rangeFrom) || 0;
+    const to = Number(tr.rangeTo) || 0;
+    return `puestos ${from} a ${to} en la tabla`;
+  }
+  if (kind === 'bottom') {
+    const b = Number(tr.bottomN) || 0;
+    return fromStage.format === 'groups' ? `últimos ${b} por grupo` : `últimos ${b} en la tabla`;
+  }
+  const t = Number(tr.topN) || 0;
+  return fromStage.format === 'groups' ? `primeros ${t} por grupo` : `primeros ${t} en la tabla`;
+}
+
+/** Etiquetas previstas por cupo (p. ej. 1° Grupo A, 2° Grupo B) para cruzar con la 1ª ronda. */
+function buildQualifierLabels(tr: StageTransition, fromStage: Stage): string[] {
+  const kind = String(tr.selectionKind || 'top').toLowerCase();
+  const cfg = parseJsonSafe(fromStage.configJson || null) || {};
+  const groups = [...(fromStage.groups || [])].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  if (kind === 'range') {
+    const from = Number(tr.rangeFrom) || 0;
+    const to = Number(tr.rangeTo) || 0;
+    const n = Math.max(0, to - from + 1);
+    return Array.from({ length: n }, (_, i) => `${from + i}° puesto · ${fromStage.name}`);
+  }
+  if (kind === 'bottom') {
+    const b = Number(tr.bottomN) || 0;
+    if (fromStage.format === 'groups') {
+      const out: string[] = [];
+      for (const g of groups) {
+        for (let k = 1; k <= b; k++) {
+          out.push(`${k}° desde abajo · ${g.name}`);
+        }
+      }
+      return out.length > 0 ? out : Array.from({ length: b }, (_, i) => `Último ${i + 1} · ${fromStage.name}`);
+    }
+    return Array.from({ length: b }, (_, i) => `Último ${i + 1} · ${fromStage.name}`);
+  }
+  const t = Number(tr.topN) || 0;
+  if (fromStage.format === 'groups') {
+    const out: string[] = [];
+    for (const g of groups) {
+      for (let rank = 1; rank <= t; rank++) {
+        out.push(`${rank}° ${g.name}`);
+      }
+    }
+    return out.length > 0 ? out : Array.from({ length: t }, (_, i) => `${i + 1}° (grupo) · ${fromStage.name}`);
+  }
+  if (fromStage.format === 'league') {
+    return Array.from({ length: t }, (_, i) => `${i + 1}° ${fromStage.name}`);
+  }
+  return Array.from({ length: t }, (_, i) => `Clasificado ${i + 1} · ${fromStage.name}`);
+}
+
+function collectIncomingTransitions(
+  tournament: Tournament | null,
+  targetStageId: string
+): Array<{ fromStage: Stage; tr: StageTransition; fromCompetitionName: string }> {
+  const out: Array<{ fromStage: Stage; tr: StageTransition; fromCompetitionName: string }> = [];
+  for (const c of tournament?.competitions || []) {
+    for (const s of c.stages || []) {
+      for (const tr of s.transitions || []) {
+        if (String(tr.toStageId || '') === targetStageId) {
+          out.push({ fromStage: s, tr, fromCompetitionName: c.name });
+        }
+      }
+    }
+  }
+  out.sort((a, b) => {
+    const o = Number(a.fromStage.order || 0) - Number(b.fromStage.order || 0);
+    if (o !== 0) return o;
+    return String(a.fromStage.name || '').localeCompare(String(b.fromStage.name || ''), 'es', { sensitivity: 'base' });
+  });
+  return out;
+}
+
+function flattenQualifierLabels(
+  incoming: Array<{ fromStage: Stage; tr: StageTransition; fromCompetitionName: string }>
+): string[] {
+  const labels: string[] = [];
+  for (const { fromStage, tr, fromCompetitionName } of incoming) {
+    const part = buildQualifierLabels(tr, fromStage);
+    const prefix = fromCompetitionName ? `[${fromCompetitionName}] ` : '';
+    for (const p of part) {
+      labels.push(`${prefix}${p}`);
+    }
+  }
+  return labels;
+}
+
+type IncomingTransitionRow = ReturnType<typeof collectIncomingTransitions>[number];
+
+function InitializationInboundBanner({
+  incoming,
+  entitySingular,
+  entityPlural,
+}: {
+  incoming: IncomingTransitionRow[];
+  entitySingular: string;
+  entityPlural: string;
+}) {
+  const total = React.useMemo(
+    () => incoming.reduce((sum, x) => sum + countTeamsFromTransition(x.tr, x.fromStage), 0),
+    [incoming]
+  );
+  if (incoming.length === 0) {
+    return (
+      <div className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-snug text-slate-600">
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2">
+          <span className="font-medium text-slate-800">Origen:</span> ninguna relación de avance desde otra etapa apunta a esta
+          fase. Podés asignar {entityPlural} manualmente o usar esta etapa como entrada directa.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-snug text-slate-800">
+      <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2">
+        <p className="font-medium text-emerald-950">
+          {total} {total === 1 ? entitySingular : entityPlural} desde otra{incoming.length > 1 ? 's' : ''} fase
+          {incoming.length > 1 ? 's' : ''}
+        </p>
+        <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-slate-700">
+          {incoming.map(({ fromStage, tr, fromCompetitionName }) => {
+            const n = countTeamsFromTransition(tr, fromStage);
+            const sel = describeSelectionNatural(tr, fromStage);
+            const lbl = tr.label?.trim();
+            return (
+              <li key={tr.id}>
+                <span className="font-medium">{n}</span> {n === 1 ? entitySingular : entityPlural} desde{' '}
+                <strong>{fromStage.name}</strong>
+                {fromCompetitionName ? ` · ${fromCompetitionName}` : ''}: {sel}
+                {lbl ? ` · ${lbl}` : ''}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
 }
 
 async function gql<T = any>(query: string, variables?: Record<string, any>): Promise<T> {
@@ -206,8 +396,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     const map = new Map<string, Array<{ stageId: string; competitionId: string }>>();
     for (const competition of tournament?.competitions || []) {
       for (const stage of competition.stages || []) {
-        if (!stage.isInitial) continue;
-      for (const assigned of stage.assignedInscriptions || []) {
+        for (const assigned of stage.assignedInscriptions || []) {
           const key = String(assigned.inscriptionId);
           const prev = map.get(key) || [];
           prev.push({ stageId: stage.id, competitionId: competition.id });
@@ -294,9 +483,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
         .map((competition: Competition) => ({
           id: competition.id,
           name: competition.name,
-          stages: (competition.stages || [])
-            .filter((stage) => stage.isInitial && (stage.assignedInscriptions?.length || 0) > 0)
-            .map((stage) => ({ id: stage.id, name: stage.name })),
+          stages: (competition.stages || []).map((stage) => ({ id: stage.id, name: stage.name })),
         }))
         .filter((group) => group.stages.length > 0)
         .map((group) => ({
@@ -462,11 +649,29 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     order
                     capacity
                     assignedInscriptions { inscriptionId displayName }
+                    matches {
+                      id
+                      round
+                      leg
+                      slotIndex
+                      fixtureCode
+                      groupId
+                      scheduledAt
+                      leagueHomeSeed
+                      leagueAwaySeed
+                      homeAssignedInscription { inscriptionId displayName }
+                      awayAssignedInscription { inscriptionId displayName }
+                    }
                   }
                   matches {
                     id
                     round
                     leg
+                    slotIndex
+                    fixtureCode
+                    scheduledAt
+                    leagueHomeSeed
+                    leagueAwaySeed
                     homeAssignedInscription { inscriptionId displayName }
                     awayAssignedInscription { inscriptionId displayName }
                   }
@@ -533,12 +738,11 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
 
   React.useEffect(() => {
     if (tab !== 'inicializacion') return;
-    const stages = (initializationCompetition?.stages || []).filter((stage) => stage.isInitial);
+    const stages = (initializationCompetition?.stages || []).filter((stage) => stage.format === 'groups');
     if (stages.length === 0) return;
     (async () => {
       for (const stage of stages) {
-        if (stage.format === 'groups') await ensureGroupsForStage(stage);
-        if (stage.format === 'elimination') await ensureBracketForStage(stage);
+        await ensureGroupsForStage(stage);
       }
     })().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -676,20 +880,6 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     await loadTournament();
   }
 
-  async function ensureBracketForStage(stage: Stage) {
-    const cap = stageCapacity(stage);
-    if (stage.format !== 'elimination' || !cap || cap <= 1) return;
-    const requiredMatches = Math.ceil(cap / 2);
-    if ((stage.matches || []).length >= requiredMatches) return;
-    await gql(
-      `mutation EnsureBracket($stageId: ID!, $totalSlots: Int!) {
-         ensureEliminationBracket(stageId: $stageId, totalSlots: $totalSlots) { id }
-       }`,
-      { stageId: stage.id, totalSlots: cap }
-    );
-    await loadTournament();
-  }
-
   async function moveToGroup(inscription: InscriptionItem, stage: Stage, groupId: string) {
     if (!['PENDIENTE', 'ACEPTADO'].includes(inscription.status)) return;
     const group = (stage.groups || []).find((item) => item.id === groupId);
@@ -741,57 +931,6 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       await loadInscriptions();
     } catch (e: any) {
       setError(e?.message || 'No se pudo mover al grupo');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function moveToBracketSlot(inscription: InscriptionItem, stage: Stage, matchId: string, slotRole: 'home' | 'away') {
-    if (!['PENDIENTE', 'ACEPTADO'].includes(inscription.status)) return;
-    const stageCap = stageCapacity(stage);
-    if (stageCap && stageCap > 0) {
-      const assignedIds = new Set<string>();
-      for (const match of stage.matches || []) {
-        if (match.homeAssignedInscription?.inscriptionId) assignedIds.add(String(match.homeAssignedInscription.inscriptionId));
-        if (match.awayAssignedInscription?.inscriptionId) assignedIds.add(String(match.awayAssignedInscription.inscriptionId));
-      }
-      if (!assignedIds.has(String(inscription.id)) && assignedIds.size >= stageCap) {
-        setError(`La llave "${stage.name}" alcanzó su cupo máximo (${stageCap}).`);
-        return;
-      }
-    }
-
-    setSaving(true);
-    setError('');
-    try {
-      const currentPlacements = assignmentByInscriptionId.get(String(inscription.id)) || [];
-      for (const placement of currentPlacements.filter(
-        (placement) => placement.competitionId === initializationCompetitionId && placement.stageId !== stage.id
-      )) {
-        await gql(
-          `mutation Unassign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!) {
-             unassignInscriptionFromStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId)
-           }`,
-          { stageId: placement.stageId, inscriptionId: String(inscription.id), tournamentId }
-        );
-      }
-      await gql(
-        `mutation AssignSlot($stageId: ID!, $matchId: ID!, $slotRole: String!, $inscriptionId: ID, $tournamentId: ID!, $displayName: String) {
-           assignInscriptionToMatchSlot(stageId: $stageId, matchId: $matchId, slotRole: $slotRole, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName)
-         }`,
-        {
-          stageId: stage.id,
-          matchId,
-          slotRole,
-          inscriptionId: String(inscription.id),
-          tournamentId,
-          displayName: inscription.display_name,
-        }
-      );
-      await loadTournament();
-      await loadInscriptions();
-    } catch (e: any) {
-      setError(e?.message || 'No se pudo ubicar en la llave');
     } finally {
       setSaving(false);
     }
@@ -883,6 +1022,13 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
               className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'inicializacion' ? 'bg-white text-[#0F2A33] shadow-sm' : 'text-slate-600'}`}
             >
               Inicialización
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('fixture')}
+              className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'fixture' ? 'bg-white text-[#0F2A33] shadow-sm' : 'text-slate-600'}`}
+            >
+              Fixture
             </button>
           </div>
         </div>
@@ -1023,7 +1169,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
             </div>
           </Card>
         </div>
-      ) : (
+      ) : tab === 'inicializacion' ? (
         <div className="overflow-x-auto">
           <div className="flex min-w-[980px] items-start gap-4">
           <div className="min-w-0 flex-1 space-y-4">
@@ -1046,12 +1192,35 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
           <Card>
                 <h3 className="mb-2 text-sm font-semibold text-slate-800">{initializationCompetition.name}</h3>
                 <div className="space-y-3">
-                  {(initializationCompetition.stages || []).filter((s) => s.isInitial).map((stage) => {
+                  {(initializationCompetition.stages || [])
+                    .slice()
+                    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+                    .map((stage) => {
                     const stageCards = (stage.assignedInscriptions || [])
                       .map((assigned) => inscriptionById.get(String(assigned.inscriptionId)))
                       .filter((item): item is InscriptionItem => Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(item!.status));
                     const cap = stageCapacity(stage);
-                    const occupancy = stageCards.length;
+                    const stageAssignedList = stage.assignedInscriptions || [];
+                    const idsInGroups =
+                      stage.format === 'groups'
+                        ? new Set(
+                            (stage.groups || []).flatMap((g) =>
+                              (g.assignedInscriptions || []).map((a) => String(a.inscriptionId))
+                            )
+                          )
+                        : new Set<string>();
+                    const floatingInStageOnly =
+                      stage.format === 'groups'
+                        ? stageAssignedList.filter((a) => !idsInGroups.has(String(a.inscriptionId)))
+                        : [];
+                    const occupancy =
+                      stage.format === 'groups'
+                        ? stageAssignedList.length
+                        : stageCards.length;
+                    const incomingTr = collectIncomingTransitions(tournament, stage.id);
+                    const previewLabels = flattenQualifierLabels(incomingTr);
+                    const eliminationPairingCount =
+                      stage.format === 'elimination' ? Math.floor(previewLabels.length / 2) : 0;
                     return (
                       <div
                         key={stage.id}
@@ -1075,9 +1244,61 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <p className="text-xs font-semibold text-slate-700">{stage.order}. {stage.name}</p>
                           <p className="text-[11px] text-slate-500">
-                            {occupancy}{cap ? ` / ${cap}` : ''} · {stage.format}
+                            {stage.format === 'groups' ? (
+                              <>
+                                {occupancy}
+                                {cap ? ` / ${cap}` : ''} cupo fase · {idsInGroups.size} en grupos
+                              </>
+                            ) : (
+                              <>
+                                {occupancy}
+                                {cap ? ` / ${cap}` : ''}
+                              </>
+                            )}{' '}
+                            · {stage.format}
                           </p>
                         </div>
+
+                        {stage.format === 'groups' && floatingInStageOnly.length > 0 ? (
+                          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2">
+                            <p className="mb-1.5 text-[11px] font-medium text-amber-900">
+                              Pendientes de ubicar en un grupo ({floatingInStageOnly.length})
+                            </p>
+                            <p className="mb-2 text-[11px] text-amber-800/90">
+                              Los equipos ya están en la fase, pero hay que asignarlos a <strong>Grupo A</strong>,{' '}
+                              <strong>Grupo B</strong>, etc. Arrastrá cada uno al recuadro del grupo.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {floatingInStageOnly.map((assigned) => {
+                                const item = inscriptionById.get(String(assigned.inscriptionId));
+                                const label =
+                                  item?.display_name?.trim() ||
+                                  assigned.displayName?.trim() ||
+                                  `Inscripción ${assigned.inscriptionId}`;
+                                const canDrag =
+                                  Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
+                                return (
+                                  <div
+                                    key={`float-${stage.id}-${String(assigned.inscriptionId)}`}
+                                    draggable={canDrag}
+                                    onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
+                                    onDragEnd={handleDragEnd}
+                                    className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-md border border-amber-300/80 bg-white px-2 py-1 text-[11px] text-amber-950 shadow-sm ${
+                                      canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+                                    }`}
+                                  >
+                                    {item ? (
+                                      renderEntryAvatar(item, 'h-5 w-5')
+                                    ) : (
+                                      <span className="inline-flex h-5 w-5 shrink-0 rounded-full bg-amber-200/80" aria-hidden />
+                                    )}
+                                    <span className="truncate font-medium">{label}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
 
                         {stage.format === 'groups' ? (
                           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -1085,9 +1306,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                               .slice()
                               .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
                               .map((group) => {
-                                const groupCards = (group.assignedInscriptions || [])
-                                  .map((assigned) => inscriptionById.get(String(assigned.inscriptionId)))
-                                  .filter((item): item is InscriptionItem => Boolean(item));
+                                const assignedList = group.assignedInscriptions || [];
                                 const groupCap = Number(group.capacity || teamsPerGroup(stage) || 0);
                                 return (
                                   <div
@@ -1105,22 +1324,44 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                     }}
                                   >
                                     <p className="mb-2 text-xs font-semibold text-slate-700">
-                                      {group.name} · {groupCards.length}{groupCap > 0 ? `/${groupCap}` : ''}
+                                      {group.name} · {assignedList.length}
+                                      {groupCap > 0 ? `/${groupCap}` : ''}
                                     </p>
                                     <div className="space-y-1">
-                                      {groupCards.map((item) => (
-                                        <div
-                                          key={item.id}
-                                          draggable
-                                          onDragStart={(e) => handleDragStart(e, item)}
-                                          onDragEnd={handleDragEnd}
-                                          className={`flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs transition-all duration-150 hover:border-emerald-300 ${draggingInscriptionId === String(item.id) ? 'opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
-                                        >
-                                          {renderEntryAvatar(item, 'h-6 w-6')}
-                                          <p className="line-clamp-1 font-medium text-slate-800">{item.display_name}</p>
-                                        </div>
-                                      ))}
-                                      {groupCards.length === 0 ? <p className="text-[11px] text-slate-500">Sin {entityPlural}</p> : null}
+                                      {assignedList.map((assigned) => {
+                                        const item = inscriptionById.get(String(assigned.inscriptionId));
+                                        const label =
+                                          item?.display_name?.trim() ||
+                                          assigned.displayName?.trim() ||
+                                          `Inscripción ${assigned.inscriptionId}`;
+                                        const canDrag =
+                                          Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
+                                        return (
+                                          <div
+                                            key={`${group.id}-${String(assigned.inscriptionId)}`}
+                                            draggable={canDrag}
+                                            onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
+                                            onDragEnd={handleDragEnd}
+                                            className={`flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs transition-all duration-150 hover:border-emerald-300 ${
+                                              canDrag
+                                                ? draggingInscriptionId === String(item!.id)
+                                                  ? 'opacity-60'
+                                                  : 'cursor-grab active:cursor-grabbing'
+                                                : 'opacity-95'
+                                            }`}
+                                          >
+                                            {item ? (
+                                              renderEntryAvatar(item, 'h-6 w-6')
+                                            ) : (
+                                              <span className="inline-flex h-6 w-6 shrink-0 rounded-full bg-slate-200" aria-hidden />
+                                            )}
+                                            <p className="line-clamp-1 font-medium text-slate-800">{label}</p>
+                                          </div>
+                                        );
+                                      })}
+                                      {assignedList.length === 0 ? (
+                                        <p className="text-[11px] text-slate-500">Sin {entityPlural}</p>
+                                      ) : null}
                                     </div>
                                   </div>
                                 );
@@ -1129,7 +1370,44 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                         ) : null}
 
                         {stage.format === 'elimination' ? (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
+                            {eliminationPairingCount > 0 ? (
+                              <div className="grid gap-4">
+                                {Array.from({ length: eliminationPairingCount }, (_, idx) => {
+                                  const home = previewLabels[idx * 2] ?? '—';
+                                  const away = previewLabels[idx * 2 + 1] ?? '—';
+                                  return (
+                                    <div
+                                      key={`elim-preview-${stage.id}-${idx}`}
+                                      className="overflow-hidden rounded-xl border border-slate-300/90 bg-gradient-to-b from-slate-100/90 to-white shadow-sm"
+                                    >
+                                      <div className="flex items-stretch gap-1.5 p-2 sm:gap-2">
+                                        <div className="flex min-h-[3rem] flex-1 flex-col justify-center rounded-lg border border-slate-200/90 bg-white px-2 py-2 text-center text-[11px] font-semibold leading-snug text-slate-900 shadow-sm">
+                                          {home}
+                                        </div>
+                                        <div className="flex shrink-0 flex-col items-center justify-center px-0.5">
+                                          <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-black tracking-wider text-white">
+                                            VS
+                                          </span>
+                                        </div>
+                                        <div className="flex min-h-[3rem] flex-1 flex-col justify-center rounded-lg border border-slate-200/90 bg-white px-2 py-2 text-center text-[11px] font-semibold leading-snug text-slate-900 shadow-sm">
+                                          {away}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-col items-center border-t border-slate-200/80 bg-slate-50/50 px-2 pb-2 pt-1">
+                                        <div className="mb-1 h-3 w-px bg-slate-400/80" aria-hidden />
+                                        <div className="w-full max-w-[min(100%,14rem)] rounded-lg border-2 border-dashed border-emerald-500/60 bg-emerald-50 px-3 py-2 text-center shadow-sm">
+                                          <p className="text-[11px] font-bold text-emerald-900">Ganador</p>
+                                          <p className="mt-0.5 text-[10px] font-medium text-emerald-800/90">
+                                            Avanza a la siguiente ronda
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
                             {(stage.matches || [])
                               .slice()
                               .sort((a, b) => (Number(a.round || 0) - Number(b.round || 0)) || String(a.id).localeCompare(String(b.id)))
@@ -1137,6 +1415,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                 <div key={match.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                                   <p className="mb-2 text-[11px] font-semibold text-slate-600">
                                     Llave {index + 1} · Ronda {match.round || 1}
+                                    {match.fixtureCode ? ` · ${match.fixtureCode}` : ''}
                                   </p>
                                   {(['home', 'away'] as const).map((slotRole) => {
                                     const slot = slotRole === 'home' ? match.homeAssignedInscription : match.awayAssignedInscription;
@@ -1145,28 +1424,15 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                     return (
                                       <div
                                         key={`${match.id}-${slotRole}`}
-                                        className={`mb-1 rounded-md border px-2 py-1 text-xs ${dragOverZone === `match-${match.id}-${slotRole}` ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDragEnter={() => setDragOverZone(`match-${match.id}-${slotRole}`)}
-                                        onDragLeave={() =>
-                                          setDragOverZone((prev) => (prev === `match-${match.id}-${slotRole}` ? null : prev))
-                                        }
-                                        onDrop={(e) => {
-                                          e.preventDefault();
-                                          setDragOverZone(null);
-                                          const id = Number(e.dataTransfer.getData('text/inscription-id'));
-                                          const item = inscriptions.find((x) => x.id === id);
-                                          if (item) moveToBracketSlot(item, stage, match.id, slotRole);
-                                        }}
+                                        className="mb-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
                                       >
                                         <span className="mr-1 font-semibold text-slate-500">{slotRole === 'home' ? 'A' : 'B'}:</span>
-                                        {slotItem ? slotItem.display_name : showBye ? 'BYE' : `Arrastrar ${entitySingular}`}
+                                        {slotItem ? slotItem.display_name : showBye ? 'BYE' : '—'}
                                       </div>
                                     );
                                   })}
                                 </div>
                               ))}
-                            {(stage.matches || []).length === 0 ? <p className="text-xs text-slate-500">Sin llaves generadas.</p> : null}
                           </div>
                         ) : null}
 
@@ -1187,6 +1453,12 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                             {stageCards.length === 0 ? <p className="text-xs text-slate-500">Sin {entityPlural} asignados</p> : null}
                           </div>
                         ) : null}
+
+                        <InitializationInboundBanner
+                          incoming={incomingTr}
+                          entitySingular={entitySingular}
+                          entityPlural={entityPlural}
+                        />
                       </div>
                     );
                   })}
@@ -1279,7 +1551,18 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
           </Card>
           </div>
         </div>
-      )}
+      ) : null}
+
+      {tab === 'fixture' && tournament ? (
+        <FixturePlanningPanel
+          tournament={tournament}
+          onRefresh={async () => {
+            await loadTournament();
+          }}
+          setSaving={setSaving}
+          setError={setError}
+        />
+      ) : null}
     </div>
   );
 };

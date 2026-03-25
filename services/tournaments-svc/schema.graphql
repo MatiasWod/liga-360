@@ -72,6 +72,7 @@ type Mutation {
     toExternalTournamentName: String,
     carryOverJson: String
   ): Transition!
+  deleteTransition(transitionId: ID!): Boolean!
   addGroup(stageId: ID!, name: String!, order: Int!): Group!
   syncStageGroups(stageId: ID!, totalGroups: Int!): [Group!]!
   addTeamToGroup(groupId: ID!, teamId: ID!): Boolean!
@@ -105,6 +106,9 @@ type Mutation {
     badgeUrl: String
   ): Competitor!
   ensureEliminationBracket(stageId: ID!, totalSlots: Int!): [Match!]!
+  generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  generateSingleEliminationBracket(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
   assignInscriptionToMatchSlot(
     stageId: ID!
     matchId: ID!
@@ -112,6 +116,14 @@ type Mutation {
     inscriptionId: ID
     tournamentId: ID!
     displayName: String
+  ): Boolean!
+  # Reasigna ronda/pierna/orden del partido (liga o grupos). Organizador.
+  updateMatchScheduling(
+    stageId: ID!
+    matchId: ID!
+    round: Int!
+    leg: Int!
+    slotIndex: Int!
   ): Boolean!
   createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
   addKey(stageId: ID!, name: String!, order: Int!): Key!
@@ -202,6 +214,7 @@ type Group {
   competitors: [Competitor!]!
   assignedInscriptions: [AssignedInscription!]!
   capacity: Int
+  matches: [Match!]!
 }
 
 type Match {
@@ -209,8 +222,13 @@ type Match {
   round: Int
   leg: Int
   scheduledAt: String
-  homeTeamId: ID!
-  awayTeamId: ID!
+  slotIndex: Int
+  fixtureCode: String
+  groupId: ID
+  leagueHomeSeed: Int
+  leagueAwaySeed: Int
+  homeTeamId: ID
+  awayTeamId: ID
   homeCompetitor: Competitor
   awayCompetitor: Competitor
   homeAssignedInscription: AssignedInscription

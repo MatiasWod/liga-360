@@ -7,12 +7,15 @@ import { StageSummary } from './StageSummary';
 interface StageCardProps {
 	stage: StageDraft;
 	allStages: StageDraft[];
+	/** Todas las etapas del torneo (nombres de destino e inbound cruzado). Si no se pasa, se usa solo `allStages`. */
+	lookupStages?: StageDraft[];
 	crossOptions?: CrossCompetitionOption[];
 	onChange: (id: string, partial: Partial<StageDraft>) => void;
 	onRemove: (id: string) => void;
 }
 
-export const StageCard: React.FC<StageCardProps> = ({ stage, allStages, crossOptions, onChange, onRemove }) => {
+export const StageCard: React.FC<StageCardProps> = ({ stage, allStages, lookupStages, crossOptions, onChange, onRemove }) => {
+	const inboundPool = lookupStages ?? allStages;
 	const [tab, setTab] = React.useState<'details' | 'tiebreak' | 'relations'>('details');
 	return (
 		<div className="card p-4">
@@ -32,19 +35,19 @@ export const StageCard: React.FC<StageCardProps> = ({ stage, allStages, crossOpt
 				<Tabs tab={tab} setTab={setTab} />
 				<div className="mt-3">
 					{tab === 'details' && (
-						<StageConfig kind={stage.kind} stage={stage} allStages={allStages} onChange={onChange} />
+						<StageConfig kind={stage.kind} stage={stage} allStages={allStages} inboundStages={inboundPool} onChange={onChange} />
 					)}
 					{tab === 'tiebreak' && (
 						<TieBreakEditor value={stage.config?.tiebreak as RuleItem[] | undefined} onChange={(rules) => onChange(stage.id, { config: { ...stage.config, tiebreak: rules } })} />
 					)}
 					{tab === 'relations' && (
-						<RelationsEditor stage={stage} allStages={allStages} crossOptions={crossOptions} onChange={onChange} />
+						<RelationsEditor stage={stage} allStages={allStages} lookupStages={lookupStages} crossOptions={crossOptions} onChange={onChange} />
 					)}
 				</div>
 			</div>
 
 			<div className="mt-6">
-				<StageSummary stage={stage} allStages={allStages} />
+				<StageSummary stage={stage} allStages={allStages} lookupStages={lookupStages} />
 			</div>
 		</div>
 	);
@@ -90,9 +93,21 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 	return <select {...props} className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-brand-green/60" />;
 }
 
-function StageConfig({ kind, stage, allStages, onChange }: { kind: StageKind; stage: StageDraft; allStages: StageDraft[]; onChange: (id: string, partial: Partial<StageDraft>) => void; }) {
+function StageConfig({
+	kind,
+	stage,
+	allStages,
+	inboundStages,
+	onChange,
+}: {
+	kind: StageKind;
+	stage: StageDraft;
+	allStages: StageDraft[];
+	inboundStages: StageDraft[];
+	onChange: (id: string, partial: Partial<StageDraft>) => void;
+}) {
 	const cfg = (stage.config || {}) as any;
-	const inbound = computeInbound(stage.id, allStages);
+	const inbound = computeInbound(stage.id, inboundStages);
 	const inboundTotal = inbound.reduce((sum, i) => sum + i.count, 0);
 	switch (kind) {
 		case 'groups': {
@@ -170,7 +185,10 @@ function computeInbound(stageId: string, allStages: StageDraft[]): Array<{ from:
 	const inbound: Array<{ from: string; count: number; label: string; }> = [];
 	for (const s of allStages) {
 		for (const r of s.relations || []) {
-			if (r.toStageId === stageId) {
+			const targetsThis =
+				r.toStageId === stageId ||
+				(r.toExternal?.tournamentId === 'this' && r.toExternal?.stageId === stageId);
+			if (targetsThis) {
 				const count = countFromSelection(r.selection, s);
 				inbound.push({ from: s.name, count, label: r.label });
 			}

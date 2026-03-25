@@ -1,16 +1,29 @@
 import React from 'react';
 import type { StageDraft, Selection } from './StageBuilder';
 
-export const StageSummary: React.FC<{ stage: StageDraft; allStages: StageDraft[]; }> = ({ stage, allStages }) => {
-	if (stage.kind === 'league') return <LeagueSummary stage={stage} allStages={allStages} />;
-	if (stage.kind === 'groups') return <GroupsSummary stage={stage} allStages={allStages} />;
+export const StageSummary: React.FC<{
+	stage: StageDraft;
+	allStages: StageDraft[];
+	lookupStages?: StageDraft[];
+}> = ({ stage, allStages, lookupStages }) => {
+	const pool = lookupStages ?? allStages;
+	if (stage.kind === 'league') return <LeagueSummary stage={stage} allStages={allStages} legendStages={pool} />;
+	if (stage.kind === 'groups') return <GroupsSummary stage={stage} allStages={allStages} legendStages={pool} />;
 	if (stage.kind === 'knockout') return <KnockoutSummary stage={stage} />;
 	return null;
 };
 
 const COLORS = ['bg-brand-green', 'bg-brand-blueLight', 'bg-amber-500', 'bg-fuchsia-500', 'bg-cyan-500'];
 
-function LeagueSummary({ stage, allStages }: { stage: StageDraft; allStages: StageDraft[]; }) {
+function LeagueSummary({
+	stage,
+	allStages,
+	legendStages,
+}: {
+	stage: StageDraft;
+	allStages: StageDraft[];
+	legendStages: StageDraft[];
+}) {
 	const cfg = (stage.config || {}) as any;
 	const n = Number(cfg.numParticipants) > 0 ? Number(cfg.numParticipants) : 10;
 	const rows = Array.from({ length: n }, (_, i) => i + 1);
@@ -55,13 +68,21 @@ function LeagueSummary({ stage, allStages }: { stage: StageDraft; allStages: Sta
 						</tbody>
 					</table>
 				</div>
-				<Legend relations={relations} allStages={allStages} />
+				<Legend relations={relations} allStages={legendStages} />
 			</div>
 		</div>
 	);
 }
 
-function GroupsSummary({ stage, allStages }: { stage: StageDraft; allStages: StageDraft[]; }) {
+function GroupsSummary({
+	stage,
+	allStages,
+	legendStages,
+}: {
+	stage: StageDraft;
+	allStages: StageDraft[];
+	legendStages: StageDraft[];
+}) {
 	const cfg = (stage.config || {}) as any;
 	const g = Number(cfg.numGroups) > 0 ? Number(cfg.numGroups) : 4;
 	const per = Number(cfg.teamsPerGroup) > 0 ? Number(cfg.teamsPerGroup) : 4;
@@ -95,7 +116,7 @@ function GroupsSummary({ stage, allStages }: { stage: StageDraft; allStages: Sta
 				))}
 			</div>
 			<div className="mt-3">
-				<Legend relations={relations} allStages={allStages} />
+				<Legend relations={relations} allStages={legendStages} />
 			</div>
 		</div>
 	);
@@ -239,7 +260,16 @@ const Legend: React.FC<{ relations: NonNullable<StageDraft['relations']>; allSta
 			<ul className="space-y-1">
 				{relations.map((r, i) => {
 					const to = r.toStageId ? allStages.find((s) => s.id === r.toStageId) : undefined;
-					const dest = r.toExternal ? (r.toExternal.stageName || r.toExternal.stageId) : (to?.name ?? '—');
+					let dest = '—';
+					if (r.toExternal) {
+						if (r.toExternal.tournamentId === 'this' && r.toExternal.stageId) {
+							dest = allStages.find((s) => s.id === r.toExternal?.stageId)?.name ?? r.toExternal.stageName ?? r.toExternal.stageId;
+						} else {
+							dest = r.toExternal.stageName || r.toExternal.stageId;
+						}
+					} else if (to) {
+						dest = to.name;
+					}
 					return (
 						<li key={r.id} className="flex items-center gap-2">
 							<span className={`inline-block w-3 h-3 rounded ${COLORS[i % COLORS.length]}`}></span>
