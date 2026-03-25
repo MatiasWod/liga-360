@@ -4,6 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { CompetitionPhaseFilter } from '../../components/CompetitionPhaseFilter';
 import {
   createTournamentInvite,
+  createManualParticipantInscriptionsBatch,
   createManualTeamInscriptionsBatch,
   createTeamInvite,
   listTournamentInvites,
@@ -62,6 +63,7 @@ type Competition = {
 type Tournament = {
   id: string;
   name: string;
+  participantType?: string | null;
   competitions: Competition[];
 };
 
@@ -127,6 +129,22 @@ function resolveBadgeUrl(rawUrl?: string | null): string {
   return `http://localhost:4002/${url}`;
 }
 
+function normalizeParticipantType(value?: string | null): 'teams' | 'individuals' {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'team' || raw === 'teams') return 'teams';
+  if (raw === 'participant' || raw === 'participants' || raw === 'individual' || raw === 'individuals') return 'individuals';
+  return 'teams';
+}
+
+function initialsFromName(name?: string | null): string {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'P';
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || '').join('') || 'P';
+}
+
 export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({ tournamentId, onBack }) => {
   const [tab, setTab] = React.useState<Tab>('gestion');
   const [loading, setLoading] = React.useState(true);
@@ -155,6 +173,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   const [manualRows, setManualRows] = React.useState<Array<{ id: string; name: string; inviteCode: string }>>([
     { id: crypto.randomUUID(), name: '', inviteCode: '' },
   ]);
+
+  const normalizedTournamentParticipantType = React.useMemo(
+    () => normalizeParticipantType(tournament?.participantType),
+    [tournament?.participantType]
+  );
+  const isTeamsTournament = normalizedTournamentParticipantType === 'teams';
+  const entitySingular = isTeamsTournament ? 'equipo' : 'participante';
+  const entityPlural = isTeamsTournament ? 'equipos' : 'participantes';
 
   const competitionNameById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -404,6 +430,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
              tournament(id: $id) {
                id
                name
+               participantType
                competitions {
                  id
                  name
@@ -539,16 +566,24 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     setSaving(true);
     setError('');
     try {
-      await createManualTeamInscriptionsBatch({
-        tournamentId,
-        competitionId: '',
-        entries: rows.filter((row) => row.name).map((row) => ({ name: row.name })),
-      });
-      for (const row of rows.filter((row) => row.inviteCode)) {
-        await createTeamInvite({
+      if (isTeamsTournament) {
+        await createManualTeamInscriptionsBatch({
           tournamentId,
-          competitionId: null,
-          targetTeamCode: row.inviteCode,
+          competitionId: '',
+          entries: rows.filter((row) => row.name).map((row) => ({ name: row.name })),
+        });
+        for (const row of rows.filter((row) => row.inviteCode)) {
+          await createTeamInvite({
+            tournamentId,
+            competitionId: null,
+            targetTeamCode: row.inviteCode,
+          });
+        }
+      } else {
+        await createManualParticipantInscriptionsBatch({
+          tournamentId,
+          competitionId: '',
+          entries: rows.filter((row) => row.name).map((row) => ({ name: row.name })),
         });
       }
       setManualRows([{ id: crypto.randomUUID(), name: '', inviteCode: '' }]);
@@ -793,6 +828,32 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     setDragOverZone(null);
   }
 
+  function renderEntryAvatar(item: InscriptionItem, className: string) {
+    if (!isTeamsTournament) {
+      return (
+        <div
+          className={`flex items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-700 ${className}`}
+          aria-label={item.display_name}
+          title={item.display_name}
+        >
+          {initialsFromName(item.display_name)}
+        </div>
+      );
+    }
+    return (
+      <img
+        src={resolveBadgeUrl(item.team_badge_url)}
+        alt={item.display_name}
+        className={`${className} rounded-full object-cover`}
+        onError={(event) => {
+          const target = event.currentTarget;
+          if (target.src.endsWith(DEFAULT_SHIELD_SRC)) return;
+          target.src = DEFAULT_SHIELD_SRC;
+        }}
+      />
+    );
+  }
+
   if (loading) return <Card>Cargando configuración del torneo...</Card>;
   if (!tournament) return <Card>{error || 'No se encontró el torneo'}</Card>;
 
@@ -832,45 +893,53 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       {tab === 'gestion' ? (
         <div className="space-y-4">
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">Invitaciones y altas manuales</h3>
-            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">
+              {isTeamsTournament ? 'Invitaciones y altas manuales' : 'Altas manuales y solicitudes'}
+            </h3>
+            <div className={`mb-4 grid grid-cols-1 gap-3 ${isTeamsTournament ? 'md:grid-cols-4' : 'md:grid-cols-1'}`}>
               <div className="rounded-xl border border-slate-200 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Código de invitación pública</p>
                 <p className="text-base font-semibold text-slate-800">{publicInviteCode || '-'}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones en curso</p>
-                <p className="text-base font-semibold text-slate-800">{targetedInvitesPendingCount}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones aceptadas</p>
-                <p className="text-base font-semibold text-emerald-700">{targetedInvitesAcceptedCount}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones rechazadas</p>
-                <p className="text-base font-semibold text-rose-700">{targetedInvitesRejectedCount}</p>
-              </div>
+              {isTeamsTournament ? (
+                <>
+                  <div className="rounded-xl border border-slate-200 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones en curso</p>
+                    <p className="text-base font-semibold text-slate-800">{targetedInvitesPendingCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones aceptadas</p>
+                    <p className="text-base font-semibold text-emerald-700">{targetedInvitesAcceptedCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Invitaciones rechazadas</p>
+                    <p className="text-base font-semibold text-rose-700">{targetedInvitesRejectedCount}</p>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <form onSubmit={handleManualBatchSubmit} className="space-y-3">
               {manualRows.map((row, index) => (
-                <div key={row.id} className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                <div key={row.id} className={`grid grid-cols-1 gap-2 ${isTeamsTournament ? 'md:grid-cols-12' : 'md:grid-cols-8'}`}>
                   <input
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm md:col-span-6"
-                    placeholder={`Nombre del equipo #${index + 1}`}
+                    className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${isTeamsTournament ? 'md:col-span-6' : 'md:col-span-6'}`}
+                    placeholder={`Nombre del ${entitySingular} #${index + 1}`}
                     value={row.name}
                     onChange={(e) => setManualRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, name: e.target.value } : x)))}
                   />
-                  <input
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm md:col-span-4"
-                    placeholder="Código invitación (ej: JAV-333)"
-                    value={row.inviteCode}
-                    onChange={(e) => setManualRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, inviteCode: e.target.value.toUpperCase() } : x)))}
-                  />
+                  {isTeamsTournament ? (
+                    <input
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm md:col-span-4"
+                      placeholder="Código invitación (ej: JAV-333)"
+                      value={row.inviteCode}
+                      onChange={(e) => setManualRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, inviteCode: e.target.value.toUpperCase() } : x)))}
+                    />
+                  ) : null}
                   <Button
                     type="button"
                     variant="secondary"
-                    className="md:col-span-2"
+                    className={isTeamsTournament ? 'md:col-span-2' : 'md:col-span-2'}
                     onClick={() => setManualRows((prev) => prev.filter((x) => x.id !== row.id))}
                   >
                     Quitar
@@ -881,7 +950,9 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                 <Button type="button" variant="secondary" onClick={() => setManualRows((prev) => [...prev, { id: crypto.randomUUID(), name: '', inviteCode: '' }])}>
                   + Fila
                 </Button>
-                <Button type="submit" disabled={saving}>Agregar equipos / invitaciones</Button>
+                <Button type="submit" disabled={saving}>
+                  {isTeamsTournament ? 'Agregar equipos / invitaciones' : 'Agregar participantes'}
+                </Button>
               </div>
             </form>
           </Card>
@@ -908,7 +979,9 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
           </Card>
 
           <Card>
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">Equipos participantes del torneo</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">
+              {isTeamsTournament ? 'Equipos participantes del torneo' : 'Participantes del torneo'}
+            </h3>
             <CompetitionPhaseFilter
               className="mb-3"
               competitions={phaseFilterCompetitions}
@@ -926,16 +999,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                 return (
                   <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <img
-                        src={resolveBadgeUrl(item.team_badge_url)}
-                        alt={item.display_name}
-                        className="h-9 w-9 rounded-full object-cover"
-                        onError={(event) => {
-                          const target = event.currentTarget;
-                          if (target.src.endsWith(DEFAULT_SHIELD_SRC)) return;
-                          target.src = DEFAULT_SHIELD_SRC;
-                        }}
-                      />
+                      {renderEntryAvatar(item, 'h-9 w-9')}
                       <div className="min-w-0">
                         <p className="truncate font-medium text-slate-800">{item.display_name}</p>
                         <p className="text-[11px] text-emerald-700">ACEPTADO</p>
@@ -954,7 +1018,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                 );
               })}
               {acceptedTeamsPool.length === 0 ? (
-                <p className="text-sm text-slate-500">No hay equipos aceptados para el filtro aplicado.</p>
+                <p className="text-sm text-slate-500">No hay {entityPlural} aceptados para el filtro aplicado.</p>
               ) : null}
             </div>
           </Card>
@@ -1052,20 +1116,11 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                           onDragEnd={handleDragEnd}
                                           className={`flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs transition-all duration-150 hover:border-emerald-300 ${draggingInscriptionId === String(item.id) ? 'opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
                                         >
-                                          <img
-                                            src={resolveBadgeUrl(item.team_badge_url)}
-                                            alt={item.display_name}
-                                            className="h-6 w-6 rounded-full object-cover"
-                                            onError={(event) => {
-                                              const target = event.currentTarget;
-                                              if (target.src.endsWith(DEFAULT_SHIELD_SRC)) return;
-                                              target.src = DEFAULT_SHIELD_SRC;
-                                            }}
-                                          />
+                                          {renderEntryAvatar(item, 'h-6 w-6')}
                                           <p className="line-clamp-1 font-medium text-slate-800">{item.display_name}</p>
                                         </div>
                                       ))}
-                                      {groupCards.length === 0 ? <p className="text-[11px] text-slate-500">Sin equipos</p> : null}
+                                      {groupCards.length === 0 ? <p className="text-[11px] text-slate-500">Sin {entityPlural}</p> : null}
                                     </div>
                                   </div>
                                 );
@@ -1105,7 +1160,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                         }}
                                       >
                                         <span className="mr-1 font-semibold text-slate-500">{slotRole === 'home' ? 'A' : 'B'}:</span>
-                                        {slotItem ? slotItem.display_name : showBye ? 'BYE' : 'Arrastrar equipo'}
+                                        {slotItem ? slotItem.display_name : showBye ? 'BYE' : `Arrastrar ${entitySingular}`}
                                       </div>
                                     );
                                   })}
@@ -1125,20 +1180,11 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                 onDragEnd={handleDragEnd}
                                 className={`w-24 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md ${draggingInscriptionId === String(item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
                               >
-                                <img
-                                  src={resolveBadgeUrl(item.team_badge_url)}
-                                  alt={item.display_name}
-                                  className="mx-auto mb-1 h-8 w-8 rounded-full object-cover"
-                                  onError={(event) => {
-                                    const target = event.currentTarget;
-                                    if (target.src.endsWith(DEFAULT_SHIELD_SRC)) return;
-                                    target.src = DEFAULT_SHIELD_SRC;
-                                  }}
-                                />
+                                <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(item, 'h-8 w-8')}</div>
                                 <p className="line-clamp-2 font-medium text-slate-800">{item.display_name}</p>
                               </div>
                             ))}
-                            {stageCards.length === 0 ? <p className="text-xs text-slate-500">Sin equipos asignados</p> : null}
+                            {stageCards.length === 0 ? <p className="text-xs text-slate-500">Sin {entityPlural} asignados</p> : null}
                           </div>
                         ) : null}
                       </div>
@@ -1150,7 +1196,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
           </div>
 
           <Card className="sticky top-4 h-fit w-[360px] shrink-0">
-            <h3 className="mb-2 text-sm font-semibold text-slate-800">Panel de equipos (A-Z)</h3>
+            <h3 className="mb-2 text-sm font-semibold text-slate-800">Panel de {entityPlural} (A-Z)</h3>
             <p className="mb-3 text-xs text-slate-500">12 por página · arrastrar a fases</p>
             <CompetitionPhaseFilter
               className="mb-3"
@@ -1213,23 +1259,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     }`}
                     title={item.display_name}
                   >
-                    <img
-                      src={resolveBadgeUrl(item.team_badge_url)}
-                      alt={item.display_name}
-                      className="mx-auto mb-1 h-10 w-10 rounded-full object-cover"
-                      onError={(event) => {
-                        const target = event.currentTarget;
-                        if (target.src.endsWith(DEFAULT_SHIELD_SRC)) return;
-                        target.src = DEFAULT_SHIELD_SRC;
-                      }}
-                    />
+                    <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(item, 'h-10 w-10')}</div>
                     <p className="line-clamp-2 font-medium text-slate-800">{item.display_name}</p>
                     <p className="text-[10px] text-slate-500">{item.status}</p>
         </div>
                 );
               })}
                       </div>
-            {initializationPool.length === 0 ? <p className="mt-2 text-xs text-slate-500">No hay equipos para mostrar.</p> : null}
+            {initializationPool.length === 0 ? <p className="mt-2 text-xs text-slate-500">No hay {entityPlural} para mostrar.</p> : null}
             {initializationPool.length > 0 ? (
               <div className="mt-3 flex items-center justify-between">
                 <p className="text-xs text-slate-500">Página {teamsPage} de {totalTeamsPages}</p>

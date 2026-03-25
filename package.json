@@ -13,6 +13,8 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:integration": "npm run test --prefix services/inscriptions-svc && npm run test --prefix services/tournaments-svc",
+    "setup:e2e": "node scripts/setup-e2e.mjs",
+    "setup:e2e:clean": "node scripts/setup-e2e.mjs --clean",
     "test:e2e": "playwright test --project=smoke",
     "test:e2e:smoke": "playwright test --project=smoke",
     "test:e2e:critical": "playwright test --project=critical",

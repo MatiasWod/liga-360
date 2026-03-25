@@ -12,6 +12,11 @@ export async function openTeamTournamentsPage(page: Page): Promise<void> {
   await page.getByRole('heading', { name: 'Torneos' }).waitFor({ state: 'visible' });
 }
 
+export async function openParticipantTournamentsPage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Torneos' }).first().click();
+  await page.getByRole('heading', { name: 'Torneos' }).waitFor({ state: 'visible' });
+}
+
 export async function openTeamHomePage(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Inicio' }).first().click();
   await page.getByText('Invitaciones recibidas').waitFor({ state: 'visible' });

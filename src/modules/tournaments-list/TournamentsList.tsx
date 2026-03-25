@@ -16,7 +16,10 @@ export const TournamentsList: React.FC<{
 	onOpen?: (id: string, name?: string) => void;
 	organizerFilter?: string;
 	inscriptionModeFilter?: 'public' | 'invitation';
-}> = ({ onOpen, organizerFilter, inscriptionModeFilter }) => {
+	participantTypeFilter?: 'teams' | 'individuals';
+	idsFilter?: string[];
+	excludeIdsFilter?: string[];
+}> = ({ onOpen, organizerFilter, inscriptionModeFilter, participantTypeFilter, idsFilter, excludeIdsFilter }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [items, setItems] = React.useState<Tournament[]>([]);
@@ -73,6 +76,13 @@ export const TournamentsList: React.FC<{
 		);
 	}
 
+	function normalizeParticipantType(value: string | null | undefined): 'teams' | 'individuals' {
+		const raw = String(value || '').trim().toLowerCase();
+		if (raw === 'team' || raw === 'teams') return 'teams';
+		if (raw === 'participant' || raw === 'participants' || raw === 'individual' || raw === 'individuals') return 'individuals';
+		return 'teams';
+	}
+
 	async function load() {
 			setLoading(true); setError(null);
 			try {
@@ -94,6 +104,17 @@ export const TournamentsList: React.FC<{
 				}
 				if (inscriptionModeFilter) {
 					filtered = filtered.filter((t) => (t.inscriptionMode || 'public') === inscriptionModeFilter);
+				}
+				if (participantTypeFilter) {
+					filtered = filtered.filter((t) => normalizeParticipantType(t.participantType) === participantTypeFilter);
+				}
+				if (Array.isArray(idsFilter)) {
+					const allowed = new Set(idsFilter.map((id) => String(id || '')));
+					filtered = filtered.filter((t) => allowed.has(String(t.id || '')));
+				}
+				if (Array.isArray(excludeIdsFilter) && excludeIdsFilter.length > 0) {
+					const blocked = new Set(excludeIdsFilter.map((id) => String(id || '')));
+					filtered = filtered.filter((t) => !blocked.has(String(t.id || '')));
 				}
 				setItems(filtered);
 			} catch (e: any) {
@@ -122,7 +143,7 @@ export const TournamentsList: React.FC<{
 
 	React.useEffect(() => {
 		load();
-	}, [organizerFilter, inscriptionModeFilter]);
+	}, [organizerFilter, inscriptionModeFilter, participantTypeFilter, idsFilter, excludeIdsFilter]);
 
 	if (loading) return <div className="text-sm opacity-80">Cargando torneos…</div>;
 	if (error) return <div className="text-sm text-red-300">{error}</div>;
