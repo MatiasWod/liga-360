@@ -51,6 +51,7 @@ async function ensureSchema() {
       competitor_kind TEXT NOT NULL DEFAULT 'team',
       display_name TEXT NOT NULL,
       linked_team_id INTEGER NULL,
+      linked_participant_user_id INTEGER NULL,
       status inscription_status_enum NOT NULL DEFAULT 'PENDIENTE',
       source inscription_source_enum NOT NULL,
       created_by_user_id INTEGER NULL,
@@ -67,6 +68,7 @@ async function ensureSchema() {
       type invite_type_enum NOT NULL,
       target_inscription_id INTEGER NULL REFERENCES "Inscription"(id) ON DELETE SET NULL,
       target_team_code TEXT NULL,
+      target_participant_user_id INTEGER NULL,
       status invite_status_enum NOT NULL DEFAULT 'active',
       expires_at TIMESTAMPTZ NULL,
       max_uses INTEGER NULL,
@@ -81,6 +83,7 @@ async function ensureSchema() {
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER NULL;
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS reviewed_by_user_id INTEGER NULL;
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS linked_team_id INTEGER NULL;
+    ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS linked_participant_user_id INTEGER NULL;
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS competition_id TEXT NULL;
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS competitor_kind TEXT NOT NULL DEFAULT 'team';
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS display_name TEXT;
@@ -118,6 +121,7 @@ async function ensureSchema() {
   await pool.query(`
     ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS competition_id TEXT NULL;
     ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS target_team_code TEXT NULL;
+    ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS target_participant_user_id INTEGER NULL;
     ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS invite_response_status TEXT NOT NULL DEFAULT 'pending';
   `);
   await pool.query(`
@@ -154,6 +158,24 @@ async function ensureSchema() {
     FROM ranked_unlinked r
     WHERE i.id = r.id
       AND r.rn > 1;
+
+    WITH ranked_participants AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY tournament_id, linked_participant_user_id
+          ORDER BY created_at ASC, id ASC
+        ) AS rn
+      FROM "Inscription"
+      WHERE linked_participant_user_id IS NOT NULL
+        AND status <> 'RECHAZADO'
+    )
+    UPDATE "Inscription" i
+    SET status = 'RECHAZADO',
+        updated_at = NOW()
+    FROM ranked_participants r
+    WHERE i.id = r.id
+      AND r.rn > 1;
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_inscription_tournament ON "Inscription"(tournament_id);
@@ -163,9 +185,13 @@ async function ensureSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS uniq_inscription_tournament_linked_team_active
       ON "Inscription"(tournament_id, linked_team_id)
       WHERE linked_team_id IS NOT NULL AND status <> 'RECHAZADO';
+    CREATE UNIQUE INDEX IF NOT EXISTS uniq_inscription_tournament_linked_participant_active
+      ON "Inscription"(tournament_id, linked_participant_user_id)
+      WHERE linked_participant_user_id IS NOT NULL AND status <> 'RECHAZADO';
     CREATE INDEX IF NOT EXISTS idx_invite_tournament ON "Invite"(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_invite_competition ON "Invite"(competition_id);
     CREATE INDEX IF NOT EXISTS idx_invite_target_team_code ON "Invite"(target_team_code);
+    CREATE INDEX IF NOT EXISTS idx_invite_target_participant_user_id ON "Invite"(target_participant_user_id);
     CREATE INDEX IF NOT EXISTS idx_invite_token ON "Invite"(token);
   `);
 }
@@ -203,6 +229,12 @@ function requireTeamUser(req, res, next) {
   return next();
 }
 
+function requireParticipantUser(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  if (req.user.type !== 'participant') return res.status(403).json({ error: 'FORBIDDEN: usuario participant requerido' });
+  return next();
+}
+
 async function getOwnedTeamForUser(client, userId) {
   const teams = await client.query(
     `SELECT id, name, badge_url
@@ -218,6 +250,30 @@ async function getOwnedTeamForUser(client, userId) {
     throw new Error('FORBIDDEN: un usuario no puede gestionar multiples equipos en este flujo');
   }
   return teams.rows[0];
+}
+
+async function getOwnedParticipantForUser(client, userId) {
+  const participants = await client.query(
+    `SELECT p.id,
+            p.first_name,
+            p.last_name,
+            p.nickname
+     FROM "Participant" p
+     JOIN "Person_Profile" pp ON pp.id = p.person_profile_id
+     WHERE pp.user_id = $1
+     ORDER BY p.id`,
+    [userId]
+  );
+  if (participants.rows.length === 0) {
+    throw new Error('FORBIDDEN: tu usuario participant no tiene perfil de jugador asociado');
+  }
+  const participant = participants.rows[0];
+  const nickname = String(participant.nickname || '').trim();
+  const fullName = `${String(participant.first_name || '').trim()} ${String(participant.last_name || '').trim()}`.trim();
+  return {
+    id: Number(participant.id),
+    displayName: fullName || nickname || `Participante ${Number(participant.id)}`,
+  };
 }
 
 async function assertSingleTeamAssociationRule(client, tournamentId, userId, teamId, inscriptionId) {
@@ -240,7 +296,13 @@ async function assertSingleTeamAssociationRule(client, tournamentId, userId, tea
 
 async function assertNoTournamentDuplicateInscription(
   client,
-  { tournamentId, linkedTeamId = null, displayName = '', excludeInscriptionId = null }
+  {
+    tournamentId,
+    linkedTeamId = null,
+    linkedParticipantUserId = null,
+    displayName = '',
+    excludeInscriptionId = null,
+  }
 ) {
   const safeTournamentId = String(tournamentId || '').trim();
   if (!safeTournamentId) return;
@@ -260,6 +322,24 @@ async function assertNoTournamentDuplicateInscription(
       [safeTournamentId, Number(linkedTeamId), excludeInscriptionId ? Number(excludeInscriptionId) : null]
     );
     if (existing.rows.length > 0) throw new Error('DUPLICATE_TEAM_IN_TOURNAMENT');
+    return;
+  }
+
+  if (linkedParticipantUserId) {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `dup:${safeTournamentId}:participant:${Number(linkedParticipantUserId)}`,
+    ]);
+    const existingParticipant = await client.query(
+      `SELECT id
+       FROM "Inscription"
+       WHERE tournament_id = $1
+         AND linked_participant_user_id = $2
+         AND status <> 'RECHAZADO'
+         AND ($3::INT IS NULL OR id <> $3)
+       LIMIT 1`,
+      [safeTournamentId, Number(linkedParticipantUserId), excludeInscriptionId ? Number(excludeInscriptionId) : null]
+    );
+    if (existingParticipant.rows.length > 0) throw new Error('DUPLICATE_PARTICIPANT_IN_TOURNAMENT');
     return;
   }
 
@@ -339,13 +419,30 @@ async function resolveCompetitionMaxSlots(competitionId) {
   }
 }
 
-async function resolveTournamentInscriptionMode(tournamentId) {
+function normalizeTournamentParticipantType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'team' || raw === 'teams') return 'teams';
+  if (raw === 'participant' || raw === 'participants' || raw === 'individual' || raw === 'individuals') return 'individuals';
+  return 'teams';
+}
+
+function assertRoleMatchesParticipantType(userType, participantType) {
+  if (userType === 'team' && participantType !== 'teams') {
+    throw new Error('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH');
+  }
+  if (userType === 'participant' && participantType !== 'individuals') {
+    throw new Error('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH');
+  }
+}
+
+async function resolveTournamentAccessConfig(tournamentId) {
   try {
     const query = `
       query TournamentInscriptionMode($id: ID!) {
         tournament(id: $id) {
           id
           inscriptionMode
+          participantType
         }
       }
     `;
@@ -359,10 +456,11 @@ async function resolveTournamentInscriptionMode(tournamentId) {
       throw new Error('TOURNAMENT_MODE_UNAVAILABLE');
     }
     const mode = String(body?.data?.tournament?.inscriptionMode || '').trim().toLowerCase();
+    const participantType = normalizeTournamentParticipantType(body?.data?.tournament?.participantType);
     if (!['public', 'invitation'].includes(mode)) {
       throw new Error('TOURNAMENT_MODE_UNAVAILABLE');
     }
-    return mode;
+    return { mode, participantType };
   } catch {
     throw new Error('TOURNAMENT_MODE_UNAVAILABLE');
   }
@@ -408,6 +506,19 @@ app.post('/inscriptions', async (req, res) => {
   const displayName = String(req.body?.displayName || '').trim();
   const sourceRaw = String(req.body?.source || 'public').trim().toLowerCase();
   const linkedTeamId = req.body?.linkedTeamId ? Number(req.body.linkedTeamId) : null;
+  const competitorKindRaw = String(req.body?.competitorKind || '').trim().toLowerCase();
+  const competitorKind = competitorKindRaw === 'participant' ? 'participant' : 'team';
+  const linkedParticipantUserIdRaw = req.body?.linkedParticipantUserId;
+  const linkedParticipantUserIdFromBody =
+    linkedParticipantUserIdRaw === null || linkedParticipantUserIdRaw === undefined
+      ? null
+      : Number(linkedParticipantUserIdRaw) || null;
+  const linkedParticipantUserId =
+    competitorKind === 'participant'
+      ? (req.user?.type === 'participant'
+          ? Number(req.user?.sub || 0) || null
+          : linkedParticipantUserIdFromBody)
+      : null;
   if (!tournamentId) return res.status(400).json({ error: 'tournamentId requerido' });
   if (!displayName) return res.status(400).json({ error: 'displayName requerido' });
   if (!['public', 'manual'].includes(sourceRaw)) return res.status(400).json({ error: 'source invalido. Usar public o manual' });
@@ -416,9 +527,12 @@ app.post('/inscriptions', async (req, res) => {
   }
   try {
     if (sourceRaw === 'public') {
-      const mode = await resolveTournamentInscriptionMode(tournamentId);
+      const { mode, participantType } = await resolveTournamentAccessConfig(tournamentId);
       if (mode !== 'public') {
         return res.status(403).json({ error: 'FORBIDDEN: torneo privado, solo se admite inscripción por invitación' });
+      }
+      if (req.user?.type === 'team' || req.user?.type === 'participant') {
+        assertRoleMatchesParticipantType(req.user.type, participantType);
       }
     }
     let finalDisplayName = displayName;
@@ -434,27 +548,54 @@ app.post('/inscriptions', async (req, res) => {
         finalDisplayName = String(teamR.rows[0].name).trim();
       }
     }
+    if (competitorKind === 'participant' && req.user?.type === 'participant') {
+      const participant = await getOwnedParticipantForUser(pool, req.user.sub);
+      finalDisplayName = participant.displayName || finalDisplayName;
+    }
     await assertNoTournamentDuplicateInscription(pool, {
       tournamentId,
       linkedTeamId,
+      linkedParticipantUserId,
       displayName: finalDisplayName,
     });
     const created = await pool.query(
       `INSERT INTO "Inscription"(
-        tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, source,
+        tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
         created_by_user_id, reviewed_by_user_id, created_at, updated_at
-      ) VALUES ($1, $2, 'team', $3, $4, 'PENDIENTE', $5::inscription_source_enum, $6, NULL, $7, $7)
-      RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE', $7::inscription_source_enum, $8, NULL, $9, $9)
+      RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                 created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
-      [tournamentId, competitionId, finalDisplayName, linkedTeamId, sourceRaw, req.user?.sub || null, nowIso()]
+      [
+        tournamentId,
+        competitionId,
+        competitorKind,
+        finalDisplayName,
+        linkedTeamId,
+        linkedParticipantUserId,
+        sourceRaw,
+        req.user?.sub || null,
+        nowIso(),
+      ]
     );
     return res.status(201).json({ inscription: created.rows[0] });
   } catch (e) {
     if (String(e?.message || '').includes('DUPLICATE_TEAM_IN_TOURNAMENT')) {
       return res.status(409).json({ error: 'equipo duplicado en torneo: solo se permite una inscripción activa por equipo' });
     }
+    if (String(e?.message || '').includes('DUPLICATE_PARTICIPANT_IN_TOURNAMENT')) {
+      return res.status(409).json({ error: 'participante duplicado en torneo: solo se permite una inscripción activa por participante' });
+    }
+    if (String(e?.message || '').includes('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH')) {
+      return res.status(403).json({ error: 'FORBIDDEN: tipo de participante incompatible con el torneo' });
+    }
     if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_team_active')) {
       return res.status(409).json({ error: 'equipo duplicado en torneo: solo se permite una inscripción activa por equipo' });
+    }
+    if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_participant_active')) {
+      return res.status(409).json({ error: 'participante duplicado en torneo: solo se permite una inscripción activa por participante' });
+    }
+    if (String(e?.message || '').startsWith('FORBIDDEN:')) {
+      return res.status(403).json({ error: e.message });
     }
     console.error('[inscriptions-svc] create public inscription error', e);
     return res.status(500).json({ error: 'internal_error' });
@@ -468,7 +609,7 @@ app.get('/invites', requireOrganizer, async (req, res) => {
   try {
     const listed = competitionId
       ? await pool.query(
-          `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status, expires_at, max_uses, uses_count, created_at
+          `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at
                   , invite_response_status
            FROM "Invite"
            WHERE competition_id = $1
@@ -476,7 +617,7 @@ app.get('/invites', requireOrganizer, async (req, res) => {
           [competitionId]
         )
       : await pool.query(
-          `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status, expires_at, max_uses, uses_count, created_at
+          `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at
                   , invite_response_status
            FROM "Invite"
            WHERE tournament_id = $1
@@ -500,13 +641,16 @@ app.post('/invites', requireOrganizer, async (req, res) => {
   const type = String(req.body?.type || '').trim().toLowerCase();
   const targetInscriptionId = req.body?.targetInscriptionId ? Number(req.body.targetInscriptionId) : null;
   const targetTeamCode = req.body?.targetTeamCode ? String(req.body.targetTeamCode).trim().toUpperCase() : null;
+  const targetParticipantUserId = req.body?.targetParticipantUserId
+    ? Number(req.body.targetParticipantUserId)
+    : null;
   const maxUsesRaw = req.body?.maxUses;
   const expiresAt = req.body?.expiresAt || null;
   const maxUses = maxUsesRaw === null || maxUsesRaw === undefined ? null : Number(maxUsesRaw);
   if (!tournamentId) return res.status(400).json({ error: 'tournamentId requerido' });
   if (!['public', 'targeted'].includes(type)) return res.status(400).json({ error: 'type invalido' });
-  if (type === 'targeted' && !targetInscriptionId && !targetTeamCode) {
-    return res.status(400).json({ error: 'targetInscriptionId o targetTeamCode requerido para type=targeted' });
+  if (type === 'targeted' && !targetInscriptionId && !targetTeamCode && !targetParticipantUserId) {
+    return res.status(400).json({ error: 'targetInscriptionId, targetTeamCode o targetParticipantUserId requerido para type=targeted' });
   }
   if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses <= 0)) {
     return res.status(400).json({ error: 'maxUses debe ser entero positivo o null' });
@@ -530,11 +674,22 @@ app.post('/invites', requireOrganizer, async (req, res) => {
     }
     const created = await pool.query(
       `INSERT INTO "Invite"(
-        token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status,
+        token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status,
         expires_at, max_uses, uses_count, created_at, invite_response_status
-      ) VALUES ($1, $2, $3, $4::invite_type_enum, $5, $6, 'active', $7, $8, 0, $9, 'pending')
-      RETURNING id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status, expires_at, max_uses, uses_count, created_at, invite_response_status`,
-      [await generateUniqueInviteToken(type), tournamentId, competitionId, type, targetInscriptionId, targetTeamCode, expiresAt, maxUses, nowIso()]
+      ) VALUES ($1, $2, $3, $4::invite_type_enum, $5, $6, $7, 'active', $8, $9, 0, $10, 'pending')
+      RETURNING id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at, invite_response_status`,
+      [
+        await generateUniqueInviteToken(type),
+        tournamentId,
+        competitionId,
+        type,
+        targetInscriptionId,
+        targetTeamCode,
+        targetParticipantUserId,
+        expiresAt,
+        maxUses,
+        nowIso(),
+      ]
     );
     return res.status(201).json({ invite: created.rows[0] });
   } catch (e) {
@@ -543,7 +698,7 @@ app.post('/invites', requireOrganizer, async (req, res) => {
   }
 });
 
-app.post('/invites/code/claim', requireTeamUser, async (req, res) => {
+app.post('/invites/code/claim', requireAuthMiddleware, async (req, res) => {
   const inviteCode = String(req.body?.code || '').trim().toUpperCase();
   if (!inviteCode) return res.status(400).json({ error: 'code requerido' });
   const client = await pool.connect();
@@ -566,11 +721,12 @@ app.post('/invites/code/claim', requireTeamUser, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'codigo no corresponde a invitacion publica' });
     }
-    const mode = await resolveTournamentInscriptionMode(String(invite.tournament_id));
+    const { mode, participantType } = await resolveTournamentAccessConfig(String(invite.tournament_id));
     if (mode !== 'public') {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'FORBIDDEN: torneo privado, solo se admite inscripción por invitación dirigida' });
     }
+    assertRoleMatchesParticipantType(req.user.type, participantType);
     try {
       ensureInviteUsable(invite);
     } catch (e) {
@@ -578,31 +734,64 @@ app.post('/invites/code/claim', requireTeamUser, async (req, res) => {
       return res.status(410).json({ error: e.message });
     }
 
-    const ownedTeam = await getOwnedTeamForUser(client, req.user.sub);
-    const duplicated = await client.query(
-      `SELECT id
-       FROM "Inscription"
-       WHERE tournament_id = $1
-         AND linked_team_id = $2
-         AND status <> 'RECHAZADO'
-       LIMIT 1
-       FOR UPDATE`,
-      [invite.tournament_id, ownedTeam.id]
-    );
-    if (duplicated.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'tu equipo ya tiene una inscripcion activa en esta competicion' });
-    }
+    let created = null;
+    if (req.user.type === 'team') {
+      const ownedTeam = await getOwnedTeamForUser(client, req.user.sub);
+      const duplicated = await client.query(
+        `SELECT id
+         FROM "Inscription"
+         WHERE tournament_id = $1
+           AND linked_team_id = $2
+           AND status <> 'RECHAZADO'
+         LIMIT 1
+         FOR UPDATE`,
+        [invite.tournament_id, ownedTeam.id]
+      );
+      if (duplicated.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'tu equipo ya tiene una inscripcion activa en esta competicion' });
+      }
 
-    const created = await client.query(
-      `INSERT INTO "Inscription"(
-        tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, source,
-        created_by_user_id, reviewed_by_user_id, created_at, updated_at
-      ) VALUES ($1, $2, 'team', $3, $4, 'PENDIENTE', 'public', $5, NULL, $6, $6)
-      RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
-                created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
-      [invite.tournament_id, invite.competition_id, ownedTeam.name, ownedTeam.id, req.user.sub, nowIso()]
-    );
+      const createdResult = await client.query(
+        `INSERT INTO "Inscription"(
+          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+          created_by_user_id, reviewed_by_user_id, created_at, updated_at
+        ) VALUES ($1, $2, 'team', $3, $4, NULL, 'PENDIENTE', 'public', $5, NULL, $6, $6)
+        RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
+        [invite.tournament_id, invite.competition_id, ownedTeam.name, ownedTeam.id, req.user.sub, nowIso()]
+      );
+      created = createdResult.rows[0];
+    } else if (req.user.type === 'participant') {
+      const participant = await getOwnedParticipantForUser(client, req.user.sub);
+      const duplicated = await client.query(
+        `SELECT id
+         FROM "Inscription"
+         WHERE tournament_id = $1
+           AND linked_participant_user_id = $2
+           AND status <> 'RECHAZADO'
+         LIMIT 1
+         FOR UPDATE`,
+        [invite.tournament_id, req.user.sub]
+      );
+      if (duplicated.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'ya tenes una inscripción activa en este torneo como participante' });
+      }
+      const createdResult = await client.query(
+        `INSERT INTO "Inscription"(
+          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+          created_by_user_id, reviewed_by_user_id, created_at, updated_at
+        ) VALUES ($1, $2, 'participant', $3, NULL, $4, 'PENDIENTE', 'public', $5, NULL, $6, $6)
+        RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
+        [invite.tournament_id, invite.competition_id, participant.displayName, req.user.sub, req.user.sub, nowIso()]
+      );
+      created = createdResult.rows[0];
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'FORBIDDEN: solo team o participant pueden usar este flujo' });
+    }
     await client.query(
       `UPDATE "Invite"
        SET uses_count = uses_count + 1
@@ -610,11 +799,20 @@ app.post('/invites/code/claim', requireTeamUser, async (req, res) => {
       [invite.id]
     );
     await client.query('COMMIT');
-    return res.status(201).json({ inscription: created.rows[0] });
+    return res.status(201).json({ inscription: created });
   } catch (e) {
     await client.query('ROLLBACK');
+    if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_team_active')) {
+      return res.status(409).json({ error: 'tu equipo ya tiene una inscripcion activa en esta competicion' });
+    }
+    if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_participant_active')) {
+      return res.status(409).json({ error: 'ya tenes una inscripción activa en este torneo como participante' });
+    }
     if (String(e?.message || '').startsWith('FORBIDDEN:')) {
       return res.status(403).json({ error: e.message });
+    }
+    if (String(e?.message || '').includes('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH')) {
+      return res.status(403).json({ error: 'FORBIDDEN: tipo de participante incompatible con el torneo' });
     }
     console.error('[inscriptions-svc] claim invite code error', e);
     return res.status(500).json({ error: 'internal_error' });
@@ -628,7 +826,7 @@ app.get('/invites/:token', async (req, res) => {
   if (!token) return res.status(400).json({ error: 'token requerido' });
   try {
     const found = await pool.query(
-      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status, expires_at, max_uses, uses_count, created_at, invite_response_status
+      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at, invite_response_status
        FROM "Invite"
        WHERE token = $1
        LIMIT 1`,
@@ -639,7 +837,7 @@ app.get('/invites/:token', async (req, res) => {
     let target = null;
     if (invite.target_inscription_id) {
       const targetR = await pool.query(
-        `SELECT id, tournament_id, competition_id, display_name, linked_team_id, status, source
+        `SELECT id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source
          FROM "Inscription"
          WHERE id = $1
          LIMIT 1`,
@@ -656,6 +854,7 @@ app.get('/invites/:token', async (req, res) => {
         inviteType: invite.type,
         targetInscriptionId: invite.target_inscription_id,
         targetTeamCode: invite.target_team_code,
+        targetParticipantUserId: invite.target_participant_user_id,
         status: invite.status,
         responseStatus: invite.invite_response_status,
         expiresAt: invite.expires_at,
@@ -678,7 +877,7 @@ app.post('/invites/:token/use', async (req, res) => {
   try {
     await client.query('BEGIN');
     const inviteR = await client.query(
-      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, status, expires_at, max_uses, uses_count, created_at, invite_response_status
+      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at, invite_response_status
        FROM "Invite"
        WHERE token = $1
        LIMIT 1
@@ -699,10 +898,13 @@ app.post('/invites/:token/use', async (req, res) => {
 
     let inscription = null;
     if (invite.type === 'public') {
-      const mode = await resolveTournamentInscriptionMode(String(invite.tournament_id));
+      const { mode, participantType } = await resolveTournamentAccessConfig(String(invite.tournament_id));
       if (mode !== 'public') {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'FORBIDDEN: torneo privado, solo se admite inscripción por invitación dirigida' });
+      }
+      if (req.user?.type === 'team' || req.user?.type === 'participant') {
+        assertRoleMatchesParticipantType(req.user.type, participantType);
       }
       if (!displayName) {
         await client.query('ROLLBACK');
@@ -710,16 +912,16 @@ app.post('/invites/:token/use', async (req, res) => {
       }
       const created = await client.query(
         `INSERT INTO "Inscription"(
-          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, source,
+          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
           created_by_user_id, reviewed_by_user_id, created_at, updated_at
-        ) VALUES ($1, $2, 'team', $3, NULL, 'PENDIENTE', 'invitation', $4, NULL, $5, $5)
-        RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+        ) VALUES ($1, $2, 'team', $3, NULL, NULL, 'PENDIENTE', 'invitation', $4, NULL, $5, $5)
+        RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                   created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
         [invite.tournament_id, invite.competition_id, displayName, req.user?.sub || null, nowIso()]
       );
       inscription = created.rows[0];
     } else {
-      if (!invite.target_inscription_id && !invite.target_team_code) {
+      if (!invite.target_inscription_id && !invite.target_team_code && !invite.target_participant_user_id) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'invite targeted sin target' });
       }
@@ -762,12 +964,47 @@ app.post('/invites/:token/use', async (req, res) => {
         } else {
           const created = await client.query(
             `INSERT INTO "Inscription"(
-              tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, source,
+              tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
               created_by_user_id, reviewed_by_user_id, created_at, updated_at
-            ) VALUES ($1, $2, 'team', $3, $4, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
-            RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+            ) VALUES ($1, $2, 'team', $3, $4, NULL, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
+            RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                       created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
             [invite.tournament_id, invite.competition_id, team.name, team.id, req.user.sub, nowIso()]
+          );
+          inscription = created.rows[0];
+        }
+      } else if (!invite.target_inscription_id && invite.target_participant_user_id) {
+        if (!req.user || req.user.type !== 'participant') {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'FORBIDDEN: invite de participante requiere usuario participant' });
+        }
+        if (Number(invite.target_participant_user_id) !== Number(req.user.sub)) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'FORBIDDEN: esta invitacion no pertenece a tu usuario' });
+        }
+        const participant = await getOwnedParticipantForUser(client, req.user.sub);
+        const existing = await client.query(
+          `SELECT id, status
+           FROM "Inscription"
+           WHERE tournament_id = $1
+             AND linked_participant_user_id = $2
+             AND status <> 'RECHAZADO'
+           ORDER BY id DESC
+           LIMIT 1
+           FOR UPDATE`,
+          [invite.tournament_id, req.user.sub]
+        );
+        if (existing.rows.length > 0) {
+          inscription = existing.rows[0];
+        } else {
+          const created = await client.query(
+            `INSERT INTO "Inscription"(
+              tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+              created_by_user_id, reviewed_by_user_id, created_at, updated_at
+            ) VALUES ($1, $2, 'participant', $3, NULL, $4, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
+            RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+                      created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
+            [invite.tournament_id, invite.competition_id, participant.displayName, req.user.sub, req.user.sub, nowIso()]
           );
           inscription = created.rows[0];
         }
@@ -805,7 +1042,7 @@ app.post('/invites/:token/use', async (req, res) => {
              source = 'invitation',
              updated_at = $3
          WHERE id = $1
-         RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+         RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                    created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
         [invite.target_inscription_id, displayName, nowIso(), req.user?.sub || null]
       );
@@ -841,6 +1078,7 @@ app.post('/invites/:token/use', async (req, res) => {
         competition_id: invite.competition_id,
         type: invite.type,
         target_team_code: invite.target_team_code || null,
+        target_participant_user_id: invite.target_participant_user_id || null,
       },
     });
   } catch (e) {
@@ -848,6 +1086,12 @@ app.post('/invites/:token/use', async (req, res) => {
       if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_team_active')) {
         return res.status(409).json({ error: 'equipo duplicado en torneo: solo se permite una inscripción activa por equipo' });
       }
+      if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_participant_active')) {
+        return res.status(409).json({ error: 'participante duplicado en torneo: solo se permite una inscripción activa por participante' });
+      }
+    if (String(e?.message || '').includes('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH')) {
+      return res.status(403).json({ error: 'FORBIDDEN: tipo de participante incompatible con el torneo' });
+    }
     console.error('[inscriptions-svc] use invite error', e);
     return res.status(500).json({ error: 'internal_error' });
   } finally {
@@ -918,7 +1162,7 @@ app.patch('/inscriptions/:id/status', requireOrganizer, async (req, res) => {
            reviewed_by_user_id = $3,
            updated_at = $4
        WHERE id = $1
-       RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+       RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
       [inscriptionId, newStatus, req.user.sub, nowIso()]
     );
@@ -992,7 +1236,7 @@ app.patch('/inscriptions/:id/competition', requireOrganizer, async (req, res) =>
            display_name = COALESCE($3, display_name),
            updated_at = $4
        WHERE id = $1
-       RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+       RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
       [inscriptionId, competitionId, finalDisplayName, nowIso()]
     );
@@ -1046,7 +1290,7 @@ app.post('/inscriptions/:id/associate', requireTeamUser, async (req, res) => {
            display_name = $3,
            updated_at = $4
        WHERE id = $1
-       RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+       RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
       [inscriptionId, ownedTeam.id, ownedTeam.name, nowIso()]
     );
@@ -1074,9 +1318,11 @@ app.get('/tournaments/:id/inscriptions', requireAuthMiddleware, async (req, res)
           `SELECT i.id,
                   i.tournament_id,
                   i.competition_id,
+                  i.competitor_kind,
                   COALESCE(t.name, i.display_name) AS display_name,
                   COALESCE(t.badge_url, t_by_name.badge_url) AS team_badge_url,
                   i.linked_team_id,
+                  i.linked_participant_user_id,
                   i.status,
                   i.source,
                   i.created_by_user_id, i.reviewed_by_user_id, i.created_at, i.updated_at
@@ -1098,9 +1344,11 @@ app.get('/tournaments/:id/inscriptions', requireAuthMiddleware, async (req, res)
           `SELECT i.id,
                   i.tournament_id,
                   i.competition_id,
+                  i.competitor_kind,
                   COALESCE(t.name, i.display_name) AS display_name,
                   COALESCE(t.badge_url, t_by_name.badge_url) AS team_badge_url,
                   i.linked_team_id,
+                  i.linked_participant_user_id,
                   i.status,
                   i.source,
                   i.created_by_user_id, i.reviewed_by_user_id, i.created_at, i.updated_at
@@ -1137,9 +1385,11 @@ app.get('/competitions/:id/inscriptions', requireAuthMiddleware, async (req, res
       `SELECT i.id,
               i.tournament_id,
               i.competition_id,
+              i.competitor_kind,
               COALESCE(t.name, i.display_name) AS display_name,
               COALESCE(t.badge_url, t_by_name.badge_url) AS team_badge_url,
               i.linked_team_id,
+              i.linked_participant_user_id,
               i.status,
               i.source,
               i.created_by_user_id, i.reviewed_by_user_id, i.created_at, i.updated_at
@@ -1182,7 +1432,7 @@ app.get('/teams/me/invites', requireTeamUser, async (req, res) => {
     if (!team.invite_code) return res.json({ invites: [] });
 
     const invitesR = await client.query(
-      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code,
+      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id,
               status, expires_at, max_uses, uses_count, created_at, invite_response_status
        FROM "Invite"
        WHERE type = 'targeted'
@@ -1221,7 +1471,7 @@ app.post('/teams/me/invites/:id/accept', requireTeamUser, async (req, res) => {
     }
     const team = teamR.rows[0];
     const inviteR = await client.query(
-      `SELECT id, token, tournament_id, competition_id, type, target_team_code, status, invite_response_status
+      `SELECT id, token, tournament_id, competition_id, type, target_team_code, target_participant_user_id, status, invite_response_status
        FROM "Invite"
        WHERE id = $1
        LIMIT 1
@@ -1259,10 +1509,10 @@ app.post('/teams/me/invites/:id/accept', requireTeamUser, async (req, res) => {
     if (existing.rows.length === 0) {
       const created = await client.query(
         `INSERT INTO "Inscription"(
-          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, source,
+          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
           created_by_user_id, reviewed_by_user_id, created_at, updated_at
-        ) VALUES ($1, $2, 'team', $3, $4, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
-        RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+        ) VALUES ($1, $2, 'team', $3, $4, NULL, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
+        RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                   created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
         [invite.tournament_id, invite.competition_id, team.name, team.id, req.user.sub, nowIso()]
       );
@@ -1274,7 +1524,7 @@ app.post('/teams/me/invites/:id/accept', requireTeamUser, async (req, res) => {
              reviewed_by_user_id = $2,
              updated_at = $3
          WHERE id = $1
-         RETURNING id, tournament_id, competition_id, display_name, linked_team_id, status, source,
+         RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
                    created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
         [existing.rows[0].id, req.user.sub, nowIso()]
       );
@@ -1336,6 +1586,144 @@ app.post('/teams/me/invites/:id/reject', requireTeamUser, async (req, res) => {
   }
 });
 
+app.get('/participants/me/invites', requireParticipantUser, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const invitesR = await client.query(
+      `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id,
+              status, expires_at, max_uses, uses_count, created_at, invite_response_status
+       FROM "Invite"
+       WHERE type = 'targeted'
+         AND target_participant_user_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.sub]
+    );
+    return res.json({ invites: invitesR.rows });
+  } catch (e) {
+    console.error('[inscriptions-svc] list participant invites error', e);
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/participants/me/invites/:id/accept', requireParticipantUser, async (req, res) => {
+  const inviteId = Number(req.params.id);
+  if (!inviteId) return res.status(400).json({ error: 'inviteId invalido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const participant = await getOwnedParticipantForUser(client, req.user.sub);
+    const inviteR = await client.query(
+      `SELECT id, token, tournament_id, competition_id, type, target_participant_user_id, status, invite_response_status
+       FROM "Invite"
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [inviteId]
+    );
+    if (inviteR.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'invite no existe' });
+    }
+    const invite = inviteR.rows[0];
+    if (invite.status !== 'active') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'invite no activa' });
+    }
+    if (String(invite.type) !== 'targeted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'invite no corresponde a flujo por usuario participant' });
+    }
+    if (Number(invite.target_participant_user_id || 0) !== Number(req.user.sub)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'FORBIDDEN: invitacion no pertenece a tu usuario' });
+    }
+    const existing = await client.query(
+      `SELECT id
+       FROM "Inscription"
+       WHERE tournament_id = $1
+         AND linked_participant_user_id = $2
+         AND status <> 'RECHAZADO'
+       LIMIT 1
+       FOR UPDATE`,
+      [invite.tournament_id, req.user.sub]
+    );
+    let inscription = null;
+    if (existing.rows.length === 0) {
+      const created = await client.query(
+        `INSERT INTO "Inscription"(
+          tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+          created_by_user_id, reviewed_by_user_id, created_at, updated_at
+        ) VALUES ($1, $2, 'participant', $3, NULL, $4, 'ACEPTADO', 'invitation', $5, $5, $6, $6)
+        RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+                  created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
+        [invite.tournament_id, invite.competition_id, participant.displayName, req.user.sub, req.user.sub, nowIso()]
+      );
+      inscription = created.rows[0];
+    } else {
+      const updatedExisting = await client.query(
+        `UPDATE "Inscription"
+         SET status = 'ACEPTADO',
+             reviewed_by_user_id = $2,
+             updated_at = $3
+         WHERE id = $1
+         RETURNING id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, linked_participant_user_id, status, source,
+                   created_by_user_id, reviewed_by_user_id, created_at, updated_at`,
+        [existing.rows[0].id, req.user.sub, nowIso()]
+      );
+      inscription = updatedExisting.rows[0];
+    }
+    await client.query(
+      `UPDATE "Invite"
+       SET status = 'revoked',
+           uses_count = uses_count + 1,
+           invite_response_status = 'accepted'
+       WHERE id = $1`,
+      [invite.id]
+    );
+    await client.query('COMMIT');
+    return res.json({ inscription });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_participant_active')) {
+      return res.status(409).json({ error: 'participante duplicado en torneo: solo se permite una inscripción activa por participante' });
+    }
+    if (String(e?.message || '').startsWith('FORBIDDEN:')) {
+      return res.status(403).json({ error: e.message });
+    }
+    console.error('[inscriptions-svc] accept participant invite error', e);
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/participants/me/invites/:id/reject', requireParticipantUser, async (req, res) => {
+  const inviteId = Number(req.params.id);
+  if (!inviteId) return res.status(400).json({ error: 'inviteId invalido' });
+  const client = await pool.connect();
+  try {
+    const updated = await client.query(
+      `UPDATE "Invite"
+       SET status = 'revoked',
+           invite_response_status = 'rejected'
+       WHERE id = $1
+         AND status = 'active'
+         AND target_participant_user_id = $2
+       RETURNING id`,
+      [inviteId, req.user.sub]
+    );
+    if (updated.rows.length === 0) return res.status(404).json({ error: 'invite no encontrada para tu usuario' });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[inscriptions-svc] reject participant invite error', e);
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
 export async function startServer() {
   return new Promise((resolve) => {
     const server = app.listen(PORT, async () => {
@@ -1348,6 +1736,8 @@ export async function startServer() {
 
 export {
   app,
+  normalizeTournamentParticipantType,
+  assertRoleMatchesParticipantType,
   ensureInviteUsable,
   generatePublicInviteCode,
   generateTargetedInviteToken,

@@ -28,9 +28,11 @@ export interface InscriptionItem {
   id: number;
   tournament_id: string;
   competition_id: string | null;
+  competitor_kind?: 'team' | 'participant';
   team_badge_url?: string | null;
   source: 'public' | 'invitation' | 'manual';
   linked_team_id: number | null;
+  linked_participant_user_id?: number | null;
   display_name: string;
   status: 'PENDIENTE' | 'ACEPTADO' | 'RECHAZADO';
   created_by_user_id: number | null;
@@ -51,6 +53,7 @@ export interface TournamentInvite {
   type: 'public' | 'targeted';
   target_inscription_id: number | null;
   target_team_code?: string | null;
+  target_participant_user_id?: number | null;
   status: 'active' | 'revoked';
   invite_response_status?: 'pending' | 'accepted' | 'rejected';
   expires_at: string | null;
@@ -97,6 +100,28 @@ export async function createManualTeamInscription(payload: {
   return json.inscription;
 }
 
+export async function createManualParticipantInscription(payload: {
+  tournamentId: string;
+  competitionId: string;
+  name: string;
+  linkedParticipantUserId?: number | null;
+}): Promise<InscriptionItem> {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      tournamentId: payload.tournamentId,
+      competitionId: payload.competitionId,
+      displayName: payload.name,
+      linkedParticipantUserId: payload.linkedParticipantUserId ?? null,
+      competitorKind: 'participant',
+      source: 'manual',
+    }),
+  });
+  const json = await parseResponse(res, 'No se pudo crear la inscripcion manual de participante');
+  return json.inscription;
+}
+
 export async function createPublicTeamInscription(payload: {
   tournamentId: string;
   competitionId?: string | null;
@@ -115,6 +140,26 @@ export async function createPublicTeamInscription(payload: {
     }),
   });
   const json = await parseResponse(res, 'No se pudo solicitar la inscripcion');
+  return json.inscription;
+}
+
+export async function createPublicParticipantInscription(payload: {
+  tournamentId: string;
+  competitionId?: string | null;
+  displayName: string;
+}): Promise<InscriptionItem> {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      tournamentId: payload.tournamentId,
+      competitionId: payload.competitionId ?? null,
+      displayName: payload.displayName,
+      source: 'public',
+      competitorKind: 'participant',
+    }),
+  });
+  const json = await parseResponse(res, 'No se pudo solicitar la inscripcion como participante');
   return json.inscription;
 }
 
@@ -204,6 +249,7 @@ export async function createTeamInvite(payload: {
   competitionId?: string | null;
   targetInscriptionId?: number;
   targetTeamCode?: string;
+  targetParticipantUserId?: number;
 }): Promise<TournamentInvite> {
   const res = await fetch(`${INSCRIPTIONS_BASE}/invites`, {
     method: 'POST',
@@ -214,6 +260,7 @@ export async function createTeamInvite(payload: {
       type: 'targeted',
       targetInscriptionId: payload.targetInscriptionId ?? null,
       targetTeamCode: payload.targetTeamCode ? payload.targetTeamCode.toUpperCase() : null,
+      targetParticipantUserId: payload.targetParticipantUserId ?? null,
     }),
   });
   const json = await parseResponse(res, 'No se pudo crear invitacion por equipo');
@@ -295,6 +342,33 @@ export async function createManualTeamInscriptionsBatch(payload: {
   return results;
 }
 
+export async function createManualParticipantInscriptionsBatch(payload: {
+  tournamentId: string;
+  competitionId: string;
+  entries: Array<{ name: string; linkedParticipantUserId?: number | null }>;
+}) {
+  const results: Array<{ ok: boolean; inscription?: InscriptionItem; error?: string; name: string }> = [];
+  for (const entry of payload.entries) {
+    const name = String(entry.name || '').trim();
+    if (!name) {
+      results.push({ ok: false, error: 'Nombre requerido', name: '' });
+      continue;
+    }
+    try {
+      const inscription = await createManualParticipantInscription({
+        tournamentId: payload.tournamentId,
+        competitionId: payload.competitionId,
+        name,
+        linkedParticipantUserId: entry.linkedParticipantUserId ?? null,
+      });
+      results.push({ ok: true, inscription, name });
+    } catch (e: any) {
+      results.push({ ok: false, error: e?.message || 'Error al crear inscripcion', name });
+    }
+  }
+  return results;
+}
+
 export async function listMyTeamInvites() {
   const res = await fetch(`${INSCRIPTIONS_BASE}/teams/me/invites`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudieron cargar invitaciones del equipo');
@@ -313,6 +387,32 @@ export async function acceptMyTeamInvite(inviteId: number) {
 
 export async function rejectMyTeamInvite(inviteId: number) {
   const res = await fetch(`${INSCRIPTIONS_BASE}/teams/me/invites/${inviteId}/reject`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  const json = await parseResponse(res, 'No se pudo rechazar la invitacion');
+  return json;
+}
+
+export async function listMyParticipantInvites() {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/participants/me/invites`, { headers: authHeaders() });
+  const json = await parseResponse(res, 'No se pudieron cargar invitaciones del participante');
+  return json;
+}
+
+export async function acceptMyParticipantInvite(inviteId: number) {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/participants/me/invites/${inviteId}/accept`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  const json = await parseResponse(res, 'No se pudo aceptar la invitacion');
+  return json;
+}
+
+export async function rejectMyParticipantInvite(inviteId: number) {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/participants/me/invites/${inviteId}/reject`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),

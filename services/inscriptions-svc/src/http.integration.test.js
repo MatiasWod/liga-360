@@ -32,3 +32,24 @@ test('GET /teams/me/invites sin token responde 401', async () => {
   assert.equal(response.statusCode, 401);
   assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
 });
+
+test('POST /invites/code/claim sin token responde 401', async () => {
+  const response = await request(app).post('/invites/code/claim').send({ code: 'ABCD1234' });
+  assert.equal(response.statusCode, 401);
+  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+});
+
+test('GET /participants/me/invites sin token responde 401', async () => {
+  const response = await request(app).get('/participants/me/invites');
+  assert.equal(response.statusCode, 401);
+  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+});
+
+test('GET /participants/me/invites con token team responde 403', async () => {
+  const token = jwt.sign({ sub: 7, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+  const response = await request(app)
+    .get('/participants/me/invites')
+    .set('Authorization', `Bearer ${token}`);
+  assert.equal(response.statusCode, 403);
+  assert.match(String(response.body.error || ''), /FORBIDDEN/);
+});
