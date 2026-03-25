@@ -3,10 +3,17 @@ import type { StageDraft, Selection } from '../StageBuilder';
 
 interface Props {
 	stages: StageDraft[];
+	/** Pool para resolver nombres de etapa destino (p. ej. otra competencia). Por defecto `stages`. */
+	lookupStages?: StageDraft[];
+	/** Quitar la relación del estado local (origen = etapa emisora). */
+	onRemoveRelation?: (fromStageId: string, relationId: string) => void;
 }
 
-export const GlobalRelationsSummary: React.FC<Props> = ({ stages }) => {
-	const items = React.useMemo(() => collectRelations(stages), [stages]);
+export const GlobalRelationsSummary: React.FC<Props> = ({ stages, lookupStages, onRemoveRelation }) => {
+	const items = React.useMemo(
+		() => collectRelations(stages, lookupStages ?? stages),
+		[stages, lookupStages]
+	);
 	if (items.length === 0) return null;
 	return (
 		<div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -22,7 +29,8 @@ export const GlobalRelationsSummary: React.FC<Props> = ({ stages }) => {
 							<th className="py-2 pr-3">Nombre</th>
 							<th className="py-2 pr-3">Selección</th>
 							<th className="py-2 pr-3">CarryOver</th>
-							<th className="py-2">Destino</th>
+							<th className="py-2 pr-3">Destino</th>
+							{onRemoveRelation ? <th className="py-2 w-24 text-right">Acción</th> : null}
 						</tr>
 					</thead>
 					<tbody>
@@ -32,7 +40,19 @@ export const GlobalRelationsSummary: React.FC<Props> = ({ stages }) => {
 								<td className="py-1 pr-3">{it.label}</td>
 								<td className="py-1 pr-3 whitespace-nowrap">{renderSelection(it.selection)}</td>
 								<td className="py-1 pr-3 whitespace-nowrap">{it.carryOverMode ?? '—'}</td>
-								<td className="py-1">{it.toName}</td>
+								<td className="py-1 pr-3">{it.toName}</td>
+								{onRemoveRelation ? (
+									<td className="py-1 text-right align-middle">
+										<button
+											type="button"
+											className="rounded px-2 py-1 text-[11px] text-white/90 hover:bg-red-500/25 hover:text-white"
+											onClick={() => onRemoveRelation(it.fromId, it.id)}
+											aria-label={`Eliminar relación ${it.label}`}
+										>
+											Eliminar
+										</button>
+									</td>
+								) : null}
 							</tr>
 						))}
 					</tbody>
@@ -42,16 +62,24 @@ export const GlobalRelationsSummary: React.FC<Props> = ({ stages }) => {
 	);
 };
 
-function collectRelations(stages: StageDraft[]) {
+function collectRelations(stages: StageDraft[], lookupPool: StageDraft[]) {
 	const items: Array<{ id: string; fromId: string; fromName: string; toId?: string; toName: string; label: string; selection: Selection; carryOverMode?: string; }> = [];
 	for (const s of stages) {
 		for (const r of s.relations || []) {
 			let toName = '—';
 			if (r.toStageId) {
-				const to = stages.find((x) => x.id === r.toStageId);
+				const to = lookupPool.find((x) => x.id === r.toStageId);
 				toName = to?.name ?? '—';
 			} else if (r.toExternal) {
-				toName = r.toExternal.stageName ?? `${r.toExternal.tournamentId} • ${r.toExternal.stageId}`;
+				const ext = r.toExternal;
+				if (ext.tournamentId === 'this' && ext.stageId) {
+					const to = lookupPool.find((x) => x.id === ext.stageId);
+					toName = to?.name ?? ext.stageName ?? ext.stageId;
+				} else {
+					toName =
+						ext.stageName ??
+						(ext.tournamentId && ext.stageId ? `${ext.tournamentId} • ${ext.stageId}` : '—');
+				}
 			}
 			items.push({ id: r.id, fromId: s.id, fromName: s.name, toId: r.toStageId, toName, label: r.label, selection: r.selection, carryOverMode: r.carryOver?.mode });
 		}

@@ -63,6 +63,25 @@ export const CompetitionsBuilder: React.FC<CompetitionsBuilderProps> = ({
 		updateCompetition(index, { stages: nextStages });
 	}
 
+	/** Todas las etapas del torneo (para resumen de relaciones y nombres de destino entre competencias). */
+	const allStagesFlat = React.useMemo(
+		() => competitions.flatMap((c) => c.stages ?? []),
+		[competitions]
+	);
+
+	function removeRelationGlobal(fromStageId: string, relationId: string) {
+		setCompetitions((prev) =>
+			prev.map((c) => ({
+				...c,
+				stages: (c.stages ?? []).map((s) =>
+					s.id === fromStageId
+						? { ...s, relations: (s.relations || []).filter((r) => r.id !== relationId) }
+						: s
+				),
+			}))
+		);
+	}
+
 	const crossOptions: CrossCompetitionOption[] = competitions.map((c) => ({
 		competitionId: c.id,
 		competitionName: c.name,
@@ -140,6 +159,8 @@ export const CompetitionsBuilder: React.FC<CompetitionsBuilderProps> = ({
 						onChangeStages={(next) => onChangeStages(activeIdx, next)}
 						crossOptions={crossOptions}
 						maxStages={maxStagesPerCompetition}
+						allStagesGlobal={allStagesFlat}
+						onRemoveRelationGlobal={removeRelationGlobal}
 					/>
 				</div>
 			)}

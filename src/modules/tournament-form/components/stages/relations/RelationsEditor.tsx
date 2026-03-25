@@ -4,11 +4,14 @@ import type { StageDraft, Relation, Selection, ExternalStageRef, CrossCompetitio
 interface Props {
 	stage: StageDraft;
 	allStages: StageDraft[];
+	/** Etapas de todo el torneo para mostrar nombre de destino fuera de esta competencia. */
+	lookupStages?: StageDraft[];
 	crossOptions?: CrossCompetitionOption[];
 	onChange: (id: string, partial: Partial<StageDraft>) => void;
 }
 
-export const RelationsEditor: React.FC<Props> = ({ stage, allStages, crossOptions, onChange }) => {
+export const RelationsEditor: React.FC<Props> = ({ stage, allStages, lookupStages, crossOptions, onChange }) => {
+	const destPool = lookupStages ?? allStages;
 	const relations = stage.relations ?? [];
 
 	const [label, setLabel] = React.useState('');
@@ -97,8 +100,17 @@ export const RelationsEditor: React.FC<Props> = ({ stage, allStages, crossOption
 		<div className="space-y-3">
 			<ul className="space-y-2">
 				{relations.map((r) => {
-					const to = r.toStageId ? allStages.find((s) => s.id === r.toStageId) : undefined;
-					const destLabel = r.toExternal ? (r.toExternal.stageName || r.toExternal.stageId) : (to?.name ?? '—');
+					const to = r.toStageId ? destPool.find((s) => s.id === r.toStageId) : undefined;
+					let destLabel = '—';
+					if (r.toExternal) {
+						if (r.toExternal.tournamentId === 'this' && r.toExternal.stageId) {
+							destLabel = destPool.find((s) => s.id === r.toExternal?.stageId)?.name ?? r.toExternal.stageName ?? r.toExternal.stageId;
+						} else {
+							destLabel = r.toExternal.stageName || r.toExternal.stageId;
+						}
+					} else if (to) {
+						destLabel = to.name;
+					}
 					return (
 						<li key={r.id} className="flex items-start justify-between gap-2 rounded bg-white/5 border border-white/10 p-2">
 							<div className="text-sm">

@@ -17,12 +17,23 @@ interface Props {
 	onChange: (rules: RuleItem[]) => void;
 }
 
+function rulesEqual(a: RuleItem[], b: RuleItem[]) {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export const TieBreakEditor: React.FC<Props> = ({ value, onChange }) => {
 	const [rules, setRules] = React.useState<RuleItem[]>(value && value.length ? value : DEFAULT_RULES);
 
 	React.useEffect(() => {
+		if (value && value.length > 0 && !rulesEqual(value, rules)) {
+			setRules(value);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- solo rehidratar cuando el servidor/padre envía otro orden distinto al estado local
+	}, [value]);
+
+	React.useEffect(() => {
 		onChange(rules);
-	}, [rules]);
+	}, [rules, onChange]);
 
 	function move(index: number, direction: -1 | 1) {
 		const newIndex = index + direction;

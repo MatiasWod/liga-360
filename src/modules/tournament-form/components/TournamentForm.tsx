@@ -3,6 +3,196 @@ import { Section } from './atoms/Section';
 import { TextField } from './atoms/TextField';
 import { SelectField } from './atoms/SelectField';
 import { CompetitionsBuilder, type CompetitionMeta } from './CompetitionsBuilder';
+import type { Relation, Selection } from './stages/StageBuilder';
+
+function parseJsonSafe(value: any): any {
+    if (value == null || value === '') return null;
+    if (typeof value === 'object') return value;
+    try {
+        return JSON.parse(String(value));
+    } catch {
+        return null;
+    }
+}
+
+function mapStageFormatToKind(format: string): 'groups' | 'league' | 'knockout' | 'composed' {
+    if (format === 'elimination') return 'knockout';
+    if (format === 'composed') return 'composed';
+    return format as 'groups' | 'league';
+}
+
+/** Rehidrata relaciones desde GraphQL (incluye toStageId cuando la etapa destino es interna). */
+function mapGraphqlTransitionsToRelations(
+    transitions: any[] | undefined,
+    parseJson: (v: any) => Record<string, unknown> | null
+): Relation[] {
+    if (!Array.isArray(transitions) || transitions.length === 0) return [];
+    return transitions.map((tr) => {
+        const kind = String(tr.selectionKind || 'top').toLowerCase();
+        let selection: Selection;
+        if (kind === 'range') {
+            selection = {
+                kind: 'range',
+                from: Number(tr.rangeFrom) || 0,
+                to: Number(tr.rangeTo) || 0,
+            };
+        } else if (kind === 'bottom') {
+            selection = { kind: 'bottom', count: Number(tr.bottomN) || 0 };
+        } else {
+            selection = { kind: 'top', count: Number(tr.topN) || 0 };
+        }
+        const id = String(tr.id);
+        const label = String(tr.label || 'avance');
+        const carryRaw = tr.carryOverJson != null ? parseJson(tr.carryOverJson) : null;
+        const carryOver =
+            carryRaw && typeof carryRaw === 'object' && !Array.isArray(carryRaw)
+                ? (carryRaw as unknown as Relation['carryOver'])
+                : undefined;
+
+        if (tr.toStageId) {
+            return {
+                id,
+                label,
+                toStageId: String(tr.toStageId),
+                selection,
+                ...(carryOver ? { carryOver } : {}),
+            };
+        }
+        const extTid = tr.toExternalTournamentId != null ? String(tr.toExternalTournamentId) : '';
+        const extSid = tr.toExternalStageId != null ? String(tr.toExternalStageId) : '';
+        if (extTid || extSid) {
+            return {
+                id,
+                label,
+                selection,
+                toExternal: {
+                    tournamentId: extTid,
+                    stageId: extSid,
+                    tournamentName: tr.toExternalTournamentName ?? undefined,
+                },
+                ...(carryOver ? { carryOver } : {}),
+            };
+        }
+        return { id, label, selection, ...(carryOver ? { carryOver } : {}) };
+    });
+}
+
+const TOURNAMENT_FOR_EDIT_QUERY = `
+    query TournamentForEdit($id: ID!) {
+        tournament(id: $id) {
+            id
+            name
+            sport
+            venue
+            participantType
+            inscriptionMode
+            status
+            competitions {
+                id
+                name
+                order
+                maxSlots
+                stages {
+                    id
+                    name
+                    order
+                    format
+                    configJson
+                    childrenJson
+                    transitions {
+                        id
+                        label
+                        toStageId
+                        selectionKind
+                        topN
+                        rangeFrom
+                        rangeTo
+                        bottomN
+                        toExternalTournamentId
+                        toExternalStageId
+                        toExternalTournamentName
+                        carryOverJson
+                    }
+                }
+            }
+        }
+    }
+`;
+
+function deriveFormStateFromGraphqlTournament(t: any): {
+    general: {
+        name: string;
+        sport: string;
+        venue: string;
+        participantType: string;
+        inscriptionMode: string;
+    };
+    competitions: CompetitionMeta[];
+    existingCompetitionIds: Set<string>;
+    existingStageIds: Set<string>;
+    existingTransitionIds: Set<string>;
+} {
+    const nextCompetitions: CompetitionMeta[] = (t.competitions || [])
+        .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
+        .map((competition: any) => ({
+            id: String(competition.id),
+            name: String(competition.name || ''),
+            maxSlots: competition.maxSlots == null ? null : Number(competition.maxSlots),
+            stages: (competition.stages || [])
+                .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
+                .map((stage: any) => ({
+                    id: String(stage.id),
+                    name: String(stage.name || ''),
+                    kind: mapStageFormatToKind(String(stage.format || 'league')),
+                    config: parseJsonSafe(stage.configJson) || {},
+                    children: parseJsonSafe(stage.childrenJson) || [],
+                    relations: mapGraphqlTransitionsToRelations(stage.transitions, parseJsonSafe),
+                })),
+        }));
+
+    const existingCompetitionIds = new Set<string>(nextCompetitions.map((c) => c.id));
+    const existingStageIds = new Set<string>(
+        nextCompetitions.flatMap((c) => (c.stages || []).map((s) => s.id))
+    );
+    const existingTransitionIds = new Set<string>(
+        (t.competitions || []).flatMap((competition: any) =>
+            (competition.stages || []).flatMap((stage: any) =>
+                (stage.transitions || []).map((transition: any) => String(transition.id))
+            )
+        )
+    );
+
+    return {
+        general: {
+            name: String(t.name || ''),
+            sport: String(t.sport || 'football'),
+            venue: String(t.venue || ''),
+            participantType: String(t.participantType || 'teams'),
+            inscriptionMode: String(t.inscriptionMode || 'public'),
+        },
+        competitions:
+            nextCompetitions.length > 0 ? nextCompetitions : [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }],
+        existingCompetitionIds,
+        existingStageIds,
+        existingTransitionIds,
+    };
+}
+
+function strOrNull(v: string | undefined | null): string | null {
+    if (v == null) return null;
+    const t = String(v).trim();
+    return t === '' ? null : t;
+}
+
+function collectRemovedTransitionIds(prev: CompetitionMeta[], next: CompetitionMeta[]): string[] {
+    const prevIds = new Set(
+        prev.flatMap((c) => (c.stages || []).flatMap((s) => (s.relations || []).map((r) => r.id)))
+    );
+    const nextIds = new Set(
+        next.flatMap((c) => (c.stages || []).flatMap((s) => (s.relations || []).map((r) => r.id)))
+    );
+    return [...prevIds].filter((id) => !nextIds.has(id));
+}
 
 interface TournamentFormProps {
     onCreated?: (payload: { id: string; name: string }) => void;
@@ -74,87 +264,21 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
             setLoadingExisting(true);
             setSubmitMsg('');
             try {
-                const data = await gql<{ tournament: any }>(
-                    `query TournamentForEdit($id: ID!) {
-                        tournament(id: $id) {
-                            id
-                            name
-                            sport
-                            venue
-                            participantType
-                            inscriptionMode
-                            status
-                            competitions {
-                                id
-                                name
-                                order
-                                maxSlots
-                                stages {
-                                    id
-                                    name
-                                    order
-                                    format
-                                    configJson
-                                    childrenJson
-                                    transitions {
-                                        id
-                                        label
-                                        selectionKind
-                                        topN
-                                        rangeFrom
-                                        rangeTo
-                                        bottomN
-                                        toExternalTournamentId
-                                        toExternalStageId
-                                        toExternalTournamentName
-                                        carryOverJson
-                                    }
-                                }
-                            }
-                        }
-                    }`,
-                    { id: tournamentId }
-                );
+                const data = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
                 const t = data?.tournament;
                 if (!t) throw new Error('No se encontró el torneo a editar');
                 if (cancelled) return;
 
+                const derived = deriveFormStateFromGraphqlTournament(t);
                 setGeneral({
-                    name: String(t.name || ''),
-                    sport: String(t.sport || 'football'),
-                    venue: String(t.venue || ''),
-                    participantType: (String(t.participantType || 'teams') as ParticipantType),
-                    inscriptionMode: (String(t.inscriptionMode || 'public') as InscriptionMode),
+                    ...derived.general,
+                    participantType: derived.general.participantType as ParticipantType,
+                    inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
                 });
-
-                const nextCompetitions: CompetitionMeta[] = (t.competitions || [])
-                    .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
-                    .map((competition: any) => ({
-                        id: String(competition.id),
-                        name: String(competition.name || ''),
-                        maxSlots: competition.maxSlots == null ? null : Number(competition.maxSlots),
-                        stages: (competition.stages || [])
-                            .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
-                            .map((stage: any) => ({
-                                id: String(stage.id),
-                                name: String(stage.name || ''),
-                                kind: mapStageFormatToKind(String(stage.format || 'league')),
-                                config: parseJsonSafe(stage.configJson) || {},
-                                children: parseJsonSafe(stage.childrenJson) || [],
-                                relations: [],
-                            })),
-                    }));
-
-                existingCompetitionIdsRef.current = new Set(nextCompetitions.map((competition) => competition.id));
-                existingStageIdsRef.current = new Set(
-                    nextCompetitions.flatMap((competition) => (competition.stages || []).map((stage) => stage.id))
-                );
-                existingTransitionIdsRef.current = new Set(
-                    (t.competitions || []).flatMap((competition: any) =>
-                        (competition.stages || []).flatMap((stage: any) => (stage.transitions || []).map((transition: any) => String(transition.id)))
-                    )
-                );
-                setCompetitions(nextCompetitions.length > 0 ? nextCompetitions : [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }]);
+                setCompetitions(derived.competitions);
+                existingCompetitionIdsRef.current = derived.existingCompetitionIds;
+                existingStageIdsRef.current = derived.existingStageIds;
+                existingTransitionIdsRef.current = derived.existingTransitionIds;
             } catch (err: any) {
                 if (!cancelled) {
                     setSubmitState('error');
@@ -307,7 +431,21 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                             toId = stageIdMap.get(rel.toExternal.stageId) ?? null;
                         }
 
+                        if (rel.toStageId && !toId) {
+                            throw new Error(
+                                `No se pudo resolver la etapa destino para la relación "${rel.label}". Revisá que la etapa siga existiendo.`
+                            );
+                        }
+                        if (rel.toExternal?.tournamentId === 'this' && rel.toExternal?.stageId && !toId) {
+                            throw new Error(
+                                `No se pudo resolver el destino entre competiciones para "${rel.label}" (etapa destino no encontrada). Guardá primero todas las etapas y volvé a intentar.`
+                            );
+                        }
+
                         const selectionVars = selectionToVariables(rel.selection);
+                        const extTid = strOrNull(rel.toExternal?.tournamentId ?? null);
+                        const extSid = strOrNull(rel.toExternal?.stageId ?? null);
+                        const extName = strOrNull(rel.toExternal?.tournamentName ?? null);
                         await gql(
                             `mutation AddTransition(
                                 $from: ID!,
@@ -344,13 +482,30 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                                 label: rel.label || 'avance',
                                 selectionKind: rel.selection.kind,
                                 ...selectionVars,
-                                toExternalTournamentId: toId ? null : rel.toExternal?.tournamentId ?? null,
-                                toExternalStageId: toId ? null : rel.toExternal?.stageId ?? null,
-                                toExternalTournamentName: toId ? null : rel.toExternal?.tournamentName ?? null,
+                                toExternalTournamentId: toId ? null : extTid,
+                                toExternalStageId: toId ? null : extSid,
+                                toExternalTournamentName: toId ? null : extName,
                                 carryOverJson: rel.carryOver ? JSON.stringify(rel.carryOver) : null,
                             }
                         );
                     }
+                }
+            }
+
+            if (isEdit && tournamentId) {
+                const refreshed = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
+                const tr = refreshed?.tournament;
+                if (tr) {
+                    const derived = deriveFormStateFromGraphqlTournament(tr);
+                    setGeneral({
+                        ...derived.general,
+                        participantType: derived.general.participantType as ParticipantType,
+                        inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
+                    });
+                    setCompetitions(derived.competitions);
+                    existingCompetitionIdsRef.current = derived.existingCompetitionIds;
+                    existingStageIdsRef.current = derived.existingStageIds;
+                    existingTransitionIdsRef.current = derived.existingTransitionIds;
                 }
             }
 
@@ -379,22 +534,6 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
             setSubmitState('error');
             setSubmitMsg('No se pudo guardar el borrador');
         }
-    }
-
-    function parseJsonSafe(value: any) {
-        if (value == null || value === '') return null;
-        if (typeof value === 'object') return value;
-        try {
-            return JSON.parse(String(value));
-        } catch {
-            return null;
-        }
-    }
-
-    function mapStageFormatToKind(format: string): 'groups' | 'league' | 'knockout' | 'composed' {
-        if (format === 'elimination') return 'knockout';
-        if (format === 'composed') return 'composed';
-        return format as 'groups' | 'league';
     }
 
     async function gql<T = any>(query: string, variables?: Record<string, any>): Promise<T> {
@@ -441,6 +580,50 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
             rangeTo: null,
             bottomN: Number(selection?.count) || 0,
         };
+    }
+
+    function handleCompetitionsChange(next: CompetitionMeta[]) {
+        const removed = collectRemovedTransitionIds(competitions, next);
+        setCompetitions(next);
+
+        if (mode !== 'edit' || !tournamentId || removed.length === 0) return;
+
+        const toDelete = removed.filter((id) => existingTransitionIdsRef.current.has(id));
+        if (toDelete.length === 0) return;
+
+        void (async () => {
+            for (const tid of toDelete) {
+                try {
+                    await gql<{ deleteTransition: boolean }>(
+                        `mutation DeleteTransition($id: ID!) { deleteTransition(transitionId: $id) }`,
+                        { id: tid }
+                    );
+                    existingTransitionIdsRef.current.delete(tid);
+                } catch (err: unknown) {
+                    setSubmitState('error');
+                    setSubmitMsg(err instanceof Error ? err.message : 'No se pudo eliminar la relación en el servidor');
+                    try {
+                        const data = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
+                        const tr = data?.tournament;
+                        if (tr) {
+                            const derived = deriveFormStateFromGraphqlTournament(tr);
+                            setGeneral({
+                                ...derived.general,
+                                participantType: derived.general.participantType as ParticipantType,
+                                inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
+                            });
+                            setCompetitions(derived.competitions);
+                            existingCompetitionIdsRef.current = derived.existingCompetitionIds;
+                            existingStageIdsRef.current = derived.existingStageIds;
+                            existingTransitionIdsRef.current = derived.existingTransitionIds;
+                        }
+                    } catch {
+                        /* ignorar fallo de refetch */
+                    }
+                    break;
+                }
+            }
+        })();
     }
 
     return (
@@ -522,7 +705,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
             </Section>
 
             <Section title="Estructura del torneo" subtitle="Cada solapa define una competencia secuencial; las solapas entre sí no son secuenciales">
-                <CompetitionsBuilder value={competitions} onChange={setCompetitions} />
+                <CompetitionsBuilder value={competitions} onChange={handleCompetitionsChange} />
             </Section>
 
             <div className="flex items-center justify-between border-t border-white/10 pt-6">
