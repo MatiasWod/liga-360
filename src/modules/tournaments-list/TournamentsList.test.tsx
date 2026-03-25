@@ -42,7 +42,7 @@ const tournamentsMock = [
 ];
 
 function mockGraphqlTournaments() {
-  vi.spyOn(global, 'fetch').mockResolvedValue({
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({
     ok: true,
     json: async () => ({ data: { tournaments: tournamentsMock } }),
   } as unknown as Response);
