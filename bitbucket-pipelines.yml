@@ -1,0 +1,21 @@
+image: node:20
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Build + Unit + Integration (required)
+          caches:
+            - node
+          script:
+            - npm ci
+            - npm run build
+            - npm run test:ci
+      - step:
+          name: E2E Smoke (required)
+          caches:
+            - node
+          script:
+            - npm ci
+            - npx playwright install --with-deps chromium
+            - npm run test:e2e:smoke

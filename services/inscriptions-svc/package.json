@@ -5,7 +5,10 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "NODE_ENV=test node --test src/rules.test.js",
+    "test:integration": "NODE_ENV=test node --test src/http.integration.test.js"
   },
   "dependencies": {
     "body-parser": "^1.20.3",
@@ -14,6 +17,9 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
   }
 }
 

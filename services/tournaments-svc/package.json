@@ -6,7 +6,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test src/auth.test.js"
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --test src/auth.test.js",
+    "test:integration": "node --test src/schema.integration.test.js"
   },
   "dependencies": {
     "@apollo/server": "^4.10.0",
