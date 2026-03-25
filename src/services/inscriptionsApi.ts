@@ -371,6 +371,9 @@ export async function createManualParticipantInscriptionsBatch(payload: {
 
 export async function listMyTeamInvites() {
   const res = await fetch(`${INSCRIPTIONS_BASE}/teams/me/invites`, { headers: authHeaders() });
+  if (res.status === 404) {
+    return { invites: [] };
+  }
   const json = await parseResponse(res, 'No se pudieron cargar invitaciones del equipo');
   return json;
 }
@@ -397,6 +400,9 @@ export async function rejectMyTeamInvite(inviteId: number) {
 
 export async function listMyParticipantInvites() {
   const res = await fetch(`${INSCRIPTIONS_BASE}/participants/me/invites`, { headers: authHeaders() });
+  if (res.status === 404) {
+    return { invites: [] };
+  }
   const json = await parseResponse(res, 'No se pudieron cargar invitaciones del participante');
   return json;
 }
