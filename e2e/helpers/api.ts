@@ -218,7 +218,8 @@ export async function createTargetedInvite(
   request: APIRequestContext,
   organizer: Session,
   tournamentId: string,
-  targetTeamCode: string
+  targetTeamCode?: string | null,
+  targetParticipantUserId?: number | null
 ): Promise<number> {
   const response = await request.post(`${INSCRIPTIONS_BASE}/invites`, {
     headers: {
@@ -229,7 +230,8 @@ export async function createTargetedInvite(
       tournamentId,
       competitionId: null,
       type: 'targeted',
-      targetTeamCode,
+      targetTeamCode: targetTeamCode || null,
+      targetParticipantUserId: targetParticipantUserId ?? null,
     },
   });
   await assertOk(response, 'No se pudo crear invitación dirigida E2E');
@@ -266,9 +268,29 @@ export async function listTeamInvites(
   return Array.isArray(json?.invites) ? json.invites : [];
 }
 
+export async function listParticipantInvites(
+  request: APIRequestContext,
+  participantSession: Session
+) {
+  const response = await request.get(`${INSCRIPTIONS_BASE}/participants/me/invites`, {
+    headers: {
+      Authorization: `Bearer ${participantSession.token}`,
+    },
+  });
+  await assertOk(response, 'No se pudieron listar invitaciones del participante');
+  const json = await parseJson(response);
+  return Array.isArray(json?.invites) ? json.invites : [];
+}
+
 export async function createTeamAndOrganizerContext(request: APIRequestContext, prefix: string) {
   const organizer = await registerAndLogin(request, 'organizer', `org_${prefix}`);
   const teamSession = await registerAndLogin(request, 'team', `team_${prefix}`);
   const team = await ensureOwnedTeam(request, teamSession, `E2E Team ${prefix}`);
   return { organizer, teamSession, team };
+}
+
+export async function createParticipantAndOrganizerContext(request: APIRequestContext, prefix: string) {
+  const organizer = await registerAndLogin(request, 'organizer', `org_${prefix}`);
+  const participantSession = await registerAndLogin(request, 'participant', `participant_${prefix}`);
+  return { organizer, participantSession };
 }
