@@ -195,13 +195,14 @@ function collectRemovedTransitionIds(prev: CompetitionMeta[], next: CompetitionM
 }
 
 interface TournamentFormProps {
+    organizerName: string;
     onCreated?: (payload: { id: string; name: string }) => void;
     onUpdated?: (payload: { id: string; name: string }) => void;
     mode?: 'create' | 'edit';
     tournamentId?: string | null;
 }
 
-export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpdated, mode = 'create', tournamentId }) => {
+export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, onCreated, onUpdated, mode = 'create', tournamentId }) => {
     type ParticipantType = 'teams' | 'individuals';
     type InscriptionMode = 'public' | 'invitation';
 
@@ -410,6 +411,14 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                             }
                         ).then(r => r.addStage);
                         stageIdMap.set(st.id, createdStage.id);
+                        if (format === 'elimination') {
+                            await gql(
+                                `mutation GenerateEliminationBracket($stageId: ID!) {
+                                    generateEliminationBracket(stageId: $stageId) { id }
+                                }`,
+                                { stageId: createdStage.id }
+                            );
+                        }
                     }
                 }
             }
@@ -652,10 +661,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                             label="Deporte"
                             name="sport"
                             value={general.sport}
-                            onChange={(e) => {
-                                const target = e?.currentTarget;
-                                if (!target) return;
-                                const v = target.value ?? 'football';
+                            onChange={(value) => {
+                                const v = value || 'football';
                                 setGeneral((g) => ({ ...g, sport: v }));
                             }}
                             options={[
@@ -677,14 +684,18 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                             setGeneral((g) => ({ ...g, venue: v }));
                         }}
                     />
+                    <div className="space-y-1">
+                        <span className="text-sm font-medium text-slate-700">Organizador</span>
+                        <p className="text-sm font-semibold text-slate-800">
+                            {organizerName?.trim() || 'Organizador'}
+                        </p>
+                    </div>
                     <SelectField
                         label="Tipo de participantes"
                         name="participantType"
                         value={general.participantType}
-                        onChange={(e) => {
-                            const target = e?.currentTarget;
-                            if (!target) return;
-                            const v = (target.value ?? 'teams') as ParticipantType;
+                        onChange={(value) => {
+                            const v = (value || 'teams') as ParticipantType;
                             setGeneral((g) => ({ ...g, participantType: v }));
                         }}
                         options={[{ label: 'Equipos', value: 'teams' }, { label: 'Participantes', value: 'individuals' }]}
@@ -693,10 +704,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ onCreated, onUpd
                         label="Tipo de inscripción"
                         name="inscriptionMode"
                         value={general.inscriptionMode}
-                        onChange={(e) => {
-                            const target = e?.currentTarget;
-                            if (!target) return;
-                            const v = (target.value ?? 'public') as InscriptionMode;
+                        onChange={(value) => {
+                            const v = (value || 'public') as InscriptionMode;
                             setGeneral((g) => ({ ...g, inscriptionMode: v }));
                         }}
                         options={[{ label: 'Pública', value: 'public' }, { label: 'Por invitación', value: 'invitation' }]}
