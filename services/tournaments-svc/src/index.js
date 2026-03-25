@@ -978,8 +978,8 @@ const resolvers = {
 
         if (!inscriptionId) {
           const clearField = role === 'home'
-            ? `homeInscriptionId = null, homeDisplayName = null, homeTournamentId = null`
-            : `awayInscriptionId = null, awayDisplayName = null, awayTournamentId = null`;
+            ? `m.homeInscriptionId = null, m.homeDisplayName = null, m.homeTournamentId = null`
+            : `m.awayInscriptionId = null, m.awayDisplayName = null, m.awayTournamentId = null`;
           await session.run(
             `MATCH (m:Match {id:$matchId})
              SET ${clearField}`,
@@ -1020,8 +1020,8 @@ const resolvers = {
         }
 
         const setField = role === 'home'
-          ? `homeInscriptionId = $iid, homeDisplayName = $displayName, homeTournamentId = $tid`
-          : `awayInscriptionId = $iid, awayDisplayName = $displayName, awayTournamentId = $tid`;
+          ? `m.homeInscriptionId = $iid, m.homeDisplayName = $displayName, m.homeTournamentId = $tid`
+          : `m.awayInscriptionId = $iid, m.awayDisplayName = $displayName, m.awayTournamentId = $tid`;
         await session.run(
           `MATCH (m:Match {id:$matchId})
            SET ${setField}`,
