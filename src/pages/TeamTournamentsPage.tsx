@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '../components/ui/Card';
 import { TournamentDetail } from '../modules/tournaments-list/TournamentDetail';
 import { TournamentsList } from '../modules/tournaments-list/TournamentsList';
-import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../services/inscriptionsApi';
+import { claimCompetitionByInviteCode, createPublicTeamInscription, listTournamentInscriptions } from '../services/inscriptionsApi';
 
 interface TeamTournamentsPageProps {
   activeTeamId?: string | null;
@@ -10,8 +10,10 @@ interface TeamTournamentsPageProps {
 }
 
 export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ activeTeamId, activeTeamName }) => {
-  const [tab, setTab] = React.useState<'publicos' | 'participando'>('publicos');
+  const [tab, setTab] = React.useState<'inscriptos' | 'disponibles'>('inscriptos');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [myTournamentIds, setMyTournamentIds] = React.useState<Set<string>>(new Set());
+  const [loadingMyTournaments, setLoadingMyTournaments] = React.useState(false);
   const [requestLoading, setRequestLoading] = React.useState(false);
   const [requestError, setRequestError] = React.useState<string | null>(null);
   const [requestSuccess, setRequestSuccess] = React.useState<string | null>(null);
@@ -61,6 +63,51 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
     }
   }
 
+  async function loadMyTournaments() {
+    if (!activeTeamId) {
+      setMyTournamentIds(new Set());
+      return;
+    }
+    setLoadingMyTournaments(true);
+    try {
+      const query = `
+        query TeamTournamentsList {
+          tournaments {
+            id
+          }
+        }`;
+      const res = await fetch('http://localhost:4000/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const json = await res.json();
+      const tournaments: Array<{ id: string }> = Array.isArray(json?.data?.tournaments) ? json.data.tournaments : [];
+      const acceptedOrPendingIds = new Set<string>();
+      for (const tournament of tournaments) {
+        const tournamentId = String(tournament.id || '');
+        if (!tournamentId) continue;
+        const inscriptions = await listTournamentInscriptions(tournamentId);
+        const match = inscriptions.some(
+          (item) =>
+            Number(item.linked_team_id || 0) === Number(activeTeamId) &&
+            String(item.status || '').toUpperCase() !== 'RECHAZADO'
+        );
+        if (match) acceptedOrPendingIds.add(tournamentId);
+      }
+      setMyTournamentIds(acceptedOrPendingIds);
+    } catch {
+      setMyTournamentIds(new Set());
+    } finally {
+      setLoadingMyTournaments(false);
+    }
+  }
+
+  React.useEffect(() => {
+    loadMyTournaments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeamId]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -76,21 +123,21 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
               type="button"
               onClick={() => {
                 setSelectedId(null);
-                setTab('publicos');
+                setTab('inscriptos');
               }}
-              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'publicos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'inscriptos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
             >
-              Publicos
+              Mis torneos
             </button>
             <button
               type="button"
               onClick={() => {
                 setSelectedId(null);
-                setTab('participando');
+                setTab('disponibles');
               }}
-              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'participando' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'disponibles' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
             >
-              Mi equipo participa
+              Disponibles
             </button>
           </div>
         </div>
@@ -120,9 +167,28 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
       </Card>
 
       <Card>
-        {tab === 'publicos' && (
+        {tab === 'inscriptos' && (
+          loadingMyTournaments ? (
+            <p className="text-sm text-slate-500">Cargando torneos del equipo...</p>
+          ) : selectedId ? (
+            <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
+          ) : (
+            <TournamentsList
+              participantTypeFilter="teams"
+              onOpen={(id) => setSelectedId(id)}
+              idsFilter={Array.from(myTournamentIds)}
+            />
+          )
+        )}
+
+        {tab === 'disponibles' && (
           !selectedId ? (
-            <TournamentsList inscriptionModeFilter="public" onOpen={(id) => setSelectedId(id)} />
+            <TournamentsList
+              inscriptionModeFilter="public"
+              participantTypeFilter="teams"
+              onOpen={(id) => setSelectedId(id)}
+              excludeIdsFilter={Array.from(myTournamentIds)}
+            />
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -143,18 +209,6 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
               <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
             </div>
           )
-        )}
-
-        {tab === 'participando' && (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-600">
-              Mostraremos aqui los torneos en los que participa el equipo activo.
-              {activeTeamId ? ` Equipo activo: #${activeTeamId}.` : ''}
-            </p>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Esta vista queda lista para conectarse al modulo de inscripciones (A4) y mostrar participaciones reales.
-            </div>
-          </div>
         )}
       </Card>
     </div>

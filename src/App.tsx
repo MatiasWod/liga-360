@@ -436,7 +436,7 @@ export const App: React.FC = () => {
       return <ParticipantTeamsPage linkedTeams={linkedTeams} />;
     }
     if (activeNav === 'torneos') {
-      return <ParticipantTournamentsPage teamTournaments={[]} individualTournaments={[]} />;
+      return <ParticipantTournamentsPage />;
     }
 
     if (activeNav === 'perfil') {
