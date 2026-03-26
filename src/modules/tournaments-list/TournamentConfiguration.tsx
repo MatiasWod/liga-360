@@ -21,76 +21,9 @@ import {
 } from '../../services/tournaments/configuration';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
+import type { TournamentCompetition as Competition, TournamentEntity as Tournament, TournamentStage as Stage } from './types';
 
 type Tab = 'gestion' | 'inicializacion' | 'fixture';
-
-type Stage = {
-  id: string;
-  name: string;
-  order: number;
-  format: 'league' | 'groups' | 'elimination' | 'composed';
-  isInitial: boolean;
-  configJson?: string | null;
-  childrenJson?: string | null;
-  assignedInscriptions: Array<{ inscriptionId: string; displayName: string }>;
-  transitions: Array<{
-    id: string;
-    label?: string | null;
-    toStageId?: string | null;
-    selectionKind?: string | null;
-    topN?: number | null;
-    rangeFrom?: number | null;
-    rangeTo?: number | null;
-    bottomN?: number | null;
-    toExternalTournamentId?: string | null;
-    toExternalStageId?: string | null;
-    toExternalTournamentName?: string | null;
-  }>;
-  groups?: Array<{
-    id: string;
-    name: string;
-    order: number;
-    capacity?: number | null;
-    assignedInscriptions?: Array<{ inscriptionId: string; displayName: string }>;
-    matches?: Array<{
-      id: string;
-      round?: number | null;
-      leg?: number | null;
-      slotIndex?: number | null;
-      fixtureCode?: string | null;
-      groupId?: string | null;
-      leagueHomeSeed?: number | null;
-      leagueAwaySeed?: number | null;
-      homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-      awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-    }>;
-  }>;
-  matches?: Array<{
-    id: string;
-    round?: number | null;
-    leg?: number | null;
-    slotIndex?: number | null;
-    fixtureCode?: string | null;
-    leagueHomeSeed?: number | null;
-    leagueAwaySeed?: number | null;
-    homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-    awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-  }>;
-};
-
-type Competition = {
-  id: string;
-  name: string;
-  order: number;
-  stages: Stage[];
-};
-
-type Tournament = {
-  id: string;
-  name: string;
-  participantType?: string | null;
-  competitions: Competition[];
-};
 
 interface TournamentConfigurationProps {
   tournamentId: string;
@@ -130,7 +63,7 @@ function teamsPerGroup(stage: Stage): number | null {
   return Number.isInteger(perGroup) && perGroup > 0 ? perGroup : null;
 }
 
-type StageTransition = Stage['transitions'][number];
+type StageTransition = NonNullable<Stage['transitions']>[number];
 
 function countTeamsFromTransition(tr: StageTransition, fromStage: Stage): number {
   const kind = String(tr.selectionKind || 'top').toLowerCase();

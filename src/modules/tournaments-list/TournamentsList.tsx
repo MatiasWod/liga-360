@@ -1,17 +1,6 @@
 import React from 'react';
 import { deleteTournamentById, listTournamentsGraphql } from '../../services/tournamentsApi';
-
-type Stage = { id: string; name: string; order: number; format: 'league' | 'groups' | 'elimination' };
-type Competition = { id: string; name: string; order: number; stages: Stage[] };
-type Tournament = {
-	id: string;
-	name: string;
-	venue?: string | null;
-	organizer?: string | null;
-	participantType?: string | null;
-	inscriptionMode?: 'public' | 'invitation' | null;
-	competitions: Competition[];
-};
+import type { TournamentEntity, TournamentStage } from './types';
 
 export const TournamentsList: React.FC<{
 	onOpen?: (id: string, name?: string) => void;
@@ -23,10 +12,10 @@ export const TournamentsList: React.FC<{
 }> = ({ onOpen, organizerFilter, inscriptionModeFilter, participantTypeFilter, idsFilter, excludeIdsFilter }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
-	const [items, setItems] = React.useState<Tournament[]>([]);
+	const [items, setItems] = React.useState<TournamentEntity[]>([]);
 	const currentOrganizer = (organizerFilter || '').trim().toLowerCase();
 
-	function StageIcon({ format }: { format: Stage['format'] }) {
+	function StageIcon({ format }: { format: TournamentStage['format'] }) {
 		const common = 'w-3.5 h-3.5';
 		switch (format) {
 			case 'groups':
@@ -87,7 +76,7 @@ export const TournamentsList: React.FC<{
 	async function load() {
 			setLoading(true); setError(null);
 			try {
-				const all = await listTournamentsGraphql() as Tournament[];
+				const all = await listTournamentsGraphql() as TournamentEntity[];
 				let filtered = all;
 				if (organizerFilter?.trim()) {
 					const needle = organizerFilter.trim().toLowerCase();

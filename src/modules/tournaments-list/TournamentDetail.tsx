@@ -1,45 +1,9 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
+import type { TournamentEntity, TournamentStage } from './types';
 
-type MatchRow = {
-	id: string;
-	round?: number | null;
-	leg?: number | null;
-	slotIndex?: number | null;
-	fixtureCode?: string | null;
-	groupId?: string | null;
-	homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-	awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-};
-
-type GroupBlock = {
-	id: string;
-	name: string;
-	order: number;
-	matches?: MatchRow[];
-};
-
-type Stage = {
-	id: string;
-	name: string;
-	order: number;
-	format: 'league' | 'groups' | 'elimination';
-	matches?: MatchRow[];
-	groups?: GroupBlock[];
-};
-type Competition = { id: string; name: string; order: number; stages: Stage[] };
-type Tournament = {
-	id: string;
-	name: string;
-	venue?: string | null;
-	organizer?: string | null;
-	participantType?: string | null;
-	status?: string | null;
-	competitions: Competition[];
-};
-
-function StageIcon({ format }: { format: Stage['format'] }) {
+function StageIcon({ format }: { format: TournamentStage['format'] }) {
 	const common = 'w-3.5 h-3.5';
 	switch (format) {
 		case 'groups':
@@ -95,7 +59,7 @@ function TournamentIcon() {
 export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({ id, onBack }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
-	const [t, setT] = React.useState<Tournament | null>(null);
+	const [t, setT] = React.useState<TournamentEntity | null>(null);
 
 	React.useEffect(() => {
 		async function load() {
@@ -103,7 +67,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 			setError(null);
 			try {
 				const tournament = await getTournamentDetailById(id);
-				setT((tournament || null) as Tournament | null);
+				setT((tournament || null) as TournamentEntity | null);
 			} catch (e: any) {
 				setError(e?.message || 'Error al cargar torneo');
 			} finally {

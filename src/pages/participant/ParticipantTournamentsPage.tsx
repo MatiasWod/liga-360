@@ -1,7 +1,6 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
-import { TournamentDetail } from '../../modules/tournaments-list/TournamentDetail';
-import { TournamentsList } from '../../modules/tournaments-list/TournamentsList';
+import { TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
 import {
   acceptMyParticipantInvite,
   claimCompetitionByInviteCode,

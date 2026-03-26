@@ -7,45 +7,10 @@ import {
   generateLeagueRoundRobin,
   generateSingleEliminationBracket,
 } from '../../services/tournaments/configuration';
-
-type MatchRow = {
-  id: string;
-  round?: number | null;
-  leg?: number | null;
-  slotIndex?: number | null;
-  fixtureCode?: string | null;
-  groupId?: string | null;
-  scheduledAt?: string | null;
-  leagueHomeSeed?: number | null;
-  leagueAwaySeed?: number | null;
-  homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-  awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
-};
-
-type GroupBlock = {
-  id: string;
-  name: string;
-  order: number;
-  assignedInscriptions?: Array<{ inscriptionId: string; displayName: string }>;
-  matches?: MatchRow[];
-};
-
-type Stage = {
-  id: string;
-  name: string;
-  order: number;
-  format: 'league' | 'groups' | 'elimination' | 'composed';
-  assignedInscriptions?: Array<{ inscriptionId: string; displayName: string }>;
-  matches?: MatchRow[];
-  groups?: GroupBlock[];
-};
-
-type Competition = { id: string; name: string; order: number; stages: Stage[] };
-
-type Tournament = { id: string; name: string; competitions: Competition[] };
+import type { TournamentEntity } from './types';
 
 export const FixturePlanningPanel: React.FC<{
-  tournament: Tournament;
+  tournament: TournamentEntity;
   onRefresh: () => Promise<void>;
   setSaving: (v: boolean) => void;
   setError: (v: string) => void;
