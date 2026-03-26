@@ -1,8 +1,8 @@
 import React from 'react';
-import { Card } from '../components/ui/Card';
-import { acceptMyTeamInvite, listMyTeamInvites, rejectMyTeamInvite } from '../services/inscriptionsApi';
-import { enrichInvitesWithTournamentData } from '../services/tournamentsApi';
-import type { TeamInfo, TeamParticipant } from '../types/domain';
+import { Card } from '../../components/ui/Card';
+import { acceptMyTeamInvite, listMyTeamInvites, rejectMyTeamInvite } from '../../services/inscriptionsApi';
+import { enrichInvitesWithTournamentData } from '../../services/tournamentsApi';
+import type { TeamInfo, TeamParticipant } from '../../types/domain';
 
 interface TeamHomePageProps {
   team: TeamInfo | null;

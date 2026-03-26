@@ -1,10 +1,10 @@
 import React from 'react';
-import type { LinkedTeam, TeamParticipant } from '../types/domain';
-import { Avatar } from '../components/ui/Avatar';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { LinkedTeamsSection } from '../components/profile/LinkedTeamsSection';
-import { Modal } from '../components/ui/Modal';
+import type { LinkedTeam, TeamParticipant } from '../../types/domain';
+import { Avatar } from '../../components/ui/Avatar';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { LinkedTeamsSection } from '../../components/profile/LinkedTeamsSection';
+import { Modal } from '../../components/ui/Modal';
 
 const DEFAULT_AVATAR_SRC = '/predeterminado.png';
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { TournamentForm } from '../modules/tournament-form/components/TournamentForm';
-import { TournamentDetail } from '../modules/tournaments-list/TournamentDetail';
-import { TournamentConfiguration } from '../modules/tournaments-list/TournamentConfiguration';
-import { TournamentsList } from '../modules/tournaments-list/TournamentsList';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { TournamentForm } from '../../modules/tournament-form/components/TournamentForm';
+import { TournamentDetail } from '../../modules/tournaments-list/TournamentDetail';
+import { TournamentConfiguration } from '../../modules/tournaments-list/TournamentConfiguration';
+import { TournamentsList } from '../../modules/tournaments-list/TournamentsList';
 
 type Mode = 'visualizacion' | 'creacion' | 'configuracion' | 'edicion';
 

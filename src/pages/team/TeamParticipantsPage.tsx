@@ -1,11 +1,11 @@
 import React from 'react';
-import type { TeamInfo, TeamParticipant } from '../types/domain';
-import { CreateParticipantModal, type CreateParticipantPayload } from '../components/team/CreateParticipantModal';
-import { TeamMembersSection } from '../components/team/TeamMembersSection';
-import { Avatar } from '../components/ui/Avatar';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Modal } from '../components/ui/Modal';
+import type { TeamInfo, TeamParticipant } from '../../types/domain';
+import { CreateParticipantModal, type CreateParticipantPayload } from '../../components/team/CreateParticipantModal';
+import { TeamMembersSection } from '../../components/team/TeamMembersSection';
+import { Avatar } from '../../components/ui/Avatar';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Modal } from '../../components/ui/Modal';
 
 const DEFAULT_SHIELD_SRC = '/predeterminado.png';
 const MIN_LOGO_ZOOM = 0.3;

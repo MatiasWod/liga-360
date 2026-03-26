@@ -1,8 +1,8 @@
 import React from 'react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { claimGeneralInvite, claimTeamInvite, getInviteByToken } from '../services/inscriptionsApi';
-import { getTournamentSummaryById } from '../services/tournamentsApi';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { claimGeneralInvite, claimTeamInvite, getInviteByToken } from '../../services/inscriptionsApi';
+import { getTournamentSummaryById } from '../../services/tournamentsApi';
 
 interface InviteLandingPageProps {
   token: string;

@@ -1,8 +1,8 @@
 import React from 'react';
-import type { TeamInfo, TeamParticipant } from '../types/domain';
-import { CreateParticipantModal, type CreateParticipantPayload } from '../components/team/CreateParticipantModal';
-import { TeamHeaderCard } from '../components/team/TeamHeaderCard';
-import { TeamMembersSection } from '../components/team/TeamMembersSection';
+import type { TeamInfo, TeamParticipant } from '../../types/domain';
+import { CreateParticipantModal, type CreateParticipantPayload } from '../../components/team/CreateParticipantModal';
+import { TeamHeaderCard } from '../../components/team/TeamHeaderCard';
+import { TeamMembersSection } from '../../components/team/TeamMembersSection';
 
 interface TeamDashboardProps {
   team: TeamInfo | null;

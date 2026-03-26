@@ -1,9 +1,9 @@
 import React from 'react';
-import { Card } from '../components/ui/Card';
-import { TournamentDetail } from '../modules/tournaments-list/TournamentDetail';
-import { TournamentsList } from '../modules/tournaments-list/TournamentsList';
-import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../services/inscriptionsApi';
-import { listTournamentIdsByInscriptionPredicate } from '../services/tournamentsApi';
+import { Card } from '../../components/ui/Card';
+import { TournamentDetail } from '../../modules/tournaments-list/TournamentDetail';
+import { TournamentsList } from '../../modules/tournaments-list/TournamentsList';
+import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../../services/inscriptionsApi';
+import { listTournamentIdsByInscriptionPredicate } from '../../services/tournamentsApi';
 
 interface TeamTournamentsPageProps {
   activeTeamId?: string | null;

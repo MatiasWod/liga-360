@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card } from '../components/ui/Card';
-import type { LinkedTeam, TeamParticipant } from '../types/domain';
+import { Card } from '../../components/ui/Card';
+import type { LinkedTeam, TeamParticipant } from '../../types/domain';
 
 interface ParticipantHomePageProps {
   linkedTeams: LinkedTeam[];

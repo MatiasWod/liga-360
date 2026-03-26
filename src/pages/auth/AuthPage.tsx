@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button } from '../components/ui/Button';
-import { login, register } from '../services/teamsApi';
+import { Button } from '../../components/ui/Button';
+import { login, register } from '../../services/teamsApi';
 
 interface AuthPageProps {
   onAuthenticated: () => void;

@@ -1,16 +1,16 @@
 import React from 'react';
-import { Card } from '../components/ui/Card';
-import { TournamentDetail } from '../modules/tournaments-list/TournamentDetail';
-import { TournamentsList } from '../modules/tournaments-list/TournamentsList';
+import { Card } from '../../components/ui/Card';
+import { TournamentDetail } from '../../modules/tournaments-list/TournamentDetail';
+import { TournamentsList } from '../../modules/tournaments-list/TournamentsList';
 import {
   acceptMyParticipantInvite,
   claimCompetitionByInviteCode,
   createPublicParticipantInscription,
   listMyParticipantInvites,
   rejectMyParticipantInvite,
-} from '../services/inscriptionsApi';
-import { readSessionUser } from '../services/teamsApi';
-import { enrichInvitesWithTournamentData, listTournamentIdsByInscriptionPredicate } from '../services/tournamentsApi';
+} from '../../services/inscriptionsApi';
+import { readSessionUser } from '../../services/teamsApi';
+import { enrichInvitesWithTournamentData, listTournamentIdsByInscriptionPredicate } from '../../services/tournamentsApi';
 
 type InviteItem = {
   id: number;

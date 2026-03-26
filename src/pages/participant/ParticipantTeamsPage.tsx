@@ -1,11 +1,11 @@
 import React from 'react';
-import { CreateParticipantModal, type CreateParticipantPayload } from '../components/team/CreateParticipantModal';
-import { TeamMembersSection } from '../components/team/TeamMembersSection';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Modal } from '../components/ui/Modal';
-import type { LinkedTeam, TeamInfo, TeamParticipant } from '../types/domain';
-import { createParticipant, getTeamDetail, removeTeamMember, updateParticipant } from '../services/teamsApi';
+import { CreateParticipantModal, type CreateParticipantPayload } from '../../components/team/CreateParticipantModal';
+import { TeamMembersSection } from '../../components/team/TeamMembersSection';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Modal } from '../../components/ui/Modal';
+import type { LinkedTeam, TeamInfo, TeamParticipant } from '../../types/domain';
+import { createParticipant, getTeamDetail, removeTeamMember, updateParticipant } from '../../services/teamsApi';
 
 const DEFAULT_SHIELD_SRC = '/predeterminado.png';
 
