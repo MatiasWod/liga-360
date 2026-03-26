@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScheduleFromStage } from './adaptFixtureData';
+import { buildScheduleFromStage } from '../../../components/tournament-schedule/adaptFixtureData';
 
 describe('buildScheduleFromStage (groups)', () => {
   it('usa el mismo id de ronda en todos los grupos para la misma fecha', () => {

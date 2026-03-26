@@ -5,7 +5,7 @@ import {
   CompetitionPhaseFilter,
   type Competition,
   type CompetitionPhaseFilterChange,
-} from './CompetitionPhaseFilter';
+} from '../../../components/CompetitionPhaseFilter';
 
 const competitions: Competition[] = [
   {

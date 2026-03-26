@@ -1,4 +1,4 @@
-import type { GroupsScheduleData, KnockoutScheduleData, LeagueScheduleData } from './types';
+import type { GroupsScheduleData, KnockoutScheduleData, LeagueScheduleData } from '../../components/tournament-schedule/types';
 
 const iso = (d: string) => new Date(d).toISOString();
 

@@ -1,4 +1,4 @@
-import type { AppUser, LinkedTeam, TeamInfo, TeamParticipant } from '../types/domain';
+import type { AppUser, LinkedTeam, TeamInfo, TeamParticipant } from '../../types/domain';
 
 export const mockCurrentUser: AppUser = {
   id: 'u-1',
@@ -84,4 +84,3 @@ export const mockLinkedTeams: LinkedTeam[] = [
   { id: 't-1', name: 'Java FC', roleLabel: 'Titular', badgeUrl: '' },
   { id: 't-2', name: 'Liga360 Juniors', roleLabel: 'Suplente', badgeUrl: '' },
 ];
-

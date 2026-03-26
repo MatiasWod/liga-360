@@ -21,12 +21,6 @@ export type {
 export { BracketView } from './BracketView';
 export { GroupSection } from './GroupSection';
 export { MatchCard } from './MatchCard';
-export {
-  mockGroupsData,
-  mockKnockoutData,
-  mockLeagueData,
-  mockTeamOptions,
-} from './mockData';
 export { RoundSelector } from './RoundSelector';
 export { TournamentSchedule } from './TournamentSchedule';
 export { getDefaultRoundId, reorderArray } from './utils';

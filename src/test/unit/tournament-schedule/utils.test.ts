@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LeagueScheduleData } from './types';
-import { getDefaultRoundId, reorderArray } from './utils';
+import type { LeagueScheduleData } from '../../../components/tournament-schedule/types';
+import { getDefaultRoundId, reorderArray } from '../../../components/tournament-schedule/utils';
 
 describe('reorderArray', () => {
   it('moves item from index 0 to 2', () => {

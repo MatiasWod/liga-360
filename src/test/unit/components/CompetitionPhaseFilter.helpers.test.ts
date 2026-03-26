@@ -5,7 +5,7 @@ import {
   toggleCompetitionSelection,
   togglePhaseSelection,
   type Competition,
-} from './CompetitionPhaseFilter';
+} from '../../../components/CompetitionPhaseFilter';
 
 const competitions: Competition[] = [
   {
