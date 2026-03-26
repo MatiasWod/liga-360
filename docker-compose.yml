@@ -114,6 +114,19 @@ services:
     ports:
       - '4000:4000'
 
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: liga360-frontend
+    depends_on:
+      - gateway
+      - teams-svc
+      - auth-svc
+      - inscriptions-svc
+    ports:
+      - '5173:80'
+
 volumes:
   neo4j_data:
   neo4j_logs:

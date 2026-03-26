@@ -28,12 +28,12 @@ Uso:
 Opciones:
   --no-build       Levanta Docker sin --build.
   --backend-only   Solo backend (docker compose).
-  --frontend-only  Solo frontend (npm run dev).
+  --frontend-only  Solo frontend container (docker compose).
   -h, --help       Muestra esta ayuda.
 
 Notas:
-  - Backend: Docker Compose en segundo plano.
-  - Frontend: Vite en primer plano (bloquea la terminal).
+  - Backend y frontend corren en Docker.
+  - Frontend disponible en http://localhost:5173.
 EOF
       exit 0
       ;;
@@ -51,15 +51,42 @@ if [[ "$BACKEND_ONLY" == "true" && "$FRONTEND_ONLY" == "true" ]]; then
 fi
 
 command -v docker >/dev/null 2>&1 || { echo "Error: docker no está instalado."; exit 1; }
-command -v npm >/dev/null 2>&1 || { echo "Error: npm no está instalado."; exit 1; }
+
+backend_services=(neo4j postgres auth-svc tournaments-svc teams-svc inscriptions-svc gateway)
 
 if [[ "$FRONTEND_ONLY" != "true" ]]; then
+  target_services=()
+  if [[ "$BACKEND_ONLY" == "true" ]]; then
+    target_services=("${backend_services[@]}")
+  fi
+
   if [[ "$NO_BUILD" == "true" ]]; then
-    echo "Levantando backend sin build..."
-    docker compose up -d
+    echo "Levantando servicios Docker sin build..."
+    if [[ "${#target_services[@]}" -gt 0 ]]; then
+      docker compose up -d "${target_services[@]}"
+    else
+      docker compose up -d
+    fi
   else
-    echo "Levantando backend con build..."
-    docker compose up -d --build
+    echo "Levantando servicios Docker con build..."
+    if [[ "${#target_services[@]}" -gt 0 ]]; then
+      docker compose up -d --build "${target_services[@]}"
+    else
+      docker compose up -d --build
+    fi
+  fi
+
+  if [[ "$BACKEND_ONLY" != "true" ]]; then
+    echo "Esperando frontend container..."
+    attempts=0
+    until curl -fsS "http://localhost:5173" >/dev/null 2>&1; do
+      attempts=$((attempts + 1))
+      if [[ "$attempts" -ge 40 ]]; then
+        echo "Warning: timeout esperando http://localhost:5173"
+        break
+      fi
+      sleep 2
+    done
   fi
 
   echo "Esperando healthchecks backend..."
@@ -88,11 +115,15 @@ if [[ "$BACKEND_ONLY" == "true" ]]; then
   exit 0
 fi
 
-if [[ ! -d node_modules ]]; then
-  echo "Instalando dependencias frontend..."
-  npm install
+if [[ "$FRONTEND_ONLY" == "true" ]]; then
+  if [[ "$NO_BUILD" == "true" ]]; then
+    docker compose up -d frontend
+  else
+    docker compose up -d --build frontend
+  fi
+  echo "Frontend container levantado en http://localhost:5173"
+  exit 0
 fi
 
-echo "Levantando frontend en http://localhost:5173 ..."
-npm run dev
+echo "Proyecto levantado. Frontend: http://localhost:5173"
 
