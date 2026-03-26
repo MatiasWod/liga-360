@@ -1,4 +1,5 @@
 import React from 'react';
+import { login } from '../../services/teamsApi';
 
 export const Login: React.FC<{ onLogged?: (user: any) => void; onSkip?: () => void }> = ({ onLogged, onSkip }) => {
 	const [username, setUsername] = React.useState('');
@@ -11,17 +12,9 @@ export const Login: React.FC<{ onLogged?: (user: any) => void; onSkip?: () => vo
 		e.preventDefault();
 		setLoading(true); setMsg(null); setErr(null);
 		try {
-			const res = await fetch('http://localhost:4003/login', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ username, password })
-			});
-			const json = await res.json();
-			if (!res.ok) throw new Error(json?.error || 'Error de login');
-			localStorage.setItem('liga360:token', json.token);
-			localStorage.setItem('liga360:user', JSON.stringify(json.user));
-			setMsg(`Bienvenido ${json.user?.username}`);
-			onLogged?.(json.user);
+			const user = await login(username, password);
+			setMsg(`Bienvenido ${user?.username || user?.fullName || username}`);
+			onLogged?.(user);
 		} catch (e: any) {
 			setErr(e?.message || 'Error');
 		} finally {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { register } from '../../services/teamsApi';
 
 type Mode = 'team' | 'participant' | 'organizer';
 
@@ -15,32 +16,9 @@ export const Register: React.FC<{ onRegistered?: (user: any) => void; onSkip?: (
 		e.preventDefault();
 		setLoading(true); setMsg(null); setErr(null);
 		try {
-			const res = await fetch('http://localhost:4003/register', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ mode, username, password, name })
-			});
-			const json = await res.json();
-			if (!res.ok) throw new Error(json?.error || 'Error de registro');
-			// Autologin real para guardar JWT válido y evitar tokens placeholder inválidos.
-			const loginRes = await fetch('http://localhost:4003/login', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ username, password })
-			});
-			const loginJson = await loginRes.json();
-			if (!loginRes.ok) {
-				// Si el autologin falla, no dejamos token inválido.
-				localStorage.removeItem('liga360:token');
-				localStorage.setItem('liga360:user', JSON.stringify(json.user));
-				setMsg(`Usuario creado (#${json.user?.id}) como ${json.user?.type}. Iniciá sesión para continuar.`);
-				onRegistered?.(json.user);
-				return;
-			}
-			localStorage.setItem('liga360:token', loginJson.token);
-			localStorage.setItem('liga360:user', JSON.stringify(loginJson.user));
-			setMsg(`Usuario creado e ingresado como ${loginJson.user?.username}`);
-			onRegistered?.(loginJson.user);
+			const user = await register(mode, username, password, name);
+			setMsg(`Usuario creado e ingresado como ${user?.username || username}`);
+			onRegistered?.(user);
 			setUsername(''); setPassword(''); setName('');
 		} catch (e: any) {
 			setErr(e?.message || 'Error');

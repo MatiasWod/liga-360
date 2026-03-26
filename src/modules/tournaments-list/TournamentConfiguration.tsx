@@ -12,6 +12,14 @@ import {
   type InscriptionItem,
   updateInscriptionStatus,
 } from '../../services/inscriptionsApi';
+import {
+  assignInscriptionToGroup,
+  assignInscriptionToStage,
+  getTournamentConfigurationById,
+  syncStageGroups,
+  unassignInscriptionFromStage,
+} from '../../services/tournaments/configuration';
+import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
 
 type Tab = 'gestion' | 'inicializacion' | 'fixture';
@@ -295,28 +303,13 @@ function InitializationInboundBanner({
   );
 }
 
-async function gql<T = any>(query: string, variables?: Record<string, any>): Promise<T> {
-  const token = localStorage.getItem('liga360:token');
-  const res = await fetch('http://localhost:4000/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json();
-  if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
-  return json.data as T;
-}
-
 function resolveBadgeUrl(rawUrl?: string | null): string {
   const url = String(rawUrl || '').trim();
   if (!url) return DEFAULT_SHIELD_SRC;
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/')) return `http://localhost:4002${url}`;
-  return `http://localhost:4002/${url}`;
+  if (url.startsWith('/')) return `${TEAMS_BASE}${url}`;
+  return `${TEAMS_BASE}/${url}`;
 }
 
 function normalizeParticipantType(value?: string | null): 'teams' | 'individuals' {
@@ -612,77 +605,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   }, [visibleRelationOptions]);
 
   const loadTournament = React.useCallback(async () => {
-    const data = await gql<{ tournament: Tournament }>(
-          `query ConfigTournament($id: ID!) {
-             tournament(id: $id) {
-               id
-               name
-               participantType
-               competitions {
-                 id
-                 name
-                 order
-                 stages {
-                   id
-                   name
-                   order
-                  format
-                   isInitial
-                  configJson
-                  childrenJson
-                  transitions {
-                    id
-                    label
-                    toStageId
-                    selectionKind
-                    topN
-                    rangeFrom
-                    rangeTo
-                    bottomN
-                    toExternalTournamentId
-                    toExternalStageId
-                    toExternalTournamentName
-                  }
-                  groups {
-                    id
-                    name
-                    order
-                    capacity
-                    assignedInscriptions { inscriptionId displayName }
-                    matches {
-                      id
-                      round
-                      leg
-                      slotIndex
-                      fixtureCode
-                      groupId
-                      scheduledAt
-                      leagueHomeSeed
-                      leagueAwaySeed
-                      homeAssignedInscription { inscriptionId displayName }
-                      awayAssignedInscription { inscriptionId displayName }
-                    }
-                  }
-                  matches {
-                    id
-                    round
-                    leg
-                    slotIndex
-                    fixtureCode
-                    scheduledAt
-                    leagueHomeSeed
-                    leagueAwaySeed
-                    homeAssignedInscription { inscriptionId displayName }
-                    awayAssignedInscription { inscriptionId displayName }
-                  }
-              assignedInscriptions { inscriptionId displayName }
-                 }
-               }
-             }
-           }`,
-          { id: tournamentId }
-    );
-    const nextTournament = data.tournament || null;
+    const nextTournament = (await getTournamentConfigurationById(tournamentId)) as Tournament | null;
     setTournament(nextTournament);
     const firstCompetitionId = nextTournament?.competitions?.[0]?.id || '';
     setInitializationCompetitionId((prev) => prev || firstCompetitionId);
@@ -697,23 +620,23 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   const loadTournamentInvites = React.useCallback(async () => {
     const invites = await listTournamentInvites(tournamentId);
     let general = (invites || []).find(
-      (invite) => invite.type === 'public' && invite.status === 'active' && !invite.competition_id
+      (invite: any) => invite.type === 'public' && invite.status === 'active' && !invite.competition_id
     );
     if (!general) general = await createTournamentInvite(tournamentId);
     setPublicInviteCode(String(general?.token || ''));
-    const targeted = (invites || []).filter((invite) => invite.type === 'targeted');
+    const targeted = (invites || []).filter((invite: any) => invite.type === 'targeted');
     setTargetedInvitesPendingCount(
       targeted.filter(
-        (invite) =>
+        (invite: any) =>
           String(invite.invite_response_status || 'pending').toLowerCase() === 'pending' &&
           String(invite.status || '').toLowerCase() === 'active'
       ).length
     );
     setTargetedInvitesRejectedCount(
-      targeted.filter((invite) => String(invite.invite_response_status || '').toLowerCase() === 'rejected').length
+      targeted.filter((invite: any) => String(invite.invite_response_status || '').toLowerCase() === 'rejected').length
     );
     setTargetedInvitesAcceptedCount(
-      targeted.filter((invite) => String(invite.invite_response_status || '').toLowerCase() === 'accepted').length
+      targeted.filter((invite: any) => String(invite.invite_response_status || '').toLowerCase() === 'accepted').length
     );
   }, [tournamentId]);
 
@@ -825,16 +748,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
         (placement) => placement.competitionId === nextCompetitionId && placement.stageId !== excludeStageId
       );
       for (const placement of placementsInSameCompetition) {
-        await gql(
-          `mutation Unassign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!) {
-             unassignInscriptionFromStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId)
-           }`,
-          {
-            stageId: placement.stageId,
-            inscriptionId: String(inscription.id),
-            tournamentId,
-          }
-        );
+        await unassignInscriptionFromStage(placement.stageId, String(inscription.id), tournamentId);
       }
     }
 
@@ -844,17 +758,12 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       await clearPlacementsInCompetition(nextStageId);
 
       if (nextStageId) {
-        await gql(
-          `mutation Assign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!) {
-             assignInscriptionToStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName)
-           }`,
-          {
-            stageId: nextStageId,
-            inscriptionId: String(inscription.id),
-            tournamentId,
-            displayName: inscription.display_name,
-          }
-        );
+        await assignInscriptionToStage({
+          stageId: nextStageId,
+          inscriptionId: String(inscription.id),
+          tournamentId,
+          displayName: inscription.display_name,
+        });
       }
 
       await loadTournament();
@@ -871,12 +780,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     const numGroups = Number(cfg.numGroups);
     if (stage.format !== 'groups' || !Number.isInteger(numGroups) || numGroups <= 0) return;
     if ((stage.groups || []).length >= numGroups) return;
-    await gql(
-      `mutation SyncGroups($stageId: ID!, $totalGroups: Int!) {
-         syncStageGroups(stageId: $stageId, totalGroups: $totalGroups) { id }
-       }`,
-      { stageId: stage.id, totalGroups: numGroups }
-    );
+    await syncStageGroups(stage.id, numGroups);
     await loadTournament();
   }
 
@@ -908,25 +812,15 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       for (const placement of currentPlacements.filter(
         (placement) => placement.competitionId === initializationCompetitionId && placement.stageId !== stage.id
       )) {
-        await gql(
-          `mutation Unassign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!) {
-             unassignInscriptionFromStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId)
-           }`,
-          { stageId: placement.stageId, inscriptionId: String(inscription.id), tournamentId }
-        );
+        await unassignInscriptionFromStage(placement.stageId, String(inscription.id), tournamentId);
       }
-      await gql(
-        `mutation AssignGroup($stageId: ID!, $groupId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!) {
-           assignInscriptionToGroup(stageId: $stageId, groupId: $groupId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName)
-         }`,
-        {
-          stageId: stage.id,
-          groupId,
-          inscriptionId: String(inscription.id),
-          tournamentId,
-          displayName: inscription.display_name,
-        }
-      );
+      await assignInscriptionToGroup({
+        stageId: stage.id,
+        groupId,
+        inscriptionId: String(inscription.id),
+        tournamentId,
+        displayName: inscription.display_name,
+      });
       await loadTournament();
       await loadInscriptions();
     } catch (e: any) {

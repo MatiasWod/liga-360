@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { claimGeneralInvite, claimTeamInvite, getInviteByToken } from '../services/inscriptionsApi';
+import { getTournamentSummaryById } from '../services/tournamentsApi';
 
 interface InviteLandingPageProps {
   token: string;
@@ -42,19 +43,8 @@ export const InviteLandingPage: React.FC<InviteLandingPageProps> = ({
       setError('');
       try {
         const invite = await getInviteByToken(token);
-        const query = `
-          query($id: ID!) {
-            tournament(id: $id) { id name organizer venue participantType }
-          }
-        `;
-        const res = await fetch('http://localhost:4000/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, variables: { id: invite.tournamentId } }),
-        });
-        const json = await res.json();
-        if (json.errors) throw new Error(json.errors?.[0]?.message || 'No se pudo cargar el torneo');
-        setTournament(json.data?.tournament || null);
+        const tournamentSummary = await getTournamentSummaryById(invite.tournamentId);
+        setTournament(tournamentSummary || null);
         setInviteType((invite.inviteType || 'general') as 'general' | 'team');
         setTargetTeamName(invite.target?.display_name || '');
       } catch (err: any) {

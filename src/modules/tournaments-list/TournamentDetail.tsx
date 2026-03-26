@@ -1,5 +1,6 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
+import { getTournamentDetailById } from '../../services/tournamentsApi';
 
 type MatchRow = {
 	id: string;
@@ -101,40 +102,8 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 			setLoading(true);
 			setError(null);
 			try {
-				const query = `
-					query($id:ID!){
-						tournament(id:$id){
-							id name venue organizer participantType status
-							competitions {
-								id name order
-								stages {
-									id name order format
-									matches {
-										id round leg slotIndex fixtureCode groupId
-										homeAssignedInscription { inscriptionId displayName }
-										awayAssignedInscription { inscriptionId displayName }
-									}
-									groups {
-										id name order
-										matches {
-											id round leg slotIndex fixtureCode groupId
-											homeAssignedInscription { inscriptionId displayName }
-											awayAssignedInscription { inscriptionId displayName }
-										}
-									}
-								}
-							}
-						}
-					}
-				`;
-				const res = await fetch('http://localhost:4000/graphql', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ query, variables: { id } }),
-				});
-				const json = await res.json();
-				if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
-				setT(json.data.tournament as Tournament);
+				const tournament = await getTournamentDetailById(id);
+				setT((tournament || null) as Tournament | null);
 			} catch (e: any) {
 				setError(e?.message || 'Error al cargar torneo');
 			} finally {

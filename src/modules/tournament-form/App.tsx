@@ -5,16 +5,15 @@ import { TournamentsList } from '../tournaments-list/TournamentsList';
 import { TournamentDetail } from '../tournaments-list/TournamentDetail';
 import { Register } from '../auth/Register';
 import { Login } from '../auth/Login';
+import { logout as clearSession, readSessionUser } from '../../services/teamsApi';
 
 export const App: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 	const [route, setRoute] = React.useState<'home' | 'create' | 'list' | 'detail' | 'register' | 'login'>('home');
 	const [selectedId, setSelectedId] = React.useState<string | null>(null);
-	const [navUser, setNavUser] = React.useState<any>(() => {
-		try { return JSON.parse(localStorage.getItem('liga360:user') || 'null'); } catch { return null; }
-	});
+	const [navUser, setNavUser] = React.useState<any>(() => readSessionUser());
 	React.useEffect(() => {
 		const i = setInterval(() => {
-			try { setNavUser(JSON.parse(localStorage.getItem('liga360:user') || 'null')); } catch {}
+			setNavUser(readSessionUser());
 		}, 500);
 		return () => clearInterval(i);
 	}, []);
@@ -82,18 +81,15 @@ export const App: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 }; 
 
 const HeaderAuth: React.FC<{ onNavigate: (r: any) => void }> = ({ onNavigate }) => {
-	const [user, setUser] = React.useState<any>(() => {
-		try { return JSON.parse(localStorage.getItem('liga360:user') || 'null'); } catch { return null; }
-	});
+	const [user, setUser] = React.useState<any>(() => readSessionUser());
 	function logout() {
-		localStorage.removeItem('liga360:user');
-		localStorage.removeItem('liga360:token');
+		clearSession();
 		setUser(null);
 		onNavigate('home');
 	}
 	React.useEffect(() => {
 		const i = setInterval(() => {
-			try { setUser(JSON.parse(localStorage.getItem('liga360:user') || 'null')); } catch {}
+			setUser(readSessionUser());
 		}, 500);
 		return () => clearInterval(i);
 	}, []);

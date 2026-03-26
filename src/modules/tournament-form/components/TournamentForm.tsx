@@ -3,196 +3,25 @@ import { Section } from './atoms/Section';
 import { TextField } from './atoms/TextField';
 import { SelectField } from './atoms/SelectField';
 import { CompetitionsBuilder, type CompetitionMeta } from './CompetitionsBuilder';
-import type { Relation, Selection } from './stages/StageBuilder';
-
-function parseJsonSafe(value: any): any {
-    if (value == null || value === '') return null;
-    if (typeof value === 'object') return value;
-    try {
-        return JSON.parse(String(value));
-    } catch {
-        return null;
-    }
-}
-
-function mapStageFormatToKind(format: string): 'groups' | 'league' | 'knockout' | 'composed' {
-    if (format === 'elimination') return 'knockout';
-    if (format === 'composed') return 'composed';
-    return format as 'groups' | 'league';
-}
-
-/** Rehidrata relaciones desde GraphQL (incluye toStageId cuando la etapa destino es interna). */
-function mapGraphqlTransitionsToRelations(
-    transitions: any[] | undefined,
-    parseJson: (v: any) => Record<string, unknown> | null
-): Relation[] {
-    if (!Array.isArray(transitions) || transitions.length === 0) return [];
-    return transitions.map((tr) => {
-        const kind = String(tr.selectionKind || 'top').toLowerCase();
-        let selection: Selection;
-        if (kind === 'range') {
-            selection = {
-                kind: 'range',
-                from: Number(tr.rangeFrom) || 0,
-                to: Number(tr.rangeTo) || 0,
-            };
-        } else if (kind === 'bottom') {
-            selection = { kind: 'bottom', count: Number(tr.bottomN) || 0 };
-        } else {
-            selection = { kind: 'top', count: Number(tr.topN) || 0 };
-        }
-        const id = String(tr.id);
-        const label = String(tr.label || 'avance');
-        const carryRaw = tr.carryOverJson != null ? parseJson(tr.carryOverJson) : null;
-        const carryOver =
-            carryRaw && typeof carryRaw === 'object' && !Array.isArray(carryRaw)
-                ? (carryRaw as unknown as Relation['carryOver'])
-                : undefined;
-
-        if (tr.toStageId) {
-            return {
-                id,
-                label,
-                toStageId: String(tr.toStageId),
-                selection,
-                ...(carryOver ? { carryOver } : {}),
-            };
-        }
-        const extTid = tr.toExternalTournamentId != null ? String(tr.toExternalTournamentId) : '';
-        const extSid = tr.toExternalStageId != null ? String(tr.toExternalStageId) : '';
-        if (extTid || extSid) {
-            return {
-                id,
-                label,
-                selection,
-                toExternal: {
-                    tournamentId: extTid,
-                    stageId: extSid,
-                    tournamentName: tr.toExternalTournamentName ?? undefined,
-                },
-                ...(carryOver ? { carryOver } : {}),
-            };
-        }
-        return { id, label, selection, ...(carryOver ? { carryOver } : {}) };
-    });
-}
-
-const TOURNAMENT_FOR_EDIT_QUERY = `
-    query TournamentForEdit($id: ID!) {
-        tournament(id: $id) {
-            id
-            name
-            sport
-            venue
-            participantType
-            inscriptionMode
-            status
-            competitions {
-                id
-                name
-                order
-                maxSlots
-                stages {
-                    id
-                    name
-                    order
-                    format
-                    configJson
-                    childrenJson
-                    transitions {
-                        id
-                        label
-                        toStageId
-                        selectionKind
-                        topN
-                        rangeFrom
-                        rangeTo
-                        bottomN
-                        toExternalTournamentId
-                        toExternalStageId
-                        toExternalTournamentName
-                        carryOverJson
-                    }
-                }
-            }
-        }
-    }
-`;
-
-function deriveFormStateFromGraphqlTournament(t: any): {
-    general: {
-        name: string;
-        sport: string;
-        venue: string;
-        participantType: string;
-        inscriptionMode: string;
-    };
-    competitions: CompetitionMeta[];
-    existingCompetitionIds: Set<string>;
-    existingStageIds: Set<string>;
-    existingTransitionIds: Set<string>;
-} {
-    const nextCompetitions: CompetitionMeta[] = (t.competitions || [])
-        .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
-        .map((competition: any) => ({
-            id: String(competition.id),
-            name: String(competition.name || ''),
-            maxSlots: competition.maxSlots == null ? null : Number(competition.maxSlots),
-            stages: (competition.stages || [])
-                .sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
-                .map((stage: any) => ({
-                    id: String(stage.id),
-                    name: String(stage.name || ''),
-                    kind: mapStageFormatToKind(String(stage.format || 'league')),
-                    config: parseJsonSafe(stage.configJson) || {},
-                    children: parseJsonSafe(stage.childrenJson) || [],
-                    relations: mapGraphqlTransitionsToRelations(stage.transitions, parseJsonSafe),
-                })),
-        }));
-
-    const existingCompetitionIds = new Set<string>(nextCompetitions.map((c) => c.id));
-    const existingStageIds = new Set<string>(
-        nextCompetitions.flatMap((c) => (c.stages || []).map((s) => s.id))
-    );
-    const existingTransitionIds = new Set<string>(
-        (t.competitions || []).flatMap((competition: any) =>
-            (competition.stages || []).flatMap((stage: any) =>
-                (stage.transitions || []).map((transition: any) => String(transition.id))
-            )
-        )
-    );
-
-    return {
-        general: {
-            name: String(t.name || ''),
-            sport: String(t.sport || 'football'),
-            venue: String(t.venue || ''),
-            participantType: String(t.participantType || 'teams'),
-            inscriptionMode: String(t.inscriptionMode || 'public'),
-        },
-        competitions:
-            nextCompetitions.length > 0 ? nextCompetitions : [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }],
-        existingCompetitionIds,
-        existingStageIds,
-        existingTransitionIds,
-    };
-}
-
-function strOrNull(v: string | undefined | null): string | null {
-    if (v == null) return null;
-    const t = String(v).trim();
-    return t === '' ? null : t;
-}
-
-function collectRemovedTransitionIds(prev: CompetitionMeta[], next: CompetitionMeta[]): string[] {
-    const prevIds = new Set(
-        prev.flatMap((c) => (c.stages || []).flatMap((s) => (s.relations || []).map((r) => r.id)))
-    );
-    const nextIds = new Set(
-        next.flatMap((c) => (c.stages || []).flatMap((s) => (s.relations || []).map((r) => r.id)))
-    );
-    return [...prevIds].filter((id) => !nextIds.has(id));
-}
+import {
+    collectRemovedTransitionIds,
+    deriveFormStateFromGraphqlTournament,
+    mapStageKindToFormat,
+    selectionToVariables,
+    strOrNull,
+} from '../services/tournamentMapping';
+import {
+    createCompetition,
+    createStage,
+    createTournamentDraft,
+    createTransition,
+    deleteTransition,
+    generateEliminationBracket,
+    getTournamentForEdit,
+    updateCompetition,
+    updateStage,
+    updateTournamentDraft,
+} from '../services/tournamentStructureApi';
 
 interface TournamentFormProps {
     organizerName: string;
@@ -265,8 +94,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
             setLoadingExisting(true);
             setSubmitMsg('');
             try {
-                const data = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
-                const t = data?.tournament;
+                const t = await getTournamentForEdit(tournamentId);
                 if (!t) throw new Error('No se encontró el torneo a editar');
                 if (cancelled) return;
 
@@ -310,35 +138,20 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         try {
             const isEdit = mode === 'edit' && Boolean(tournamentId);
             const workingTournament = isEdit
-                ? await gql(
-                    `mutation UpdateTournament($id: ID!, $name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!) {
-                        updateTournament(id: $id, name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status) { id name season }
-                    }`,
-                    {
-                        id: tournamentId,
-                        name: general.name,
-                        sport: general.sport,
-                        season: null,
-                        venue: general.venue || null,
-                        pt: general.participantType,
-                        inscriptionMode: general.inscriptionMode,
-                        status: 'draft',
-                    }
-                ).then(r => r.updateTournament)
-                : await gql(
-                    `mutation CreateTournament($name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!) {
-                        createTournament(name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status) { id name season }
-                    }`,
-                    {
-                        name: general.name,
-                        sport: general.sport,
-                        season: null,
-                        venue: general.venue || null,
-                        pt: general.participantType,
-                        inscriptionMode: general.inscriptionMode,
-                        status: 'draft',
-                    }
-                ).then(r => r.createTournament);
+                ? await updateTournamentDraft(String(tournamentId), {
+                    name: general.name,
+                    sport: general.sport,
+                    venue: general.venue,
+                    participantType: general.participantType,
+                    inscriptionMode: general.inscriptionMode,
+                })
+                : await createTournamentDraft({
+                    name: general.name,
+                    sport: general.sport,
+                    venue: general.venue,
+                    participantType: general.participantType,
+                    inscriptionMode: general.inscriptionMode,
+                });
 
             const competitionIdMap = new Map<string, string>();
             const stageIdMap = new Map<string, string>();
@@ -350,23 +163,20 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
             for (let i = 0; i < competitions.length; i++) {
                 const comp = competitions[i];
                 if (isEdit && existingCompetitionIds.has(comp.id)) {
-                    const updatedComp = await gql(
-                        `mutation UpdateCompetition($competitionId: ID!, $name: String!, $order: Int!, $maxSlots: Int) {
-                            updateCompetition(competitionId: $competitionId, name: $name, order: $order, maxSlots: $maxSlots) { id }
-                        }`,
-                        {
-                            competitionId: comp.id,
-                            name: comp.name,
-                            order: i + 1,
-                            maxSlots: comp.maxSlots ?? null,
-                        }
-                    ).then((r) => r.updateCompetition);
+                    const updatedComp = await updateCompetition(
+                        comp.id,
+                        comp.name,
+                        i + 1,
+                        comp.maxSlots ?? null
+                    );
                     competitionIdMap.set(comp.id, updatedComp.id);
                 } else {
-                    const createdComp = await gql(
-                        `mutation CreateCompetition($tid: ID!, $name: String!, $order: Int!, $maxSlots: Int) { createCompetition(tournamentId: $tid, name: $name, order: $order, maxSlots: $maxSlots) { id name order maxSlots effectiveMaxSlots } }`,
-                        { tid: workingTournament.id, name: comp.name, order: i + 1, maxSlots: comp.maxSlots ?? null }
-                    ).then(r => r.createCompetition);
+                    const createdComp = await createCompetition(
+                        workingTournament.id,
+                        comp.name,
+                        i + 1,
+                        comp.maxSlots ?? null
+                    );
                     competitionIdMap.set(comp.id, createdComp.id);
                 }
             }
@@ -380,44 +190,27 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     const st = comp.stages[j];
                     const format = mapStageKindToFormat(st.kind);
                     if (isEdit && existingStageIds.has(st.id)) {
-                        const updatedStage = await gql(
-                            `mutation UpdateStage($stageId: ID!, $name: String!, $order: Int!, $format: StageFormat!, $configJson: String, $childrenJson: String) {
-                                updateStage(stageId: $stageId, name: $name, order: $order, format: $format, configJson: $configJson, childrenJson: $childrenJson) { id }
-                            }`,
-                            {
-                                stageId: st.id,
-                                name: st.name,
-                                order: j + 1,
-                                format,
-                                configJson: JSON.stringify(st.config ?? {}),
-                                childrenJson: JSON.stringify(st.children ?? []),
-                            }
-                        ).then((r) => r.updateStage);
+                        const updatedStage = await updateStage(
+                            st.id,
+                            st.name,
+                            j + 1,
+                            format,
+                            st.config ?? {},
+                            st.children ?? []
+                        );
                         stageIdMap.set(st.id, updatedStage.id);
                     } else {
-                        const createdStage = await gql(
-                            `mutation AddStage($cid: ID!, $name: String!, $order: Int!, $format: StageFormat!, $configJson: String, $childrenJson: String) {
-                                addStage(competitionId: $cid, name: $name, order: $order, format: $format, configJson: $configJson, childrenJson: $childrenJson) {
-                                    id
-                                }
-                            }`,
-                            {
-                                cid: createdCompetitionId,
-                                name: st.name,
-                                order: j + 1,
-                                format,
-                                configJson: JSON.stringify(st.config ?? {}),
-                                childrenJson: JSON.stringify(st.children ?? []),
-                            }
-                        ).then(r => r.addStage);
+                        const createdStage = await createStage(
+                            createdCompetitionId,
+                            st.name,
+                            j + 1,
+                            format,
+                            st.config ?? {},
+                            st.children ?? []
+                        );
                         stageIdMap.set(st.id, createdStage.id);
                         if (format === 'elimination') {
-                            await gql(
-                                `mutation GenerateEliminationBracket($stageId: ID!) {
-                                    generateEliminationBracket(stageId: $stageId) { id }
-                                }`,
-                                { stageId: createdStage.id }
-                            );
+                            await generateEliminationBracket(createdStage.id);
                         }
                     }
                 }
@@ -455,55 +248,23 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         const extTid = strOrNull(rel.toExternal?.tournamentId ?? null);
                         const extSid = strOrNull(rel.toExternal?.stageId ?? null);
                         const extName = strOrNull(rel.toExternal?.tournamentName ?? null);
-                        await gql(
-                            `mutation AddTransition(
-                                $from: ID!,
-                                $to: ID,
-                                $label: String!,
-                                $selectionKind: String!,
-                                $topN: Int,
-                                $rangeFrom: Int,
-                                $rangeTo: Int,
-                                $bottomN: Int,
-                                $toExternalTournamentId: String,
-                                $toExternalStageId: String,
-                                $toExternalTournamentName: String,
-                                $carryOverJson: String
-                            ) {
-                                addTransition(
-                                    fromStageId: $from,
-                                    toStageId: $to,
-                                    label: $label,
-                                    selectionKind: $selectionKind,
-                                    topN: $topN,
-                                    rangeFrom: $rangeFrom,
-                                    rangeTo: $rangeTo,
-                                    bottomN: $bottomN,
-                                    toExternalTournamentId: $toExternalTournamentId,
-                                    toExternalStageId: $toExternalStageId,
-                                    toExternalTournamentName: $toExternalTournamentName,
-                                    carryOverJson: $carryOverJson
-                                ) { id }
-                            }`,
-                            {
-                                from: fromId,
-                                to: toId,
-                                label: rel.label || 'avance',
-                                selectionKind: rel.selection.kind,
-                                ...selectionVars,
-                                toExternalTournamentId: toId ? null : extTid,
-                                toExternalStageId: toId ? null : extSid,
-                                toExternalTournamentName: toId ? null : extName,
-                                carryOverJson: rel.carryOver ? JSON.stringify(rel.carryOver) : null,
-                            }
-                        );
+                        await createTransition({
+                            from: fromId,
+                            to: toId,
+                            label: rel.label || 'avance',
+                            selectionKind: rel.selection.kind,
+                            ...selectionVars,
+                            toExternalTournamentId: toId ? null : extTid,
+                            toExternalStageId: toId ? null : extSid,
+                            toExternalTournamentName: toId ? null : extName,
+                            carryOverJson: rel.carryOver ? JSON.stringify(rel.carryOver) : null,
+                        });
                     }
                 }
             }
 
             if (isEdit && tournamentId) {
-                const refreshed = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
-                const tr = refreshed?.tournament;
+                const tr = await getTournamentForEdit(tournamentId);
                 if (tr) {
                     const derived = deriveFormStateFromGraphqlTournament(tr);
                     setGeneral({
@@ -545,52 +306,6 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         }
     }
 
-    async function gql<T = any>(query: string, variables?: Record<string, any>): Promise<T> {
-        const token = localStorage.getItem('liga360:token');
-        const res = await fetch('http://localhost:4000/graphql', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ query, variables })
-        });
-        const json = await res.json();
-        if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
-        return json.data as T;
-    }
-
-    function mapStageKindToFormat(kind: string): 'league' | 'groups' | 'elimination' | 'composed' {
-        if (kind === 'knockout') return 'elimination';
-        if (kind === 'composed') return 'composed';
-        return kind as 'league' | 'groups' | 'elimination' | 'composed';
-    }
-
-    function selectionToVariables(selection: any): {
-        topN: number | null;
-        rangeFrom: number | null;
-        rangeTo: number | null;
-        bottomN: number | null;
-    } {
-        if (selection?.kind === 'top') {
-            return { topN: Number(selection.count) || 0, rangeFrom: null, rangeTo: null, bottomN: null };
-        }
-        if (selection?.kind === 'range') {
-            return {
-                topN: null,
-                rangeFrom: Number(selection.from) || 0,
-                rangeTo: Number(selection.to) || 0,
-                bottomN: null,
-            };
-        }
-        return {
-            topN: null,
-            rangeFrom: null,
-            rangeTo: null,
-            bottomN: Number(selection?.count) || 0,
-        };
-    }
-
     function handleCompetitionsChange(next: CompetitionMeta[]) {
         const removed = collectRemovedTransitionIds(competitions, next);
         setCompetitions(next);
@@ -603,17 +318,13 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         void (async () => {
             for (const tid of toDelete) {
                 try {
-                    await gql<{ deleteTransition: boolean }>(
-                        `mutation DeleteTransition($id: ID!) { deleteTransition(transitionId: $id) }`,
-                        { id: tid }
-                    );
+                    await deleteTransition(tid);
                     existingTransitionIdsRef.current.delete(tid);
                 } catch (err: unknown) {
                     setSubmitState('error');
                     setSubmitMsg(err instanceof Error ? err.message : 'No se pudo eliminar la relación en el servidor');
                     try {
-                        const data = await gql<{ tournament: any }>(TOURNAMENT_FOR_EDIT_QUERY, { id: tournamentId });
-                        const tr = data?.tournament;
+                        const tr = await getTournamentForEdit(tournamentId);
                         if (tr) {
                             const derived = deriveFormStateFromGraphqlTournament(tr);
                             setGeneral({

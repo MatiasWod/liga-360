@@ -2,6 +2,11 @@ import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import {
+  generateGroupsStageRoundRobin,
+  generateLeagueRoundRobin,
+  generateSingleEliminationBracket,
+} from '../../services/tournaments/configuration';
 
 type MatchRow = {
   id: string;
@@ -38,21 +43,6 @@ type Stage = {
 type Competition = { id: string; name: string; order: number; stages: Stage[] };
 
 type Tournament = { id: string; name: string; competitions: Competition[] };
-
-async function gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const token = localStorage.getItem('liga360:token');
-  const res = await fetch('http://localhost:4000/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json();
-  if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
-  return json.data as T;
-}
 
 export const FixturePlanningPanel: React.FC<{
   tournament: Tournament;
@@ -108,12 +98,7 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await gql(
-        `mutation GenLeague($stageId: ID!, $doubleRound: Boolean!) {
-           generateLeagueRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode }
-         }`,
-        { stageId: stage.id, doubleRound }
-      );
+      await generateLeagueRoundRobin(stage.id, doubleRound);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar liga');
@@ -127,12 +112,7 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await gql(
-        `mutation GenElim($stageId: ID!, $doubleRound: Boolean!) {
-           generateSingleEliminationBracket(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode round slotIndex leg }
-         }`,
-        { stageId: stage.id, doubleRound }
-      );
+      await generateSingleEliminationBracket(stage.id, doubleRound);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar eliminación');
@@ -146,12 +126,7 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await gql(
-        `mutation GenGroups($stageId: ID!, $doubleRound: Boolean!) {
-           generateGroupsStageRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode groupId }
-         }`,
-        { stageId: stage.id, doubleRound }
-      );
+      await generateGroupsStageRoundRobin(stage.id, doubleRound);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar grupos');

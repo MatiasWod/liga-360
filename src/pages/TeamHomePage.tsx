@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '../components/ui/Card';
 import { acceptMyTeamInvite, listMyTeamInvites, rejectMyTeamInvite } from '../services/inscriptionsApi';
+import { enrichInvitesWithTournamentData } from '../services/tournamentsApi';
 import type { TeamInfo, TeamParticipant } from '../types/domain';
 
 interface TeamHomePageProps {
@@ -24,51 +25,7 @@ export const TeamHomePage: React.FC<TeamHomePageProps> = ({
     try {
       const data = await listMyTeamInvites();
       const rawInvites = data?.invites || [];
-      const tournamentIds = Array.from(new Set(rawInvites.map((invite: any) => String(invite.tournament_id || '')).filter(Boolean)));
-      const tournamentById = new Map<string, { name: string; competitions: Array<{ id: string; name: string }> }>();
-      await Promise.all(
-        tournamentIds.map(async (tournamentId) => {
-          const res = await fetch('http://localhost:4000/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `
-                query TeamInviteTournament($id: ID!) {
-                  tournament(id: $id) {
-                    id
-                    name
-                    competitions { id name }
-                  }
-                }`,
-              variables: { id: tournamentId },
-            }),
-          });
-          const json = await res.json();
-          const t = json?.data?.tournament;
-          if (t?.id) {
-            tournamentById.set(String(t.id), {
-              name: String(t.name || ''),
-              competitions: Array.isArray(t.competitions) ? t.competitions : [],
-            });
-          }
-        })
-      );
-      const enrichedInvites = rawInvites.map((invite: any) => {
-        const tournament = tournamentById.get(String(invite.tournament_id || ''));
-        const competition = tournament?.competitions?.find((c) => String(c.id) === String(invite.competition_id || ''));
-        const responseStatus = String(invite.invite_response_status || '').toLowerCase();
-        const inviteStatus = String(invite.status || '').toLowerCase();
-        let viewStatus: 'en_curso' | 'aceptada' | 'rechazada' = 'en_curso';
-        if (responseStatus === 'accepted') viewStatus = 'aceptada';
-        else if (responseStatus === 'rejected') viewStatus = 'rechazada';
-        else if (inviteStatus !== 'active') viewStatus = 'rechazada';
-        return {
-          ...invite,
-          tournament_name: tournament?.name || null,
-          competition_name: competition?.name || null,
-          view_status: viewStatus,
-        };
-      });
+      const enrichedInvites = await enrichInvitesWithTournamentData(rawInvites);
       setInvites(enrichedInvites);
     } catch (e: any) {
       setInviteError(e?.message || 'No se pudieron cargar invitaciones');

@@ -6,10 +6,11 @@ import {
   acceptMyParticipantInvite,
   claimCompetitionByInviteCode,
   createPublicParticipantInscription,
-  listTournamentInscriptions,
   listMyParticipantInvites,
   rejectMyParticipantInvite,
 } from '../services/inscriptionsApi';
+import { readSessionUser } from '../services/teamsApi';
+import { enrichInvitesWithTournamentData, listTournamentIdsByInscriptionPredicate } from '../services/tournamentsApi';
 
 type InviteItem = {
   id: number;
@@ -39,28 +40,16 @@ export const ParticipantTournamentsPage: React.FC = () => {
   const [invitesLoading, setInvitesLoading] = React.useState(false);
   const [invitesErr, setInvitesErr] = React.useState<string | null>(null);
 
+  const sessionUser = React.useMemo(() => readSessionUser(), []);
+
   const participantName = React.useMemo(() => {
-    try {
-      const raw = localStorage.getItem('liga360:user');
-      if (!raw) return 'Participante';
-      const parsed = JSON.parse(raw);
-      return String(parsed?.username || 'Participante');
-    } catch {
-      return 'Participante';
-    }
-  }, []);
+    return String(sessionUser?.username || 'Participante');
+  }, [sessionUser]);
 
   const participantUserId = React.useMemo(() => {
-    try {
-      const raw = localStorage.getItem('liga360:user');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      const id = Number(parsed?.id || 0);
-      return Number.isFinite(id) && id > 0 ? id : null;
-    } catch {
-      return null;
-    }
-  }, []);
+    const id = Number(sessionUser?.id || 0);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }, [sessionUser]);
 
   async function loadMyTournaments() {
     if (!participantUserId) {
@@ -69,31 +58,11 @@ export const ParticipantTournamentsPage: React.FC = () => {
     }
     setLoadingMyTournaments(true);
     try {
-      const query = `
-        query ParticipantTournamentsList {
-          tournaments {
-            id
-          }
-        }`;
-      const res = await fetch('http://localhost:4000/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
-      const json = await res.json();
-      const tournaments: Array<{ id: string }> = Array.isArray(json?.data?.tournaments) ? json.data.tournaments : [];
-      const acceptedOrPendingIds = new Set<string>();
-      for (const tournament of tournaments) {
-        const tournamentId = String(tournament.id || '');
-        if (!tournamentId) continue;
-        const inscriptions = await listTournamentInscriptions(tournamentId);
-        const match = inscriptions.some(
-          (item) =>
-            Number(item.linked_participant_user_id || 0) === Number(participantUserId) &&
-            String(item.status || '').toUpperCase() !== 'RECHAZADO'
-        );
-        if (match) acceptedOrPendingIds.add(tournamentId);
-      }
+      const acceptedOrPendingIds = await listTournamentIdsByInscriptionPredicate(
+        (item) =>
+          Number(item.linked_participant_user_id || 0) === Number(participantUserId) &&
+          String(item.status || '').toUpperCase() !== 'RECHAZADO'
+      );
       setMyTournamentIds(acceptedOrPendingIds);
     } catch {
       setMyTournamentIds(new Set());
@@ -108,56 +77,8 @@ export const ParticipantTournamentsPage: React.FC = () => {
     try {
       const data = await listMyParticipantInvites();
       const rawInvites = (data?.invites || []) as InviteItem[];
-      const tournamentIds = Array.from(
-        new Set(rawInvites.map((invite) => String(invite.tournament_id || '')).filter(Boolean))
-      );
-      const tournamentById = new Map<string, { name: string; competitions: Array<{ id: string; name: string }> }>();
-
-      await Promise.all(
-        tournamentIds.map(async (tournamentId) => {
-          const res = await fetch('http://localhost:4000/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `
-                query ParticipantInviteTournament($id: ID!) {
-                  tournament(id: $id) {
-                    id
-                    name
-                    competitions { id name }
-                  }
-                }`,
-              variables: { id: tournamentId },
-            }),
-          });
-          const json = await res.json();
-          const t = json?.data?.tournament;
-          if (t?.id) {
-            tournamentById.set(String(t.id), {
-              name: String(t.name || ''),
-              competitions: Array.isArray(t.competitions) ? t.competitions : [],
-            });
-          }
-        })
-      );
-
-      const enrichedInvites = rawInvites.map((invite) => {
-        const tournament = tournamentById.get(String(invite.tournament_id || ''));
-        const competition = tournament?.competitions?.find((c) => String(c.id) === String(invite.competition_id || ''));
-        const responseStatus = String(invite.invite_response_status || '').toLowerCase();
-        const inviteStatus = String(invite.status || '').toLowerCase();
-        let viewStatus: 'en_curso' | 'aceptada' | 'rechazada' = 'en_curso';
-        if (responseStatus === 'accepted') viewStatus = 'aceptada';
-        else if (responseStatus === 'rejected') viewStatus = 'rechazada';
-        else if (inviteStatus !== 'active') viewStatus = 'rechazada';
-        return {
-          ...invite,
-          tournament_name: tournament?.name || null,
-          competition_name: competition?.name || null,
-          view_status: viewStatus,
-        };
-      });
-      setInvites(enrichedInvites);
+      const enrichedInvites = await enrichInvitesWithTournamentData(rawInvites);
+      setInvites(enrichedInvites as InviteItem[]);
     } catch (e: any) {
       setInvitesErr(e?.message || 'No se pudieron cargar invitaciones');
     } finally {

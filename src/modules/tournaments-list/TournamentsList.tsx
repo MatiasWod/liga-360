@@ -1,4 +1,5 @@
 import React from 'react';
+import { deleteTournamentById, listTournamentsGraphql } from '../../services/tournamentsApi';
 
 type Stage = { id: string; name: string; order: number; format: 'league' | 'groups' | 'elimination' };
 type Competition = { id: string; name: string; order: number; stages: Stage[] };
@@ -86,17 +87,7 @@ export const TournamentsList: React.FC<{
 	async function load() {
 			setLoading(true); setError(null);
 			try {
-				const query = `
-					{ tournaments { id name venue organizer participantType inscriptionMode competitions { id name order stages { id name order format } } } }
-				`;
-				const res = await fetch('http://localhost:4000/graphql', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ query })
-				});
-				const json = await res.json();
-				if (json.errors) throw new Error(json.errors?.[0]?.message || 'GraphQL error');
-				const all = json.data.tournaments as Tournament[];
+				const all = await listTournamentsGraphql() as Tournament[];
 				let filtered = all;
 				if (organizerFilter?.trim()) {
 					const needle = organizerFilter.trim().toLowerCase();
@@ -125,20 +116,7 @@ export const TournamentsList: React.FC<{
 	}
 
 	async function deleteTournament(id: string) {
-		const token = localStorage.getItem('liga360:token');
-		const res = await fetch('http://localhost:4000/graphql', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(token ? { Authorization: `Bearer ${token}` } : {}),
-			},
-			body: JSON.stringify({
-				query: `mutation DeleteTournament($id: ID!) { deleteTournament(id: $id) }`,
-				variables: { id },
-			}),
-		});
-		const json = await res.json();
-		if (json.errors) throw new Error(json.errors?.[0]?.message || 'No se pudo eliminar torneo');
+		await deleteTournamentById(id);
 	}
 
 	React.useEffect(() => {

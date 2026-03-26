@@ -1,13 +1,12 @@
 import React from 'react';
+import { readSessionUser } from '../../services/teamsApi';
 
 interface HomeProps {
 	onNavigate: (route: 'home' | 'create' | 'list' | 'register' | 'login') => void;
 }
 
 export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
-	const user = React.useMemo(() => {
-		try { return JSON.parse(localStorage.getItem('liga360:user') || 'null'); } catch { return null; }
-	}, []);
+	const user = React.useMemo(() => readSessionUser(), []);
 	return (
 		<div className="space-y-6">
 			<div className="rounded-xl border border-white/10 bg-white/10 p-6">

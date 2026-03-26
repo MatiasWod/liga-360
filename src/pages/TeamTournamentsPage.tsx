@@ -2,7 +2,8 @@ import React from 'react';
 import { Card } from '../components/ui/Card';
 import { TournamentDetail } from '../modules/tournaments-list/TournamentDetail';
 import { TournamentsList } from '../modules/tournaments-list/TournamentsList';
-import { claimCompetitionByInviteCode, createPublicTeamInscription, listTournamentInscriptions } from '../services/inscriptionsApi';
+import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../services/inscriptionsApi';
+import { listTournamentIdsByInscriptionPredicate } from '../services/tournamentsApi';
 
 interface TeamTournamentsPageProps {
   activeTeamId?: string | null;
@@ -70,31 +71,11 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
     }
     setLoadingMyTournaments(true);
     try {
-      const query = `
-        query TeamTournamentsList {
-          tournaments {
-            id
-          }
-        }`;
-      const res = await fetch('http://localhost:4000/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
-      const json = await res.json();
-      const tournaments: Array<{ id: string }> = Array.isArray(json?.data?.tournaments) ? json.data.tournaments : [];
-      const acceptedOrPendingIds = new Set<string>();
-      for (const tournament of tournaments) {
-        const tournamentId = String(tournament.id || '');
-        if (!tournamentId) continue;
-        const inscriptions = await listTournamentInscriptions(tournamentId);
-        const match = inscriptions.some(
-          (item) =>
-            Number(item.linked_team_id || 0) === Number(activeTeamId) &&
-            String(item.status || '').toUpperCase() !== 'RECHAZADO'
-        );
-        if (match) acceptedOrPendingIds.add(tournamentId);
-      }
+      const acceptedOrPendingIds = await listTournamentIdsByInscriptionPredicate(
+        (item) =>
+          Number(item.linked_team_id || 0) === Number(activeTeamId) &&
+          String(item.status || '').toUpperCase() !== 'RECHAZADO'
+      );
       setMyTournamentIds(acceptedOrPendingIds);
     } catch {
       setMyTournamentIds(new Set());
