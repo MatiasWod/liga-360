@@ -7,9 +7,10 @@ export const TournamentsList: React.FC<{
 	organizerFilter?: string;
 	inscriptionModeFilter?: 'public' | 'invitation';
 	participantTypeFilter?: 'teams' | 'individuals';
+	searchTerm?: string;
 	idsFilter?: string[];
 	excludeIdsFilter?: string[];
-}> = ({ onOpen, organizerFilter, inscriptionModeFilter, participantTypeFilter, idsFilter, excludeIdsFilter }) => {
+}> = ({ onOpen, organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [items, setItems] = React.useState<TournamentEntity[]>([]);
@@ -73,6 +74,28 @@ export const TournamentsList: React.FC<{
 		return 'teams';
 	}
 
+	function matchesSearchTerm(tournament: TournamentEntity, term: string): boolean {
+		const query = term.trim().toLowerCase();
+		if (!query) return true;
+
+		const normalizedParticipantType = normalizeParticipantType(tournament.participantType);
+		const participantTypeLabel = normalizedParticipantType === 'teams' ? 'equipos teams team' : 'participantes participant participants individual individuales';
+		const searchable = [
+			tournament.name,
+			tournament.organizer,
+			tournament.venue,
+			tournament.participantType,
+			participantTypeLabel,
+			...(tournament.competitions || []).map((competition) => competition.name),
+			...(tournament.competitions || []).flatMap((competition) => (competition.stages || []).map((stage) => stage.name)),
+		]
+			.filter(Boolean)
+			.join(' ')
+			.toLowerCase();
+
+		return searchable.includes(query);
+	}
+
 	async function load() {
 			setLoading(true); setError(null);
 			try {
@@ -87,6 +110,9 @@ export const TournamentsList: React.FC<{
 				}
 				if (participantTypeFilter) {
 					filtered = filtered.filter((t) => normalizeParticipantType(t.participantType) === participantTypeFilter);
+				}
+				if (searchTerm?.trim()) {
+					filtered = filtered.filter((t) => matchesSearchTerm(t, searchTerm));
 				}
 				if (Array.isArray(idsFilter)) {
 					const allowed = new Set(idsFilter.map((id) => String(id || '')));
@@ -110,7 +136,7 @@ export const TournamentsList: React.FC<{
 
 	React.useEffect(() => {
 		load();
-	}, [organizerFilter, inscriptionModeFilter, participantTypeFilter, idsFilter, excludeIdsFilter]);
+	}, [organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter]);
 
 	if (loading) return <div className="text-sm opacity-80">Cargando torneos…</div>;
 	if (error) return <div className="text-sm text-red-300">{error}</div>;
