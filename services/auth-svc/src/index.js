@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import jwt from 'jsonwebtoken';
 import pkg from 'pg';
 import bcrypt from 'bcryptjs';
+import { httpLogger, logger } from './logger.js';
 
 const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
@@ -62,6 +63,7 @@ async function ensureSchema() {
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(httpLogger);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -161,7 +163,7 @@ app.post('/register', async (req, res) => {
       });
       // #endregion
       if (e.code === '23505') return res.status(409).json({ error: 'username already exists' });
-      console.error('[auth-svc] register error', e);
+      logger.error({ err: e }, 'register error');
       return res.status(500).json({ error: 'internal_error' });
     } finally {
       client.release();
@@ -210,9 +212,9 @@ app.listen(PORT, async () => {
       }
     });
     // #endregion
-    console.error('[auth-svc] schema init error', e);
+    logger.error({ err: e }, 'schema init error');
   });
-  console.log(`[auth-svc] running on http://0.0.0.0:${PORT}`);
+  logger.info({ port: PORT }, 'running');
 });
 
 

@@ -10,6 +10,7 @@ import { expressMiddleware } from '@apollo/server/express4';
 import neo4j from 'neo4j-driver';
 import { requireOrganizerFromAuthHeader } from './auth.js';
 import { eliminationFirstRoundBracketPositions, eliminationMatchSlots, nextPowerOf2 } from './bracketElimination.js';
+import { httpLogger, logger } from './logger.js';
 import {
   doubleRoundRobinFromSingle,
   singleRoundRobinSchedule,
@@ -2229,6 +2230,7 @@ async function bootstrap() {
   const app = express();
   app.use(cors());
   app.use(bodyParser.json());
+  app.use(httpLogger);
 
   // Health endpoint
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -2247,12 +2249,12 @@ async function bootstrap() {
   }));
 
   app.listen(PORT, () => {
-    console.log(`[tournaments-svc] running on http://0.0.0.0:${PORT}`);
+    logger.info({ port: PORT }, 'running');
   });
 }
 
 bootstrap().catch((err) => {
-  console.error('[tournaments-svc] fatal error:', err);
+  logger.fatal({ err }, 'fatal error');
   process.exit(1);
 });
 
