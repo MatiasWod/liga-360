@@ -1,4 +1,4 @@
-# Comunication Rules
+# Communication Rules
 
 - Always respond in Spanish.
 - Keep one emoji in every response.
