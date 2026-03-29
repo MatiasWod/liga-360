@@ -9,6 +9,7 @@ import { OrganizerTournamentsPage } from './pages/organizer/OrganizerTournaments
 import { ParticipantHomePage } from './pages/participant/ParticipantHomePage';
 import { ParticipantTeamsPage } from './pages/participant/ParticipantTeamsPage';
 import { ParticipantTournamentsPage } from './pages/participant/ParticipantTournamentsPage';
+import { PublicViewerPage } from './pages/shared/PublicViewerPage';
 import { PlaceholderPage } from './pages/shared/PlaceholderPage';
 import { TeamHomePage } from './pages/team/TeamHomePage';
 import { TeamParticipantsPage } from './pages/team/TeamParticipantsPage';
@@ -23,6 +24,7 @@ export const App: React.FC = () => {
     return match ? decodeURIComponent(match[1]) : null;
   }, []);
   const [user, setUser] = React.useState(readSessionUser());
+  const [showAuthPage, setShowAuthPage] = React.useState(false);
   const [inviteToken, setInviteToken] = React.useState<string | null>(initialInviteToken);
   const [inviteAuthRequired, setInviteAuthRequired] = React.useState(false);
   const [pendingInviteClaimMode, setPendingInviteClaimMode] = React.useState<'general_with_account' | 'team_claim' | null>(() => {
@@ -164,6 +166,7 @@ export const App: React.FC = () => {
   function handleLogout() {
     logout();
     setUser(null);
+    setShowAuthPage(false);
     setTeams([]);
     setActiveTeamId(null);
   }
@@ -207,10 +210,20 @@ export const App: React.FC = () => {
   }
 
   if (!user) {
+    if (!showAuthPage) {
+      return (
+        <PublicViewerPage
+          onGoToAuth={() => setShowAuthPage(true)}
+        />
+      );
+    }
+
     return (
       <AuthPage
+        onBackToPublic={() => setShowAuthPage(false)}
         onAuthenticated={() => {
           setUser(readSessionUser());
+          setShowAuthPage(false);
           const pendingInviteToken = localStorage.getItem('liga360:pendingInviteToken');
           if (pendingInviteToken) {
             window.history.replaceState({}, '', `/invite/${pendingInviteToken}`);
