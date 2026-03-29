@@ -1,7 +1,6 @@
 # Communication Rules
 
 - Always respond in Spanish.
-- Keep one emoji in every response.
 - Do not remove existing comments from the codebase.
 - Ask clarifying questions instead of making assumptions when requirements are ambiguous.
 - Do not change anything unrelated to the user request.
