@@ -13,16 +13,17 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
 
   return (
     <div className="min-h-screen bg-[#F5F7F9] text-[#0F2A33]">
-      <header className="border-b border-[#22512D] bg-[#163A20] px-6 py-4">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-white">Liga360</h1>
-            <p className="mt-1 text-sm text-[#CFE8D0]">Visualización pública de torneos, fases y partidos.</p>
+      <header className="border-b border-[#22512D] bg-[#163A20] px-6">
+        <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
+            <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
           </div>
+          <div aria-hidden="true" />
           <button
             type="button"
             onClick={onGoToAuth}
-            className="rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
+            className="justify-self-end rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
           >
             Iniciar sesión
           </button>

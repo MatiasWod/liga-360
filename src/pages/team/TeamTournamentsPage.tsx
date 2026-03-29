@@ -10,8 +10,9 @@ interface TeamTournamentsPageProps {
 }
 
 export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ activeTeamId, activeTeamName }) => {
-  const [tab, setTab] = React.useState<'inscriptos' | 'disponibles'>('inscriptos');
+  const [tab, setTab] = React.useState<'inscriptos' | 'disponibles' | 'publicos'>('inscriptos');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
   const [myTournamentIds, setMyTournamentIds] = React.useState<Set<string>>(new Set());
   const [loadingMyTournaments, setLoadingMyTournaments] = React.useState(false);
   const [requestLoading, setRequestLoading] = React.useState(false);
@@ -91,35 +92,58 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-[#0F2A33]">Torneos</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Explora torneos públicos y los torneos donde participa tu equipo.
-            </p>
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-[#0F2A33]">Torneos</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Explora torneos públicos y los torneos donde participa tu equipo.
+              </p>
+            </div>
+            <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId(null);
+                  setTab('inscriptos');
+                }}
+                className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'inscriptos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+              >
+                Mis torneos
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId(null);
+                  setTab('disponibles');
+                }}
+                className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'disponibles' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+              >
+                Disponibles
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId(null);
+                  setTab('publicos');
+                }}
+                className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'publicos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+              >
+                Públicos
+              </button>
+            </div>
           </div>
-          <div className="inline-flex rounded-xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedId(null);
-                setTab('inscriptos');
-              }}
-              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'inscriptos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
-            >
-              Mis torneos
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedId(null);
-                setTab('disponibles');
-              }}
-              className={`rounded-xl px-4 py-2 text-sm font-medium ${tab === 'disponibles' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
-            >
-              Disponibles
-            </button>
-          </div>
+
+          <label className="block md:max-w-xl">
+            <span className="mb-1 block text-sm text-slate-600">Buscar torneos, organización, equipos o etapas</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Ej: Copa, Club Sur"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            />
+          </label>
         </div>
       </Card>
 
@@ -155,6 +179,7 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
           ) : (
             <TournamentsList
               participantTypeFilter="teams"
+              searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
               idsFilter={Array.from(myTournamentIds)}
             />
@@ -166,6 +191,7 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
             <TournamentsList
               inscriptionModeFilter="public"
               participantTypeFilter="teams"
+              searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
               excludeIdsFilter={Array.from(myTournamentIds)}
             />
@@ -186,6 +212,23 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
               </div>
               {requestError && <div className="text-sm text-red-700">{requestError}</div>}
               {requestSuccess && <div className="text-sm text-emerald-700">{requestSuccess}</div>}
+              <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
+            </div>
+          )
+        )}
+
+        {tab === 'publicos' && (
+          !selectedId ? (
+            <TournamentsList
+              inscriptionModeFilter="public"
+              searchTerm={searchTerm}
+              onOpen={(id) => setSelectedId(id)}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Vista pública en modo solo lectura.
+              </div>
               <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
             </div>
           )

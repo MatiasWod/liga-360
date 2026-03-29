@@ -70,7 +70,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden p-6">
+    <div className="relative min-h-screen overflow-hidden">
       {SPORTS_BACKGROUNDS.map((imageUrl, index) => {
         const isActive = index === backgroundIndex;
         return (
@@ -84,22 +84,29 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
       })}
       <div className="absolute inset-0 bg-[#0F2A33]/70" aria-hidden="true" />
 
-      <div className="relative mx-auto max-w-xl rounded-xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-sm">
-        {onBackToPublic && (
-          <button
-            type="button"
-            onClick={onBackToPublic}
-            className="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#2E7D32] bg-[#2E7D32] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:border-[#256628] hover:bg-[#256628]"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M12.5 4.5L7 10l5.5 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Volver a Torneos públicos
-          </button>
-        )}
+      <header className="relative border-b border-[#22512D] bg-[#163A20] px-6">
+        <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
+            <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
+          </div>
+          <div aria-hidden="true" />
+          <div className="flex items-center justify-self-end gap-2">
+            {onBackToPublic && (
+              <button
+                type="button"
+                onClick={onBackToPublic}
+                className="rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
+              >
+                Volver a Torneos públicos
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
 
-        <h1 className="text-2xl font-semibold text-[#0F2A33]">LIGA360</h1>
-        <p className="mt-1 text-sm text-slate-600">Inicia sesion o registrate para usar el flujo completo.</p>
+      <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-sm">
+        <p className="text-sm text-slate-600">Inicia sesion o registrate para usar el flujo completo.</p>
 
         <div className="mt-5 inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1">
           <button
