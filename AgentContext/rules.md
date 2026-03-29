@@ -12,6 +12,8 @@
 - If business logic changes, tests must be added or updated.
 - If fixing a bug, reproduce it with a test first, then implement the fix.
 - Do not perform commits unless explicitly requested by the user.
+- When commits are requested, commit messages must be descriptive and follow good practices.
+- Commit messages must always be written in English.
 
 ## Architecture and Code Quality
 
