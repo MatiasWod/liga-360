@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pkg from 'pg';
+import { httpLogger, logger } from './logger.js';
 
 const PORT = process.env.PORT || 4002;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
@@ -205,6 +206,7 @@ async function canWriteTeam(client, teamId, userId, teamCode) {
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(httpLogger);
 app.use(optionalAuthMiddleware);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -245,7 +247,7 @@ app.get('/teams', requireAuthMiddleware, async (req, res) => {
     );
     return res.json({ teams: mine.rows });
   } catch (e) {
-    console.error('[teams-svc] list teams error', e);
+    logger.error({ err: e }, 'list teams error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -270,7 +272,7 @@ app.post('/teams', requireAuthMiddleware, async (req, res) => {
     return res.status(201).json({ team: r.rows[0], accessCode });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[teams-svc] create team error', e);
+    logger.error({ err: e }, 'create team error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -302,7 +304,7 @@ app.patch('/teams/:id', async (req, res) => {
       client.release();
     }
   } catch (e) {
-    console.error('[teams-svc] update team error', e);
+    logger.error({ err: e }, 'update team error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -358,7 +360,7 @@ app.post('/participants', async (req, res) => {
     return res.status(201).json({ participant });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[teams-svc] create participant error', e);
+    logger.error({ err: e }, 'create participant error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -434,7 +436,7 @@ app.patch('/participants/:id', async (req, res) => {
     return res.json({ participant: updated.rows[0] });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[teams-svc] update participant error', e);
+    logger.error({ err: e }, 'update participant error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -459,7 +461,7 @@ app.post('/teams/:id/members', async (req, res) => {
     );
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[teams-svc] add member error', e);
+    logger.error({ err: e }, 'add member error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -483,7 +485,7 @@ app.delete('/teams/:id/members/:participantId', async (req, res) => {
     );
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[teams-svc] remove member error', e);
+    logger.error({ err: e }, 'remove member error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -532,7 +534,7 @@ app.post('/profiles/me/claim-by-dni', requireAuthMiddleware, async (req, res) =>
     return res.json({ profile, linkedParticipants: linked.rows.map(r => r.id) });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[teams-svc] claim by dni error', e);
+    logger.error({ err: e }, 'claim by dni error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -576,7 +578,7 @@ app.get('/profiles/me', requireAuthMiddleware, async (req, res) => {
       teams: teamsRes.rows,
     });
   } catch (e) {
-    console.error('[teams-svc] profile read error', e);
+    logger.error({ err: e }, 'profile read error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -616,7 +618,7 @@ app.delete('/profiles/me/participants/:id/unlink', requireAuthMiddleware, async 
     return res.json({ ok: true, participantId });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[teams-svc] unlink participant error', e);
+    logger.error({ err: e }, 'unlink participant error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -647,7 +649,7 @@ app.get('/teams/:id', async (req, res) => {
     );
     return res.json({ team: teamRes.rows[0], members: members.rows });
   } catch (e) {
-    console.error('[teams-svc] team read error', e);
+    logger.error({ err: e }, 'team read error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -669,7 +671,7 @@ app.post('/teams/:id/access-code/rotate', requireAuthMiddleware, async (req, res
     );
     return res.json({ teamId, accessCode });
   } catch (e) {
-    console.error('[teams-svc] rotate access code error', e);
+    logger.error({ err: e }, 'rotate access code error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -694,7 +696,7 @@ app.get('/teams/me/invite-code', requireAuthMiddleware, async (req, res) => {
       inviteCode: found.rows[0].invite_code,
     });
   } catch (e) {
-    console.error('[teams-svc] get team invite code error', e);
+    logger.error({ err: e }, 'get team invite code error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -716,7 +718,7 @@ app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req
     if (found.rows.length === 0) return res.status(404).json({ error: 'team not found' });
     return res.json({ team: found.rows[0] });
   } catch (e) {
-    console.error('[teams-svc] resolve by invite code error', e);
+    logger.error({ err: e }, 'resolve by invite code error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -724,8 +726,8 @@ app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req
 });
 
 app.listen(PORT, async () => {
-  await ensureSchema().catch((e) => console.error('[teams-svc] schema init error', e));
-  console.log(`[teams-svc] running on http://0.0.0.0:${PORT}`);
+  await ensureSchema().catch((e) => logger.error({ err: e }, 'schema init error'));
+  logger.info({ port: PORT }, 'running');
 });
 
 

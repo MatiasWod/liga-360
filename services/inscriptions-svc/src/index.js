@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
+import { httpLogger, logger } from './logger.js';
 
 const PORT = process.env.PORT || 4004;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
@@ -492,6 +493,7 @@ async function clearTournamentInitialAssignments({ tournamentId, inscriptionId, 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(httpLogger);
 app.use(optionalAuthMiddleware);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -597,7 +599,7 @@ app.post('/inscriptions', async (req, res) => {
     if (String(e?.message || '').startsWith('FORBIDDEN:')) {
       return res.status(403).json({ error: e.message });
     }
-    console.error('[inscriptions-svc] create public inscription error', e);
+    logger.error({ err: e }, 'create public inscription error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -626,7 +628,7 @@ app.get('/invites', requireOrganizer, async (req, res) => {
         );
     return res.json({ invites: listed.rows });
   } catch (e) {
-    console.error('[inscriptions-svc] list invites error', e);
+    logger.error({ err: e }, 'list invites error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -693,7 +695,7 @@ app.post('/invites', requireOrganizer, async (req, res) => {
     );
     return res.status(201).json({ invite: created.rows[0] });
   } catch (e) {
-    console.error('[inscriptions-svc] create invite error', e);
+    logger.error({ err: e }, 'create invite error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -814,7 +816,7 @@ app.post('/invites/code/claim', requireAuthMiddleware, async (req, res) => {
     if (String(e?.message || '').includes('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH')) {
       return res.status(403).json({ error: 'FORBIDDEN: tipo de participante incompatible con el torneo' });
     }
-    console.error('[inscriptions-svc] claim invite code error', e);
+    logger.error({ err: e }, 'claim invite code error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -864,7 +866,7 @@ app.get('/invites/:token', async (req, res) => {
       },
     });
   } catch (e) {
-    console.error('[inscriptions-svc] get invite error', e);
+    logger.error({ err: e }, 'get invite error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1092,7 +1094,7 @@ app.post('/invites/:token/use', async (req, res) => {
     if (String(e?.message || '').includes('FORBIDDEN_PARTICIPANT_TYPE_MISMATCH')) {
       return res.status(403).json({ error: 'FORBIDDEN: tipo de participante incompatible con el torneo' });
     }
-    console.error('[inscriptions-svc] use invite error', e);
+    logger.error({ err: e }, 'use invite error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1173,7 +1175,7 @@ app.patch('/inscriptions/:id/status', requireOrganizer, async (req, res) => {
     if (String(e?.message || '').includes('COMPETITION_MAX_SLOTS_UNAVAILABLE')) {
       return res.status(500).json({ error: 'COMPETITION_MAX_SLOTS_UNAVAILABLE' });
     }
-    console.error('[inscriptions-svc] update status error', e);
+    logger.error({ err: e }, 'update status error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1244,7 +1246,7 @@ app.patch('/inscriptions/:id/competition', requireOrganizer, async (req, res) =>
     return res.json({ inscription: updated.rows[0] });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error('[inscriptions-svc] move inscription competition error', e);
+    logger.error({ err: e }, 'move inscription competition error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1301,7 +1303,7 @@ app.post('/inscriptions/:id/associate', requireTeamUser, async (req, res) => {
     if (String(e?.message || '').startsWith('FORBIDDEN:')) {
       return res.status(403).json({ error: e.message });
     }
-    console.error('[inscriptions-svc] associate inscription error', e);
+    logger.error({ err: e }, 'associate inscription error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1372,7 +1374,7 @@ app.get('/tournaments/:id/inscriptions', requireAuthMiddleware, async (req, res)
       inscriptions: listed.rows,
     });
   } catch (e) {
-    console.error('[inscriptions-svc] list tournament inscriptions error', e);
+    logger.error({ err: e }, 'list tournament inscriptions error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1412,7 +1414,7 @@ app.get('/competitions/:id/inscriptions', requireAuthMiddleware, async (req, res
       inscriptions: listed.rows,
     });
   } catch (e) {
-    console.error('[inscriptions-svc] list competition inscriptions error', e);
+    logger.error({ err: e }, 'list competition inscriptions error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -1445,7 +1447,7 @@ app.get('/teams/me/invites', requireTeamUser, async (req, res) => {
       invites: invitesR.rows,
     });
   } catch (e) {
-    console.error('[inscriptions-svc] list team invites error', e);
+    logger.error({ err: e }, 'list team invites error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1545,7 +1547,7 @@ app.post('/teams/me/invites/:id/accept', requireTeamUser, async (req, res) => {
     if (String(e?.code || '') === '23505' && String(e?.constraint || '').includes('uniq_inscription_tournament_linked_team_active')) {
       return res.status(409).json({ error: 'equipo duplicado en torneo: solo se permite una inscripción activa por equipo' });
     }
-    console.error('[inscriptions-svc] accept team invite error', e);
+    logger.error({ err: e }, 'accept team invite error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1579,7 +1581,7 @@ app.post('/teams/me/invites/:id/reject', requireTeamUser, async (req, res) => {
     if (updated.rows.length === 0) return res.status(404).json({ error: 'invite no encontrada para tu equipo' });
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[inscriptions-svc] reject team invite error', e);
+    logger.error({ err: e }, 'reject team invite error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1600,7 +1602,7 @@ app.get('/participants/me/invites', requireParticipantUser, async (req, res) => 
     );
     return res.json({ invites: invitesR.rows });
   } catch (e) {
-    console.error('[inscriptions-svc] list participant invites error', e);
+    logger.error({ err: e }, 'list participant invites error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1692,7 +1694,7 @@ app.post('/participants/me/invites/:id/accept', requireParticipantUser, async (r
     if (String(e?.message || '').startsWith('FORBIDDEN:')) {
       return res.status(403).json({ error: e.message });
     }
-    console.error('[inscriptions-svc] accept participant invite error', e);
+    logger.error({ err: e }, 'accept participant invite error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1717,7 +1719,7 @@ app.post('/participants/me/invites/:id/reject', requireParticipantUser, async (r
     if (updated.rows.length === 0) return res.status(404).json({ error: 'invite no encontrada para tu usuario' });
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[inscriptions-svc] reject participant invite error', e);
+    logger.error({ err: e }, 'reject participant invite error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -1727,8 +1729,8 @@ app.post('/participants/me/invites/:id/reject', requireParticipantUser, async (r
 export async function startServer() {
   return new Promise((resolve) => {
     const server = app.listen(PORT, async () => {
-      await ensureSchema().catch((e) => console.error('[inscriptions-svc] schema init error', e));
-      console.log(`[inscriptions-svc] running on http://0.0.0.0:${PORT}`);
+      await ensureSchema().catch((e) => logger.error({ err: e }, 'schema init error'));
+      logger.info({ port: PORT }, 'running');
       resolve(server);
     });
   });

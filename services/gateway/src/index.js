@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { ApolloGateway, IntrospectAndCompose, RemoteGraphQLDataSource } from '@apollo/gateway';
+import { httpLogger, logger } from './logger.js';
 
 const PORT = process.env.PORT || 4000;
 
@@ -11,6 +12,7 @@ async function bootstrap() {
   const app = express();
   app.use(cors());
   app.use(bodyParser.json());
+  app.use(httpLogger);
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -29,6 +31,9 @@ async function bootstrap() {
           if (context?.authorization) {
             request.http.headers.set('authorization', context.authorization);
           }
+          if (context?.requestId) {
+            request.http.headers.set('x-request-id', context.requestId);
+          }
         }
       });
     }
@@ -38,17 +43,18 @@ async function bootstrap() {
 
   app.use('/graphql', expressMiddleware(server, {
     context: async ({ req }) => ({
-      authorization: req.headers.authorization || ''
+      authorization: req.headers.authorization || '',
+      requestId: req.id || req.headers['x-request-id'] || '',
     })
   }));
 
   app.listen(PORT, () => {
-    console.log(`[gateway] running on http://0.0.0.0:${PORT}`);
+    logger.info({ port: PORT }, 'running');
   });
 }
 
 bootstrap().catch((err) => {
-  console.error('[gateway] fatal error:', err);
+  logger.fatal({ err }, 'fatal error');
   process.exit(1);
 });
 

@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "NODE_ENV=test node --test src/rules.test.js",
-    "test:integration": "NODE_ENV=test node --test src/http.integration.test.js"
+    "test:unit": "cross-env NODE_ENV=test node --test src/rules.test.js",
+    "test:integration": "cross-env NODE_ENV=test node --test src/http.integration.test.js"
   },
   "dependencies": {
     "body-parser": "^1.20.3",
@@ -16,12 +16,13 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.1"
+    "liga360-torneo-form": "file:../..",
+    "pg": "^8.13.1",
+    "pino": "^9.9.5",
+    "pino-http": "^10.5.0"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "supertest": "^7.1.4"
   }
 }
-
-
-
