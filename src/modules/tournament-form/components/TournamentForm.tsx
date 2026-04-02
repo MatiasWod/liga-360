@@ -64,6 +64,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
     const [submitState, setSubmitState] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [submitMsg, setSubmitMsg] = React.useState<string>('');
     const [loadingExisting, setLoadingExisting] = React.useState(false);
+    const [publicationStatus, setPublicationStatus] = React.useState<'draft' | 'published'>('draft');
     const existingCompetitionIdsRef = React.useRef<Set<string>>(new Set());
     const existingStageIdsRef = React.useRef<Set<string>>(new Set());
     const existingTransitionIdsRef = React.useRef<Set<string>>(new Set());
@@ -99,6 +100,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                 if (cancelled) return;
 
                 const derived = deriveFormStateFromGraphqlTournament(t);
+                setPublicationStatus(derived.publicationStatus);
                 setGeneral({
                     ...derived.general,
                     participantType: derived.general.participantType as ParticipantType,
@@ -144,6 +146,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     venue: general.venue,
                     participantType: general.participantType,
                     inscriptionMode: general.inscriptionMode,
+                    status: publicationStatus,
                 })
                 : await createTournamentDraft({
                     name: general.name,
@@ -267,6 +270,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                 const tr = await getTournamentForEdit(tournamentId);
                 if (tr) {
                     const derived = deriveFormStateFromGraphqlTournament(tr);
+                    setPublicationStatus(derived.publicationStatus);
                     setGeneral({
                         ...derived.general,
                         participantType: derived.general.participantType as ParticipantType,
@@ -327,6 +331,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         const tr = await getTournamentForEdit(tournamentId);
                         if (tr) {
                             const derived = deriveFormStateFromGraphqlTournament(tr);
+                            setPublicationStatus(derived.publicationStatus);
                             setGeneral({
                                 ...derived.general,
                                 participantType: derived.general.participantType as ParticipantType,
@@ -421,6 +426,21 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         }}
                         options={[{ label: 'Pública', value: 'public' }, { label: 'Por invitación', value: 'invitation' }]}
                     />
+                    {mode === 'edit' ? (
+                        <SelectField
+                            label="Estado del torneo"
+                            name="publicationStatus"
+                            value={publicationStatus}
+                            onChange={(value) => {
+                                const v = (value || 'draft') as 'draft' | 'published';
+                                setPublicationStatus(v);
+                            }}
+                            options={[
+                                { label: 'Borrador (no público / sin carga de resultados)', value: 'draft' },
+                                { label: 'Publicado (visible y habilitado para resultados)', value: 'published' },
+                            ]}
+                        />
+                    ) : null}
                 </div>
             </Section>
 

@@ -98,7 +98,11 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
               </button>
             </div>
             {selectedTournamentId && (
-              <TournamentConfiguration tournamentId={selectedTournamentId} onBack={() => setMode('visualizacion')} />
+              <TournamentConfiguration
+                tournamentId={selectedTournamentId}
+                organizerName={organizerName}
+                onBack={() => setMode('visualizacion')}
+              />
             )}
           </div>
         </Card>

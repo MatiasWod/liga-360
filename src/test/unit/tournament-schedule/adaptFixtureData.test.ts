@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScheduleFromStage } from '../../../components/tournament-schedule/adaptFixtureData';
+import { buildScheduleFromStage, matchInputToRecord } from '../../../components/tournament-schedule/adaptFixtureData';
 
 describe('buildScheduleFromStage (groups)', () => {
   it('usa el mismo id de ronda en todos los grupos para la misma fecha', () => {
@@ -61,5 +61,24 @@ describe('buildScheduleFromStage (elimination)', () => {
     if (out?.type !== 'knockout') return;
     const col = out.data.rounds[0]?.matches ?? [];
     expect(col.map((m) => m.id)).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('matchInputToRecord', () => {
+  it('mapea status finished a completed y conserva marcadores', () => {
+    const rec = matchInputToRecord({
+      id: 'm1',
+      status: 'finished',
+      homeScore: 2,
+      awayScore: 1,
+      resultRecordedAt: '2026-03-29T12:00:00.000Z',
+      resultRecordedBy: 'org1',
+      homeAssignedInscription: { inscriptionId: 'a', displayName: 'A' },
+      awayAssignedInscription: { inscriptionId: 'b', displayName: 'B' },
+    });
+    expect(rec.status).toBe('completed');
+    expect(rec.homeScore).toBe(2);
+    expect(rec.awayScore).toBe(1);
+    expect(rec.resultRecordedBy).toBe('org1');
   });
 });

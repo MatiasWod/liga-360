@@ -7,6 +7,13 @@ export type FixtureMatchInput = {
   leg?: number | null;
   slotIndex?: number | null;
   groupId?: string | null;
+  scheduledAt?: string | null;
+  status?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  resultRecordedAt?: string | null;
+  resultRecordedBy?: string | null;
+  fixtureCode?: string | null;
   homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
   awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
 };
@@ -41,11 +48,18 @@ function teamFromSlot(
 }
 
 export function matchInputToRecord(m: FixtureMatchInput): MatchRecord {
+  const apiFinished = String(m.status || '').toLowerCase() === 'finished';
   return {
     id: m.id,
     homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id),
     awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id),
-    status: 'scheduled',
+    fixtureCode: m.fixtureCode ? String(m.fixtureCode) : undefined,
+    scheduledAt: m.scheduledAt ?? undefined,
+    status: apiFinished ? 'completed' : 'scheduled',
+    homeScore: m.homeScore != null ? Number(m.homeScore) : undefined,
+    awayScore: m.awayScore != null ? Number(m.awayScore) : undefined,
+    resultRecordedAt: m.resultRecordedAt ?? undefined,
+    resultRecordedBy: m.resultRecordedBy ?? undefined,
   };
 }
 

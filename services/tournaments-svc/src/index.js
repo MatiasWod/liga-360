@@ -205,6 +205,8 @@ function requireOrganizer(context) {
 }
 
 function matchFromNeoProps(m) {
+  const ms = String(m.matchStatus || '').toLowerCase();
+  const status = ms === 'finished' ? 'finished' : 'scheduled';
   return {
     id: m.id,
     round: m.round != null ? Number(m.round) : null,
@@ -223,6 +225,11 @@ function matchFromNeoProps(m) {
     awayDisplayName: m.awayDisplayName ?? null,
     homeTournamentId: m.homeTournamentId ?? null,
     awayTournamentId: m.awayTournamentId ?? null,
+    status,
+    homeScore: m.homeScore != null ? Number(m.homeScore) : null,
+    awayScore: m.awayScore != null ? Number(m.awayScore) : null,
+    resultRecordedAt: m.resultRecordedAt ?? null,
+    resultRecordedBy: m.resultRecordedBy ?? null,
   };
 }
 
@@ -1644,6 +1651,100 @@ const resolvers = {
         await session.close();
       }
     },
+    updateMatchResult: async (_, { tournamentId, stageId, matchId, homeScore, awayScore }, context) => {
+      const user = requireOrganizer(context);
+      const requester = String(user?.username || '').trim().toLowerCase();
+      if (!requester) throw new Error('BAD_REQUEST: usuario sin nombre');
+
+      const h = Number(homeScore);
+      const a = Number(awayScore);
+      if (!Number.isInteger(h) || h < 0) throw new Error('BAD_REQUEST: marcador local inválido');
+      if (!Number.isInteger(a) || a < 0) throw new Error('BAD_REQUEST: marcador visitante inválido');
+
+      const session = context.driver.session();
+      try {
+        const r = await session.run(
+          `MATCH (t:Tournament {id:$tid})-[:HAS_COMPETITION]->(:Competition)-[:HAS_STAGE]->(s:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match {id:$matchId})
+           RETURN t, m
+           LIMIT 1`,
+          { tid: tournamentId, stageId, matchId }
+        );
+        if (r.records.length === 0) {
+          throw new Error('NOT_FOUND: partido no encontrado en el torneo');
+        }
+        const t = r.records[0].get('t').properties;
+        const owner = String(t.organizer || '').trim().toLowerCase();
+        if (!owner || owner !== requester) {
+          throw new Error('FORBIDDEN: solo el organizador del torneo puede cargar resultados');
+        }
+        const tStatus = String(t.status || '').toLowerCase();
+        if (tStatus !== 'published') {
+          throw new Error('BAD_REQUEST: el torneo debe estar publicado para cargar resultados');
+        }
+
+        const recordedAt = new Date().toISOString();
+        const recordedBy = String(user?.username || '').trim();
+
+        const upd = await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.homeScore = $homeScore,
+               m.awayScore = $awayScore,
+               m.matchStatus = 'finished',
+               m.resultRecordedAt = $recordedAt,
+               m.resultRecordedBy = $recordedBy
+           RETURN m`,
+          { matchId, homeScore: h, awayScore: a, recordedAt, recordedBy }
+        );
+        const m = upd.records[0]?.get('m')?.properties;
+        if (!m) throw new Error('NOT_FOUND: partido no existe');
+        return matchFromNeoProps(m);
+      } finally {
+        await session.close();
+      }
+    },
+    updateMatchScheduledAt: async (_, { tournamentId, stageId, matchId, scheduledAt }, context) => {
+      const user = requireOrganizer(context);
+      const requester = String(user?.username || '').trim().toLowerCase();
+      if (!requester) throw new Error('BAD_REQUEST: usuario sin nombre');
+
+      const raw = scheduledAt == null || scheduledAt === '' ? null : String(scheduledAt).trim();
+      let at = null;
+      if (raw) {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) throw new Error('BAD_REQUEST: fecha u hora inválida');
+        at = d.toISOString();
+      }
+
+      const session = context.driver.session();
+      try {
+        const r = await session.run(
+          `MATCH (t:Tournament {id:$tid})-[:HAS_COMPETITION]->(:Competition)-[:HAS_STAGE]->(s:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match {id:$matchId})
+           RETURN t, m
+           LIMIT 1`,
+          { tid: tournamentId, stageId, matchId }
+        );
+        if (r.records.length === 0) {
+          throw new Error('NOT_FOUND: partido no encontrado en el torneo');
+        }
+        const t = r.records[0].get('t').properties;
+        const owner = String(t.organizer || '').trim().toLowerCase();
+        if (!owner || owner !== requester) {
+          throw new Error('FORBIDDEN: solo el organizador del torneo puede programar partidos');
+        }
+
+        await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.scheduledAt = $scheduledAt`,
+          { matchId, scheduledAt: at }
+        );
+        const mR = await session.run(`MATCH (m:Match {id:$matchId}) RETURN m`, { matchId });
+        const m = mR.records[0]?.get('m')?.properties;
+        if (!m) throw new Error('NOT_FOUND: partido no existe');
+        return matchFromNeoProps(m);
+      } finally {
+        await session.close();
+      }
+    },
     createMatch: async (_, { stageId, groupId, homeTeamId, awayTeamId, round, leg, scheduledAt }, { driver }) => {
       const id = genId('m');
       const session = driver.session();
@@ -1700,6 +1801,11 @@ const resolvers = {
           scheduledAt: scheduledAt ?? null,
           homeTeamId,
           awayTeamId,
+          status: 'scheduled',
+          homeScore: null,
+          awayScore: null,
+          resultRecordedAt: null,
+          resultRecordedBy: null,
         };
       } finally {
         await session.close();
@@ -2223,6 +2329,36 @@ async function waitForNeo4jConnection(driver, maxAttempts = 20, delayMs = 500) {
   }
 }
 
+/** Mensajes `CODIGO: detalle` o solo `CODIGO` → extensions.code + mensaje legible. */
+function formatGraphqlServiceError(formattedError) {
+  const raw = formattedError.message || '';
+  const idx = raw.indexOf(': ');
+  if (idx > 1) {
+    const code = raw.slice(0, idx);
+    if (/^[A-Z][A-Z0-9_]*$/.test(code)) {
+      const detail = raw.slice(idx + 2).trim();
+      return {
+        ...formattedError,
+        message: detail || code,
+        extensions: {
+          ...(formattedError.extensions || {}),
+          code,
+        },
+      };
+    }
+  }
+  if (/^[A-Z][A-Z0-9_]+$/.test(raw)) {
+    return {
+      ...formattedError,
+      extensions: {
+        ...(formattedError.extensions || {}),
+        code: raw,
+      },
+    };
+  }
+  return formattedError;
+}
+
 async function bootstrap() {
   const driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USERNAME, NEO4J_PASSWORD));
   await waitForNeo4jConnection(driver);
@@ -2236,7 +2372,7 @@ async function bootstrap() {
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
   const schema = buildSubgraphSchema({ typeDefs, resolvers });
-  const server = new ApolloServer({ schema });
+  const server = new ApolloServer({ schema, formatError: formatGraphqlServiceError });
   await server.start();
 
   app.use('/graphql', expressMiddleware(server, {

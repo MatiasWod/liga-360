@@ -7,6 +7,8 @@ export interface TournamentGeneralPayload {
   venue: string;
   participantType: 'teams' | 'individuals';
   inscriptionMode: 'public' | 'invitation';
+  /** En actualización, si no se envía se asume borrador (solo por compatibilidad interna). */
+  status?: 'draft' | 'published';
 }
 
 export async function createTournamentDraft(general: TournamentGeneralPayload) {
@@ -39,7 +41,7 @@ export async function updateTournamentDraft(tournamentId: string, general: Tourn
       venue: general.venue || null,
       pt: general.participantType,
       inscriptionMode: general.inscriptionMode,
-      status: 'draft',
+      status: general.status ?? 'draft',
     }
   ).then((response: any) => response.updateTournament);
 }

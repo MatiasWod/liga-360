@@ -122,6 +122,7 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
     participantType: string;
     inscriptionMode: string;
   };
+  publicationStatus: 'draft' | 'published';
   competitions: CompetitionMeta[];
   existingCompetitionIds: Set<string>;
   existingStageIds: Set<string>;
@@ -157,6 +158,9 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
     )
   );
 
+  const publicationStatus =
+    String(t.status || '').toLowerCase() === 'published' ? 'published' : 'draft';
+
   return {
     general: {
       name: String(t.name || ''),
@@ -165,6 +169,7 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
       participantType: String(t.participantType || 'teams'),
       inscriptionMode: String(t.inscriptionMode || 'public'),
     },
+    publicationStatus,
     competitions:
       nextCompetitions.length > 0
         ? nextCompetitions

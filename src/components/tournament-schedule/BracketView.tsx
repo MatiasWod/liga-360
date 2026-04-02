@@ -1,5 +1,5 @@
 import React from 'react';
-import type { MatchRecord } from './types';
+import type { MatchFixtureEditingOptions, MatchRecord } from './types';
 import { MatchRoundList } from './MatchRoundList';
 
 interface BracketColumn {
@@ -11,9 +11,10 @@ interface BracketColumn {
 interface BracketViewProps {
   columns: BracketColumn[];
   theme?: 'light' | 'dark';
+  fixtureEditing?: MatchFixtureEditingOptions | null;
 }
 
-export const BracketView: React.FC<BracketViewProps> = ({ columns, theme = 'light' }) => {
+export const BracketView: React.FC<BracketViewProps> = ({ columns, theme = 'light', fixtureEditing = null }) => {
   const isDark = theme === 'dark';
   const labelCls = isDark ? 'text-white/60' : 'text-slate-500';
 
@@ -25,7 +26,7 @@ export const BracketView: React.FC<BracketViewProps> = ({ columns, theme = 'ligh
             <div className={`mb-3 text-center text-xs font-bold uppercase tracking-wider ${labelCls}`}>
               {col.label}
             </div>
-            <MatchRoundList matches={col.matches} theme={theme} />
+            <MatchRoundList matches={col.matches} theme={theme} fixtureEditing={fixtureEditing} />
           </div>
         ))}
       </div>

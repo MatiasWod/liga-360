@@ -10,6 +10,7 @@ export type {
   KnockoutScheduleData,
   LeagueScheduleData,
   MatchRecord,
+  MatchFixtureEditingOptions,
   MatchStatus,
   ScheduleRound,
   TeamRef,
@@ -17,6 +18,8 @@ export type {
   TournamentScheduleData,
   TournamentScheduleProps,
 } from './types';
+
+export { datetimeLocalValueToIso, isoToDatetimeLocalValue } from './matchScheduleUtils';
 
 export { BracketView } from './BracketView';
 export { GroupSection } from './GroupSection';

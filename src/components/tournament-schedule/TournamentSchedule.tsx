@@ -4,6 +4,7 @@ import type {
   GroupsScheduleData,
   KnockoutScheduleData,
   LeagueScheduleData,
+  MatchFixtureEditingOptions,
   TournamentScheduleProps,
 } from './types';
 import { BracketView } from './BracketView';
@@ -17,6 +18,7 @@ export const TournamentSchedule: React.FC<TournamentScheduleProps> = ({
   data,
   theme = 'light',
   className = '',
+  fixtureEditing = null,
 }) => {
   const [selectedRoundId, setSelectedRoundId] = React.useState<string | null>(() =>
     getDefaultRoundId(type, data as LeagueScheduleData | GroupsScheduleData | KnockoutScheduleData)
@@ -60,15 +62,25 @@ export const TournamentSchedule: React.FC<TournamentScheduleProps> = ({
           transition={{ duration: 0.2 }}
         >
           {type === 'league' && selectedRoundId ? (
-            <LeagueRound data={data as LeagueScheduleData} roundId={selectedRoundId} theme={theme} />
+            <LeagueRound
+              data={data as LeagueScheduleData}
+              roundId={selectedRoundId}
+              theme={theme}
+              fixtureEditing={fixtureEditing}
+            />
           ) : null}
 
           {type === 'groups' && selectedRoundId ? (
-            <GroupsRounds data={data as GroupsScheduleData} roundId={selectedRoundId} theme={theme} />
+            <GroupsRounds
+              data={data as GroupsScheduleData}
+              roundId={selectedRoundId}
+              theme={theme}
+              fixtureEditing={fixtureEditing}
+            />
           ) : null}
 
           {type === 'knockout' ? (
-            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} />
+            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} fixtureEditing={fixtureEditing} />
           ) : null}
         </motion.div>
       </AnimatePresence>
@@ -80,24 +92,28 @@ function LeagueRound({
   data,
   roundId,
   theme,
+  fixtureEditing,
 }: {
   data: LeagueScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
+  fixtureEditing?: MatchFixtureEditingOptions | null;
 }) {
   const round = data.rounds.find((r) => r.id === roundId);
   const matches = round?.matches ?? [];
-  return <MatchRoundList matches={matches} theme={theme} />;
+  return <MatchRoundList matches={matches} theme={theme} fixtureEditing={fixtureEditing} />;
 }
 
 function GroupsRounds({
   data,
   roundId,
   theme,
+  fixtureEditing,
 }: {
   data: GroupsScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
+  fixtureEditing?: MatchFixtureEditingOptions | null;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -106,7 +122,7 @@ function GroupsRounds({
         const matches = round?.matches ?? [];
         return (
           <GroupSection key={g.id} title={g.name} theme={theme}>
-            <MatchRoundList matches={matches} theme={theme} />
+            <MatchRoundList matches={matches} theme={theme} fixtureEditing={fixtureEditing} />
           </GroupSection>
         );
       })}
@@ -114,11 +130,19 @@ function GroupsRounds({
   );
 }
 
-function KnockoutBracket({ data, theme }: { data: KnockoutScheduleData; theme: 'light' | 'dark' }) {
+function KnockoutBracket({
+  data,
+  theme,
+  fixtureEditing,
+}: {
+  data: KnockoutScheduleData;
+  theme: 'light' | 'dark';
+  fixtureEditing?: MatchFixtureEditingOptions | null;
+}) {
   const columns = data.rounds.map((r) => ({
     id: r.id,
     label: r.label,
     matches: r.matches,
   }));
-  return <BracketView columns={columns} theme={theme} />;
+  return <BracketView columns={columns} theme={theme} fixtureEditing={fixtureEditing} />;
 }

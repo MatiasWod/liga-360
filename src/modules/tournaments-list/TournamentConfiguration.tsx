@@ -27,6 +27,7 @@ type Tab = 'gestion' | 'inicializacion' | 'fixture';
 
 interface TournamentConfigurationProps {
   tournamentId: string;
+  organizerName: string;
   onBack: () => void;
 }
 
@@ -261,7 +262,11 @@ function initialsFromName(name?: string | null): string {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || '').join('') || 'P';
 }
 
-export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({ tournamentId, onBack }) => {
+export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({
+  tournamentId,
+  organizerName,
+  onBack,
+}) => {
   const [tab, setTab] = React.useState<Tab>('gestion');
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -355,6 +360,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
 
   const pendingRequests = React.useMemo(() => inscriptions.filter((item) => item.status === 'PENDIENTE'), [inscriptions]);
   const acceptedTeams = React.useMemo(() => inscriptions.filter((item) => item.status === 'ACEPTADO'), [inscriptions]);
+  const inscriptionBadgeUrlById = React.useMemo(() => {
+    const o: Record<string, string> = {};
+    for (const item of inscriptions) {
+      o[String(item.id)] = resolveBadgeUrl(item.team_badge_url);
+    }
+    return o;
+  }, [inscriptions]);
+
   const inscriptionById = React.useMemo(() => {
     const map = new Map<string, InscriptionItem>();
     for (const item of inscriptions) map.set(String(item.id), item);
@@ -1383,6 +1396,9 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       {tab === 'fixture' && tournament ? (
         <FixturePlanningPanel
           tournament={tournament}
+          organizerName={organizerName}
+          saveLocked={saving}
+          badgeUrlByInscriptionId={inscriptionBadgeUrlById}
           onRefresh={async () => {
             await loadTournament();
           }}

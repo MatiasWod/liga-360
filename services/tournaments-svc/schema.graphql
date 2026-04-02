@@ -125,6 +125,21 @@ type Mutation {
     leg: Int!
     slotIndex: Int!
   ): Boolean!
+  """Carga o actualiza el resultado; deja el partido en estado finalizado. Solo organizador del torneo y torneo publicado."""
+  updateMatchResult(
+    tournamentId: ID!
+    stageId: ID!
+    matchId: ID!
+    homeScore: Int!
+    awayScore: Int!
+  ): Match!
+  """Fecha y hora del partido (ISO 8601). Null o vacío limpia. Organizador del torneo (también en borrador)."""
+  updateMatchScheduledAt(
+    tournamentId: ID!
+    stageId: ID!
+    matchId: ID!
+    scheduledAt: String
+  ): Match!
   createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
   addKey(stageId: ID!, name: String!, order: Int!): Key!
   linkGroupToKey(keyId: ID!, groupId: ID!): Boolean!
@@ -164,6 +179,11 @@ enum StageFormat {
   groups
   elimination
   composed
+}
+
+enum MatchStatus {
+  scheduled
+  finished
 }
 
 type Stage {
@@ -229,6 +249,11 @@ type Match {
   leagueAwaySeed: Int
   homeTeamId: ID
   awayTeamId: ID
+  status: MatchStatus!
+  homeScore: Int
+  awayScore: Int
+  resultRecordedAt: String
+  resultRecordedBy: String
   homeCompetitor: Competitor
   awayCompetitor: Competitor
   homeAssignedInscription: AssignedInscription

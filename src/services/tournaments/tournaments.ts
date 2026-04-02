@@ -158,6 +158,12 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
                 slotIndex
                 fixtureCode
                 groupId
+                scheduledAt
+                status
+                homeScore
+                awayScore
+                resultRecordedAt
+                resultRecordedBy
                 homeAssignedInscription { inscriptionId displayName }
                 awayAssignedInscription { inscriptionId displayName }
               }
@@ -172,6 +178,12 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
                   slotIndex
                   fixtureCode
                   groupId
+                  scheduledAt
+                  status
+                  homeScore
+                  awayScore
+                  resultRecordedAt
+                  resultRecordedBy
                   homeAssignedInscription { inscriptionId displayName }
                   awayAssignedInscription { inscriptionId displayName }
                 }

@@ -15,6 +15,12 @@ export type TournamentMatchRow = {
   scheduledAt?: string | null;
   leagueHomeSeed?: number | null;
   leagueAwaySeed?: number | null;
+  /** GraphQL: scheduled | finished */
+  status?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  resultRecordedAt?: string | null;
+  resultRecordedBy?: string | null;
   homeAssignedInscription?: AssignedInscription | null;
   awayAssignedInscription?: AssignedInscription | null;
 };
@@ -66,6 +72,8 @@ export type TournamentCompetition = {
 export type TournamentEntity = {
   id: string;
   name: string;
+  sport?: string | null;
+  season?: string | null;
   venue?: string | null;
   organizer?: string | null;
   participantType?: string | null;

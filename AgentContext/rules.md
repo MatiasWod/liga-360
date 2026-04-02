@@ -21,6 +21,21 @@
 - Follow existing project layering and patterns (UI / service API / backend service boundaries).
 - Preserve current conventions unless the user asks for a refactor.
 
+## Frontend — Component structure (Liga 360)
+
+- **`src/components/ui/`**: shared primitives (Button, Card, Modal, etc.); keep domain-specific flows out.
+- **`src/components/layout/`**: app shell (header, sidebar, layout).
+- **`src/components/<feature>/`**: feature UI shared across routes (e.g. tournament schedule, team blocks).
+- **`src/modules/<module>/components/`**: module-only UI; use `atoms/` (or similar) for small building blocks inside the module.
+- Prefer composition over monolithic screens; mirror unit tests under `src/test/unit/` when adding component tests.
+
+## Frontend — Color palette (Liga 360)
+
+- Canonical colors live in **`tailwind.config.js`** under `theme.extend.colors.brand` (`brand-dark`, `brand-bg`, `brand-green`, `brand-greenDark`, `brand-greenAccent`, `brand-white`, etc.).
+- Prefer Tailwind classes such as `text-brand-dark`, `bg-brand-bg`, `bg-brand-green`, `hover:bg-brand-greenDark` instead of introducing new arbitrary hex values in JSX.
+- Global base styles and shared button/card utilities are in **`src/index.css`** (`body`, `@layer components`); keep them aligned with `brand` tokens when changing the look and feel.
+- Use existing neutral patterns (`slate-*` for borders/secondary surfaces) unless new brand neutrals are added to the theme.
+
 ## Testing Rules (Mandatory)
 
 - Before closing a task, run at least:
