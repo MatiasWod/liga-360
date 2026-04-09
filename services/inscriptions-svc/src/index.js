@@ -237,6 +237,7 @@ function requireParticipantUser(req, res, next) {
 }
 
 async function getOwnedTeamForUser(client, userId) {
+  // Delegado a teams-svc vía HTTP para respetar límites de microservicios
   const teams = await client.query(
     `SELECT id, name, badge_url
      FROM "Team"

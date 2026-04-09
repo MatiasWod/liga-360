@@ -143,6 +143,19 @@ type Mutation {
     inscriptionId: ID!
     tournamentId: ID!
   ): Boolean!
+  updateMatchResult(
+    matchId: ID!
+    homeScore: Int
+    awayScore: Int
+    status: String
+  ): MatchResult!
+}
+
+type MatchResult {
+  id: ID!
+  homeScore: Int
+  awayScore: Int
+  status: String!
 }
 
 type Tournament {
@@ -233,6 +246,9 @@ type Match {
   awayCompetitor: Competitor
   homeAssignedInscription: AssignedInscription
   awayAssignedInscription: AssignedInscription
+  homeScore: Int
+  awayScore: Int
+  status: String
 }
 
 type Key {

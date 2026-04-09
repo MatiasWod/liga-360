@@ -223,6 +223,9 @@ function matchFromNeoProps(m) {
     awayDisplayName: m.awayDisplayName ?? null,
     homeTournamentId: m.homeTournamentId ?? null,
     awayTournamentId: m.awayTournamentId ?? null,
+    homeScore: m.homeScore != null ? Number(m.homeScore) : null,
+    awayScore: m.awayScore != null ? Number(m.awayScore) : null,
+    status: m.status ?? null,
   };
 }
 
@@ -608,9 +611,18 @@ const resolvers = {
         if (!owner || !requester || owner !== requester) {
           throw new Error('FORBIDDEN: solo el organizador creador puede eliminar este torneo');
         }
+        // Cascada real: borrar todo el subgrafo del torneo
+        // DETACH DELETE t solo borra relaciones directas; Competition, Stage, etc. están a más hops
         await session.run(
           `MATCH (t:Tournament {id:$id})
-           DETACH DELETE t`,
+           OPTIONAL MATCH (t)-[:HAS_COMPETITION]->(c:Competition)
+           OPTIONAL MATCH (c)-[:HAS_STAGE]->(s:Stage)
+           OPTIONAL MATCH (s)-[:HAS_GROUP]->(g:Group)
+           OPTIONAL MATCH (s)-[:HAS_MATCH]->(m:Match)
+           OPTIONAL MATCH (g)-[:HAS_MATCH]->(gm:Match)
+           OPTIONAL MATCH (s)-[:EMITS|HAS_TRANSITION]->(tr:Transition)
+           OPTIONAL MATCH (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           DETACH DELETE tr, gm, m, g, i, s, c, t`,
           { id }
         );
         return true;
@@ -1851,6 +1863,43 @@ const resolvers = {
         await session.close();
       }
     },
+    updateMatchResult: async (_, { matchId, homeScore, awayScore, status }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const matchR = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
+        const m = matchR.records[0].get('m').properties;
+        const homeScoreNum = homeScore != null ? Number(homeScore) : null;
+        const awayScoreNum = awayScore != null ? Number(awayScore) : null;
+        if (homeScoreNum != null && (!Number.isInteger(homeScoreNum) || homeScoreNum < 0)) {
+          throw new Error('BAD_REQUEST: homeScore debe ser entero no negativo');
+        }
+        if (awayScoreNum != null && (!Number.isInteger(awayScoreNum) || awayScoreNum < 0)) {
+          throw new Error('BAD_REQUEST: awayScore debe ser entero no negativo');
+        }
+        const matchStatus = status ?? m.status ?? 'scheduled';
+        await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.homeScore = $homeScore,
+               m.awayScore = $awayScore,
+               m.status = $status,
+               m.updatedAt = $updatedAt`,
+          { matchId, homeScore: homeScoreNum, awayScore: awayScoreNum, status: matchStatus, updatedAt: new Date().toISOString() }
+        );
+        return {
+          id: matchId,
+          homeScore: homeScoreNum,
+          awayScore: awayScoreNum,
+          status: matchStatus,
+        };
+      } finally {
+        await session.close();
+      }
+    },
   },
   Tournament: {
     competitions: async (parent, _args, { driver }) => {
@@ -2018,7 +2067,6 @@ const resolvers = {
       try {
         const res = await session.run(
           `MATCH (s:Stage {id:$id})-[:HAS_MATCH]->(m:Match)
-           WHERE m.groupId IS NULL
            RETURN m ORDER BY COALESCE(m.round, 1), COALESCE(m.leg, 1), COALESCE(m.slotIndex, 999), m.id`,
           { id: parent.id }
         );
@@ -2132,23 +2180,47 @@ const resolvers = {
     homeCompetitor: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {
+        // Primero intentar por relación HAS_COMPETITOR (modelo legacy de createMatch)
         const res = await session.run(
           `MATCH (m:Match {id:$id})-[:HAS_COMPETITOR {role:'home'}]->(c:Competitor)
            RETURN c LIMIT 1`,
           { id: parent.id }
         );
-        if (res.records.length === 0) return null;
-        const c = res.records[0].get('c').properties;
-        return {
-          id: c.id,
-          kind: c.kind ?? 'team',
-          displayName: c.displayName ?? c.id,
-          shortName: c.shortName ?? null,
-          avatarUrl: c.avatarUrl ?? null,
-          badgeUrl: c.badgeUrl ?? null,
-          source: c.source ?? null,
-          updatedAt: c.updatedAt ?? null,
-        };
+        if (res.records.length > 0) {
+          const c = res.records[0].get('c').properties;
+          return {
+            id: c.id,
+            kind: c.kind ?? 'team',
+            displayName: c.displayName ?? c.id,
+            shortName: c.shortName ?? null,
+            avatarUrl: c.avatarUrl ?? null,
+            badgeUrl: c.badgeUrl ?? null,
+            source: c.source ?? null,
+            updatedAt: c.updatedAt ?? null,
+          };
+        }
+        // Fallback: resolver desde InscriptionRef (modelo de generateLeagueRoundRobin, etc.)
+        if (parent.homeInscriptionId) {
+          const ir = await session.run(
+            `MATCH (i:InscriptionRef {inscriptionId:$iid})
+             RETURN i LIMIT 1`,
+            { iid: String(parent.homeInscriptionId) }
+          );
+          if (ir.records.length > 0) {
+            const i = ir.records[0].get('i').properties;
+            return {
+              id: String(i.inscriptionId),
+              kind: 'team',
+              displayName: i.displayName ?? String(i.inscriptionId),
+              shortName: null,
+              avatarUrl: null,
+              badgeUrl: null,
+              source: 'inscription-ref',
+              updatedAt: null,
+            };
+          }
+        }
+        return null;
       } finally {
         await session.close();
       }
@@ -2161,18 +2233,40 @@ const resolvers = {
            RETURN c LIMIT 1`,
           { id: parent.id }
         );
-        if (res.records.length === 0) return null;
-        const c = res.records[0].get('c').properties;
-        return {
-          id: c.id,
-          kind: c.kind ?? 'team',
-          displayName: c.displayName ?? c.id,
-          shortName: c.shortName ?? null,
-          avatarUrl: c.avatarUrl ?? null,
-          badgeUrl: c.badgeUrl ?? null,
-          source: c.source ?? null,
-          updatedAt: c.updatedAt ?? null,
-        };
+        if (res.records.length > 0) {
+          const c = res.records[0].get('c').properties;
+          return {
+            id: c.id,
+            kind: c.kind ?? 'team',
+            displayName: c.displayName ?? c.id,
+            shortName: c.shortName ?? null,
+            avatarUrl: c.avatarUrl ?? null,
+            badgeUrl: c.badgeUrl ?? null,
+            source: c.source ?? null,
+            updatedAt: c.updatedAt ?? null,
+          };
+        }
+        if (parent.awayInscriptionId) {
+          const ir = await session.run(
+            `MATCH (i:InscriptionRef {inscriptionId:$iid})
+             RETURN i LIMIT 1`,
+            { iid: String(parent.awayInscriptionId) }
+          );
+          if (ir.records.length > 0) {
+            const i = ir.records[0].get('i').properties;
+            return {
+              id: String(i.inscriptionId),
+              kind: 'team',
+              displayName: i.displayName ?? String(i.inscriptionId),
+              shortName: null,
+              avatarUrl: null,
+              badgeUrl: null,
+              source: 'inscription-ref',
+              updatedAt: null,
+            };
+          }
+        }
+        return null;
       } finally {
         await session.close();
       }

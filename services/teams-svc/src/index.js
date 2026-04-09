@@ -3,9 +3,32 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import pkg from 'pg';
 import { httpLogger, logger } from './logger.js';
+import {
+  normalizeDni,
+  nowIso,
+  hashTeamCode,
+  generateTeamCode,
+  normalizeInvitePrefix,
+  randomThreeDigits,
+  generateUniqueInviteCode,
+} from './utils.js';
+
+export {
+  normalizeDni,
+  nowIso,
+  hashTeamCode,
+  generateTeamCode,
+  normalizeInvitePrefix,
+  randomThreeDigits,
+  generateUniqueInviteCode,
+  optionalAuthMiddleware,
+  requireAuthMiddleware,
+  isTeamOwner,
+  canWriteTeam,
+  autoLinkParticipantByDni,
+};
 
 const PORT = process.env.PORT || 4002;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
