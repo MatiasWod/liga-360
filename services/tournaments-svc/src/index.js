@@ -227,7 +227,7 @@ function matchFromNeoProps(m) {
     awayTournamentId: m.awayTournamentId ?? null,
     homeScore: m.homeScore != null ? Number(m.homeScore) : null,
     awayScore: m.awayScore != null ? Number(m.awayScore) : null,
-    status: m.status ?? null,
+    status,
     resultRecordedAt: m.resultRecordedAt ?? null,
     resultRecordedBy: m.resultRecordedBy ?? null,
   };
@@ -1962,43 +1962,6 @@ const resolvers = {
           { tid: tournamentId, iid }
         );
         return true;
-      } finally {
-        await session.close();
-      }
-    },
-    updateMatchResult: async (_, { matchId, homeScore, awayScore, status }, context) => {
-      requireOrganizer(context);
-      const session = context.driver.session();
-      try {
-        const matchR = await session.run(
-          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
-          { matchId }
-        );
-        if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
-        const m = matchR.records[0].get('m').properties;
-        const homeScoreNum = homeScore != null ? Number(homeScore) : null;
-        const awayScoreNum = awayScore != null ? Number(awayScore) : null;
-        if (homeScoreNum != null && (!Number.isInteger(homeScoreNum) || homeScoreNum < 0)) {
-          throw new Error('BAD_REQUEST: homeScore debe ser entero no negativo');
-        }
-        if (awayScoreNum != null && (!Number.isInteger(awayScoreNum) || awayScoreNum < 0)) {
-          throw new Error('BAD_REQUEST: awayScore debe ser entero no negativo');
-        }
-        const matchStatus = status ?? m.status ?? 'scheduled';
-        await session.run(
-          `MATCH (m:Match {id:$matchId})
-           SET m.homeScore = $homeScore,
-               m.awayScore = $awayScore,
-               m.status = $status,
-               m.updatedAt = $updatedAt`,
-          { matchId, homeScore: homeScoreNum, awayScore: awayScoreNum, status: matchStatus, updatedAt: new Date().toISOString() }
-        );
-        return {
-          id: matchId,
-          homeScore: homeScoreNum,
-          awayScore: awayScoreNum,
-          status: matchStatus,
-        };
       } finally {
         await session.close();
       }
