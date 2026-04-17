@@ -19,6 +19,19 @@ export async function getTournamentConfigurationById(tournamentId: string) {
             isInitial
             configJson
             childrenJson
+            standings {
+              position
+              inscriptionId
+              displayName
+              played
+              won
+              drawn
+              lost
+              goalsFor
+              goalsAgainst
+              goalDifference
+              points
+            }
             transitions {
               id
               label
@@ -38,6 +51,19 @@ export async function getTournamentConfigurationById(tournamentId: string) {
               order
               capacity
               assignedInscriptions { inscriptionId displayName }
+              standings {
+                position
+                inscriptionId
+                displayName
+                played
+                won
+                drawn
+                lost
+                goalsFor
+                goalsAgainst
+                goalDifference
+                points
+              }
               matches {
                 id
                 round

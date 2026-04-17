@@ -16,6 +16,7 @@ import {
   singleRoundRobinSchedule,
   validateSingleRoundRobin,
 } from './roundRobin.js';
+import { computeStandings } from './standings.js';
 
 const PORT = process.env.PORT || 4001;
 const NEO4J_URI = process.env.NEO4J_URI || 'bolt://localhost:7687';
@@ -1989,6 +1990,47 @@ const resolvers = {
         await session.close();
       }
     },
+    standings: async (parent, _args, { driver }) => {
+      if (parent.format === 'elimination') return [];
+      const session = driver.session();
+      try {
+        const inscriptionsResult = await session.run(
+          `MATCH (s:Stage {id:$id})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           RETURN i.inscriptionId AS inscriptionId, i.displayName AS displayName
+           ORDER BY i.displayName, i.inscriptionId`,
+          { id: parent.id }
+        );
+        const inscriptions = inscriptionsResult.records.map((record) => ({
+          inscriptionId: record.get('inscriptionId'),
+          displayName: record.get('displayName'),
+        }));
+
+        const matchesResult = await session.run(
+          `MATCH (s:Stage {id:$id})-[:HAS_MATCH]->(m:Match)
+           RETURN m.homeInscriptionId AS homeInscriptionId,
+                  m.awayInscriptionId AS awayInscriptionId,
+                  m.homeDisplayName AS homeDisplayName,
+                  m.awayDisplayName AS awayDisplayName,
+                  m.homeScore AS homeScore,
+                  m.awayScore AS awayScore,
+                  m.matchStatus AS matchStatus`,
+          { id: parent.id }
+        );
+        const matches = matchesResult.records.map((record) => ({
+          homeInscriptionId: record.get('homeInscriptionId'),
+          awayInscriptionId: record.get('awayInscriptionId'),
+          homeDisplayName: record.get('homeDisplayName'),
+          awayDisplayName: record.get('awayDisplayName'),
+          homeScore: record.get('homeScore'),
+          awayScore: record.get('awayScore'),
+          matchStatus: record.get('matchStatus'),
+        }));
+
+        return computeStandings(matches, inscriptions);
+      } finally {
+        await session.close();
+      }
+    },
     transitions: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {
@@ -2132,6 +2174,46 @@ const resolvers = {
             displayName: i.displayName ?? i.inscriptionId,
           };
         });
+      } finally {
+        await session.close();
+      }
+    },
+    standings: async (parent, _args, { driver }) => {
+      const session = driver.session();
+      try {
+        const inscriptionsResult = await session.run(
+          `MATCH (g:Group {id:$id})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           RETURN i.inscriptionId AS inscriptionId, i.displayName AS displayName
+           ORDER BY i.displayName, i.inscriptionId`,
+          { id: parent.id }
+        );
+        const inscriptions = inscriptionsResult.records.map((record) => ({
+          inscriptionId: record.get('inscriptionId'),
+          displayName: record.get('displayName'),
+        }));
+
+        const matchesResult = await session.run(
+          `MATCH (g:Group {id:$id})-[:HAS_MATCH]->(m:Match)
+           RETURN m.homeInscriptionId AS homeInscriptionId,
+                  m.awayInscriptionId AS awayInscriptionId,
+                  m.homeDisplayName AS homeDisplayName,
+                  m.awayDisplayName AS awayDisplayName,
+                  m.homeScore AS homeScore,
+                  m.awayScore AS awayScore,
+                  m.matchStatus AS matchStatus`,
+          { id: parent.id }
+        );
+        const matches = matchesResult.records.map((record) => ({
+          homeInscriptionId: record.get('homeInscriptionId'),
+          awayInscriptionId: record.get('awayInscriptionId'),
+          homeDisplayName: record.get('homeDisplayName'),
+          awayDisplayName: record.get('awayDisplayName'),
+          homeScore: record.get('homeScore'),
+          awayScore: record.get('awayScore'),
+          matchStatus: record.get('matchStatus'),
+        }));
+
+        return computeStandings(matches, inscriptions);
       } finally {
         await session.close();
       }

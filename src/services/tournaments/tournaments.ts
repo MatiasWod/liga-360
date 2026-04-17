@@ -151,6 +151,19 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
               name
               order
               format
+              standings {
+                position
+                inscriptionId
+                displayName
+                played
+                won
+                drawn
+                lost
+                goalsFor
+                goalsAgainst
+                goalDifference
+                points
+              }
               matches {
                 id
                 round
@@ -165,6 +178,19 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
                 id
                 name
                 order
+                standings {
+                  position
+                  inscriptionId
+                  displayName
+                  played
+                  won
+                  drawn
+                  lost
+                  goalsFor
+                  goalsAgainst
+                  goalDifference
+                  points
+                }
                 matches {
                   id
                   round

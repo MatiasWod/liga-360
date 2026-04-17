@@ -186,6 +186,7 @@ type Stage {
   format: StageFormat!
   isInitial: Boolean!
   assignedInscriptions: [AssignedInscription!]!
+  standings: [StandingsRow!]!
   configJson: String
   childrenJson: String
   transitions: [Transition!]!
@@ -226,8 +227,23 @@ type Group {
   competitorIds: [ID!]!
   competitors: [Competitor!]!
   assignedInscriptions: [AssignedInscription!]!
+  standings: [StandingsRow!]!
   capacity: Int
   matches: [Match!]!
+}
+
+type StandingsRow {
+  position: Int!
+  inscriptionId: ID!
+  displayName: String!
+  played: Int!
+  won: Int!
+  drawn: Int!
+  lost: Int!
+  goalsFor: Int!
+  goalsAgainst: Int!
+  goalDifference: Int!
+  points: Int!
 }
 
 type Match {

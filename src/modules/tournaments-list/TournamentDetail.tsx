@@ -1,5 +1,6 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
+import { StandingsTable } from '../../components/standings';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
 import type { TournamentEntity, TournamentStage } from './types';
 
@@ -170,6 +171,25 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 																			: ' · Eliminación'}
 																</p>
 																<TournamentSchedule type={built.type} data={built.data} theme="dark" />
+																{s.format === 'league' ? (
+																	<div className="mt-3 space-y-2">
+																		<h3 className="text-sm font-semibold text-white/90">Tabla de posiciones</h3>
+																		<StandingsTable rows={s.standings ?? []} theme="dark" />
+																	</div>
+																) : null}
+																{s.format === 'groups'
+																	? (s.groups || [])
+																			.slice()
+																			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+																			.map((group) => (
+																				<div key={`public-standings-${group.id}`} className="mt-3 space-y-2">
+																					<h3 className="text-sm font-semibold text-white/90">
+																						Tabla de posiciones · {group.name}
+																					</h3>
+																					<StandingsTable rows={group.standings ?? []} theme="dark" />
+																				</div>
+																			))
+																	: null}
 															</div>
 														);
 													})}
