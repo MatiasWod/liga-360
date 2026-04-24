@@ -19,12 +19,27 @@ export type TournamentMatchRow = {
   awayAssignedInscription?: AssignedInscription | null;
 };
 
+export type StandingsRow = {
+  position: number;
+  inscriptionId: string;
+  displayName: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+};
+
 export type TournamentGroupBlock = {
   id: string;
   name: string;
   order: number;
   capacity?: number | null;
   assignedInscriptions?: AssignedInscription[];
+  standings?: StandingsRow[];
   matches?: TournamentMatchRow[];
 };
 
@@ -52,6 +67,7 @@ export type TournamentStage = {
   childrenJson?: string | null;
   transitions?: TournamentTransition[];
   assignedInscriptions?: AssignedInscription[];
+  standings?: StandingsRow[];
   matches?: TournamentMatchRow[];
   groups?: TournamentGroupBlock[];
 };

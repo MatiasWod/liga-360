@@ -1,5 +1,6 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
+import { StandingsTable } from '../../components/standings';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import {
@@ -196,6 +197,25 @@ export const FixturePlanningPanel: React.FC<{
             </h3>
           </div>
           <TournamentSchedule type={scheduleView.type} data={scheduleView.data} theme="light" />
+          {stage.format === 'league' ? (
+            <div className="mt-4 space-y-2">
+              <h3 className="text-sm font-semibold text-slate-800">Tabla de posiciones</h3>
+              <StandingsTable rows={stage.standings ?? []} />
+            </div>
+          ) : null}
+          {stage.format === 'groups'
+            ? (stage.groups || [])
+                .slice()
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                .map((group) => (
+                  <div key={`standings-${group.id}`} className="mt-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      Tabla de posiciones · {group.name}
+                    </h3>
+                    <StandingsTable rows={group.standings ?? []} />
+                  </div>
+                ))
+            : null}
         </Card>
       ) : null}
 

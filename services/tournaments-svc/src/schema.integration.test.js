@@ -34,3 +34,27 @@ test('schema incluye mutaciones de inicializacion avanzada', async () => {
   assert.equal(mutationFields.has('deleteTransition'), true);
   assert.equal(mutationFields.has('updateMatchScheduling'), true);
 });
+
+test('schema incluye StandingsRow y fields standings en Stage/Group', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+
+  const standingsType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'StandingsRow'
+  );
+  assert.ok(standingsType, 'StandingsRow type no encontrado');
+
+  const stageType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Stage'
+  );
+  assert.ok(stageType, 'Stage type no encontrado');
+  const stageFields = new Set(stageType.fields?.map((field) => field.name.value) || []);
+  assert.equal(stageFields.has('standings'), true);
+
+  const groupType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Group'
+  );
+  assert.ok(groupType, 'Group type no encontrado');
+  const groupFields = new Set(groupType.fields?.map((field) => field.name.value) || []);
+  assert.equal(groupFields.has('standings'), true);
+});
