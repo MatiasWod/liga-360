@@ -47,6 +47,18 @@ const MATCH_STATUS_OPTIONS = [
   { value: 'postponed', label: 'Aplazado' },
 ];
 
+/**
+ * Normaliza el status del backend al valor esperado por el <select>.
+ * El backend guarda 'finished' pero el form usa 'completed' para "Finalizado".
+ */
+function normalizeStatusForForm(raw: string | null | undefined): string {
+  const s = (raw ?? '').toLowerCase();
+  if (s === 'finished' || s === 'completed') return 'completed';
+  if (s === 'live' || s === 'in_progress') return 'live';
+  if (s === 'postponed') return 'postponed';
+  return 'scheduled';
+}
+
 // ---------------------------------------------------------------------------
 // Props del drawer
 // ---------------------------------------------------------------------------
@@ -65,7 +77,8 @@ export interface MatchEditDrawerProps {
     awayDisplayName?: string;
   };
   onClose: () => void;
-  onSaved?: () => void;
+  /** Llamado tras guardar — puede ser async para esperar el refresh */
+  onSaved?: () => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +197,7 @@ function ScheduleSection({
         referee: referee.trim() || null,
       });
       setSuccess(true);
-      onSaved?.();
+      await onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al guardar');
     } finally {
@@ -257,7 +270,7 @@ function ResultSection({
   const [awayScore, setAwayScore] = React.useState<string>(
     initialData?.awayScore != null ? String(initialData.awayScore) : ''
   );
-  const [status, setStatus] = React.useState(initialData?.status ?? 'scheduled');
+  const [status, setStatus] = React.useState(() => normalizeStatusForForm(initialData?.status));
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState(false);
@@ -273,7 +286,9 @@ function ResultSection({
       if (as_ !== null && (isNaN(as_) || as_ < 0)) throw new Error('Marcador visitante inválido');
       await updateMatchResult(matchId, hs, as_, status);
       setSuccess(true);
-      onSaved?.();
+      // Esperar a que el refresh (onSaved) complete antes de continuar;
+      // así el card ya refleja el nuevo estado cuando el drawer cierra.
+      await onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al guardar');
     } finally {

@@ -1922,21 +1922,28 @@ const resolvers = {
         if (awayScoreNum != null && (!Number.isInteger(awayScoreNum) || awayScoreNum < 0)) {
           throw new Error('BAD_REQUEST: awayScore debe ser entero no negativo');
         }
-        // Normalizar 'completed' → 'finished' para que computeStandings lo cuente.
+        // Normalizar 'completed'/'finished' → 'finished' para que computeStandings lo cuente.
         const rawStatus = status ?? m.status ?? 'scheduled';
-        const matchStatus = String(rawStatus).toLowerCase() === 'completed' ? 'finished' : rawStatus;
+        const rawLower = String(rawStatus).toLowerCase();
+        const matchStatus = (rawLower === 'completed' || rawLower === 'finished') ? 'finished' : rawStatus;
+        // COALESCE preserva scores existentes cuando el frontend envía null (el usuario no tocó los campos).
         await session.run(
           `MATCH (m:Match {id:$matchId})
-           SET m.homeScore = $homeScore,
-               m.awayScore = $awayScore,
+           SET m.homeScore = coalesce($homeScore, m.homeScore),
+               m.awayScore = coalesce($awayScore, m.awayScore),
                m.status = $status,
                m.updatedAt = $updatedAt`,
           { matchId, homeScore: homeScoreNum, awayScore: awayScoreNum, status: matchStatus, updatedAt: new Date().toISOString() }
         );
+        // Valores finales: si el usuario no envió score, usar el previo del nodo.
+        const neoHomeScore = m.homeScore != null ? Number(m.homeScore) : null;
+        const neoAwayScore = m.awayScore != null ? Number(m.awayScore) : null;
+        const finalHomeScore = homeScoreNum != null ? homeScoreNum : neoHomeScore;
+        const finalAwayScore = awayScoreNum != null ? awayScoreNum : neoAwayScore;
         return {
           id: matchId,
-          homeScore: homeScoreNum,
-          awayScore: awayScoreNum,
+          homeScore: finalHomeScore,
+          awayScore: finalAwayScore,
           status: matchStatus,
         };
       } finally {

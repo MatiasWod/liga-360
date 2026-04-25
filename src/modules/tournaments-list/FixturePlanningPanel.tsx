@@ -262,7 +262,10 @@ export const FixturePlanningPanel: React.FC<{
               awayDisplayName: matchRow?.awayAssignedInscription?.displayName,
             }}
             onClose={() => setMatchIdDrawerOpen(null)}
-            onSaved={() => onRefresh()}
+            onSaved={async () => {
+              await onRefresh();
+              setMatchIdDrawerOpen(null);
+            }}
           />
         );
       })() : null}
