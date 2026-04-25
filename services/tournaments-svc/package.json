@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "node --test src/auth.test.js src/roundRobin.test.js src/bracketElimination.test.js src/standings.test.js",
     "test:integration": "node --test src/schema.integration.test.js"

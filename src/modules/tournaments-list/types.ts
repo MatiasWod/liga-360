@@ -13,6 +13,11 @@ export type TournamentMatchRow = {
   fixtureCode?: string | null;
   groupId?: string | null;
   scheduledAt?: string | null;
+  venue?: string | null;
+  referee?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  status?: string | null;
   leagueHomeSeed?: number | null;
   leagueAwaySeed?: number | null;
   homeAssignedInscription?: AssignedInscription | null;

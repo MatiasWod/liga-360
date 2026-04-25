@@ -227,6 +227,8 @@ function matchFromNeoProps(m) {
     homeScore: m.homeScore != null ? Number(m.homeScore) : null,
     awayScore: m.awayScore != null ? Number(m.awayScore) : null,
     status: m.status ?? null,
+    venue: m.venue ?? null,
+    referee: m.referee ?? null,
   };
 }
 
@@ -1864,6 +1866,44 @@ const resolvers = {
         await session.close();
       }
     },
+    updateMatchDateTime: async (_, { matchId, scheduledAt, venue, referee }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const matchR = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
+        await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.scheduledAt = coalesce($scheduledAt, m.scheduledAt),
+               m.venue = coalesce($venue, m.venue),
+               m.referee = coalesce($referee, m.referee),
+               m.updatedAt = $updatedAt`,
+          {
+            matchId,
+            scheduledAt: scheduledAt ?? null,
+            venue: venue ?? null,
+            referee: referee ?? null,
+            updatedAt: new Date().toISOString(),
+          }
+        );
+        const updated = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        const mp = updated.records[0].get('m').properties;
+        return {
+          id: matchId,
+          scheduledAt: mp.scheduledAt ?? null,
+          venue: mp.venue ?? null,
+          referee: mp.referee ?? null,
+        };
+      } finally {
+        await session.close();
+      }
+    },
     updateMatchResult: async (_, { matchId, homeScore, awayScore, status }, context) => {
       requireOrganizer(context);
       const session = context.driver.session();
@@ -1882,7 +1922,9 @@ const resolvers = {
         if (awayScoreNum != null && (!Number.isInteger(awayScoreNum) || awayScoreNum < 0)) {
           throw new Error('BAD_REQUEST: awayScore debe ser entero no negativo');
         }
-        const matchStatus = status ?? m.status ?? 'scheduled';
+        // Normalizar 'completed' → 'finished' para que computeStandings lo cuente.
+        const rawStatus = status ?? m.status ?? 'scheduled';
+        const matchStatus = String(rawStatus).toLowerCase() === 'completed' ? 'finished' : rawStatus;
         await session.run(
           `MATCH (m:Match {id:$matchId})
            SET m.homeScore = $homeScore,
@@ -2013,7 +2055,7 @@ const resolvers = {
                   m.awayDisplayName AS awayDisplayName,
                   m.homeScore AS homeScore,
                   m.awayScore AS awayScore,
-                  m.matchStatus AS matchStatus`,
+                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
           { id: parent.id }
         );
         const matches = matchesResult.records.map((record) => ({
@@ -2200,7 +2242,7 @@ const resolvers = {
                   m.awayDisplayName AS awayDisplayName,
                   m.homeScore AS homeScore,
                   m.awayScore AS awayScore,
-                  m.matchStatus AS matchStatus`,
+                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
           { id: parent.id }
         );
         const matches = matchesResult.records.map((record) => ({

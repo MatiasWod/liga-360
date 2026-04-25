@@ -266,7 +266,7 @@ export const ParticipantTournamentsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={loadInvites}
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-surface-2"
               >
                 Refrescar
               </button>
@@ -307,7 +307,7 @@ export const ParticipantTournamentsPage: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-surface-2"
                         onClick={async () => {
                           await rejectMyParticipantInvite(Number(invite.id));
                           await loadInvites();

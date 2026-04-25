@@ -15,6 +15,8 @@ export interface MatchRecord {
   awayTeam: TeamRef;
   /** ISO 8601 string */
   scheduledAt?: string;
+  venue?: string;
+  referee?: string;
   status: MatchStatus;
   homeScore?: number;
   awayScore?: number;

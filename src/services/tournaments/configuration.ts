@@ -72,6 +72,11 @@ export async function getTournamentConfigurationById(tournamentId: string) {
                 fixtureCode
                 groupId
                 scheduledAt
+                venue
+                referee
+                homeScore
+                awayScore
+                status
                 leagueHomeSeed
                 leagueAwaySeed
                 homeAssignedInscription { inscriptionId displayName }
@@ -84,7 +89,13 @@ export async function getTournamentConfigurationById(tournamentId: string) {
               leg
               slotIndex
               fixtureCode
+              groupId
               scheduledAt
+              venue
+              referee
+              homeScore
+              awayScore
+              status
               leagueHomeSeed
               leagueAwaySeed
               homeAssignedInscription { inscriptionId displayName }

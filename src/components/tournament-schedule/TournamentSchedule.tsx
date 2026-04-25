@@ -11,12 +11,20 @@ import { GroupSection } from './GroupSection';
 import { MatchRoundList } from './MatchRoundList';
 import { RoundSelector } from './RoundSelector';
 import { getDefaultRoundId } from './utils';
+import type { GoalRecord } from './MatchCard';
 
-export const TournamentSchedule: React.FC<TournamentScheduleProps> = ({
+export const TournamentSchedule: React.FC<
+  TournamentScheduleProps & {
+    onEdit?: (matchId: string) => void;
+    goalsByMatchId?: Record<string, GoalRecord[]>;
+  }
+> = ({
   type,
   data,
-  theme = 'light',
+  theme = 'dark',
   className = '',
+  onEdit,
+  goalsByMatchId,
 }) => {
   const [selectedRoundId, setSelectedRoundId] = React.useState<string | null>(() =>
     getDefaultRoundId(type, data as LeagueScheduleData | GroupsScheduleData | KnockoutScheduleData)
@@ -60,15 +68,15 @@ export const TournamentSchedule: React.FC<TournamentScheduleProps> = ({
           transition={{ duration: 0.2 }}
         >
           {type === 'league' && selectedRoundId ? (
-            <LeagueRound data={data as LeagueScheduleData} roundId={selectedRoundId} theme={theme} />
+            <LeagueRound data={data as LeagueScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
           ) : null}
 
           {type === 'groups' && selectedRoundId ? (
-            <GroupsRounds data={data as GroupsScheduleData} roundId={selectedRoundId} theme={theme} />
+            <GroupsRounds data={data as GroupsScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
           ) : null}
 
           {type === 'knockout' ? (
-            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} />
+            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
           ) : null}
         </motion.div>
       </AnimatePresence>
@@ -80,24 +88,32 @@ function LeagueRound({
   data,
   roundId,
   theme,
+  onEdit,
+  goalsByMatchId,
 }: {
   data: LeagueScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
+  onEdit?: (matchId: string) => void;
+  goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   const round = data.rounds.find((r) => r.id === roundId);
   const matches = round?.matches ?? [];
-  return <MatchRoundList matches={matches} theme={theme} />;
+  return <MatchRoundList matches={matches} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />;
 }
 
 function GroupsRounds({
   data,
   roundId,
   theme,
+  onEdit,
+  goalsByMatchId,
 }: {
   data: GroupsScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
+  onEdit?: (matchId: string) => void;
+  goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -106,7 +122,7 @@ function GroupsRounds({
         const matches = round?.matches ?? [];
         return (
           <GroupSection key={g.id} title={g.name} theme={theme}>
-            <MatchRoundList matches={matches} theme={theme} />
+            <MatchRoundList matches={matches} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
           </GroupSection>
         );
       })}
@@ -114,11 +130,21 @@ function GroupsRounds({
   );
 }
 
-function KnockoutBracket({ data, theme }: { data: KnockoutScheduleData; theme: 'light' | 'dark' }) {
+function KnockoutBracket({
+  data,
+  theme,
+  onEdit,
+  goalsByMatchId,
+}: {
+  data: KnockoutScheduleData;
+  theme: 'light' | 'dark';
+  onEdit?: (matchId: string) => void;
+  goalsByMatchId?: Record<string, GoalRecord[]>;
+}) {
   const columns = data.rounds.map((r) => ({
     id: r.id,
     label: r.label,
     matches: r.matches,
   }));
-  return <BracketView columns={columns} theme={theme} />;
+  return <BracketView columns={columns} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />;
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
+import { MatchEditDrawer } from '../../components/match-edit/MatchEditDrawer';
 import { StandingsTable } from '../../components/standings';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -8,7 +9,7 @@ import {
   generateLeagueRoundRobin,
   generateSingleEliminationBracket,
 } from '../../services/tournaments/configuration';
-import type { TournamentEntity } from './types';
+import type { TournamentEntity, TournamentMatchRow } from './types';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
@@ -18,6 +19,7 @@ export const FixturePlanningPanel: React.FC<{
 }> = ({ tournament, onRefresh, setSaving, setError }) => {
   const [competitionId, setCompetitionId] = React.useState(tournament.competitions[0]?.id || '');
   const [stageId, setStageId] = React.useState('');
+  const [matchIdDrawerOpen, setMatchIdDrawerOpen] = React.useState<string | null>(null);
 
   const competition = tournament.competitions.find((c) => c.id === competitionId);
   const selectableStages = React.useMemo(
@@ -43,6 +45,17 @@ export const FixturePlanningPanel: React.FC<{
   }, [selectableStages, stageId]);
 
   const stage = selectableStages.find((s) => s.id === stageId);
+
+  /** Busca el TournamentMatchRow por id en la etapa activa (stage o grupos). */
+  const matchById = React.useMemo<Map<string, TournamentMatchRow>>(() => {
+    const map = new Map<string, TournamentMatchRow>();
+    if (!stage) return map;
+    for (const m of stage.matches || []) map.set(m.id, m);
+    for (const g of stage.groups || []) {
+      for (const m of g.matches || []) map.set(m.id, m);
+    }
+    return map;
+  }, [stage]);
 
   const scheduleView = React.useMemo(() => {
     if (!stage || stage.format === 'composed') return null;
@@ -196,7 +209,12 @@ export const FixturePlanningPanel: React.FC<{
                   : ' · Eliminación'}
             </h3>
           </div>
-          <TournamentSchedule type={scheduleView.type} data={scheduleView.data} theme="light" />
+          <TournamentSchedule
+            type={scheduleView.type}
+            data={scheduleView.data}
+            theme="dark"
+            onEdit={(matchId) => setMatchIdDrawerOpen(matchId)}
+          />
           {stage.format === 'league' ? (
             <div className="mt-4 space-y-2">
               <h3 className="text-sm font-semibold text-slate-800">Tabla de posiciones</h3>
@@ -226,6 +244,28 @@ export const FixturePlanningPanel: React.FC<{
           </p>
         </Card>
       ) : null}
+
+      {matchIdDrawerOpen ? (() => {
+        const matchRow = matchById.get(matchIdDrawerOpen);
+        return (
+          <MatchEditDrawer
+            matchId={matchIdDrawerOpen}
+            tournamentId={tournament.id}
+            initialData={{
+              scheduledAt: matchRow?.scheduledAt,
+              venue: matchRow?.venue,
+              referee: matchRow?.referee,
+              homeScore: matchRow?.homeScore,
+              awayScore: matchRow?.awayScore,
+              status: matchRow?.status,
+              homeDisplayName: matchRow?.homeAssignedInscription?.displayName,
+              awayDisplayName: matchRow?.awayAssignedInscription?.displayName,
+            }}
+            onClose={() => setMatchIdDrawerOpen(null)}
+            onSaved={() => onRefresh()}
+          />
+        );
+      })() : null}
     </div>
   );
 };

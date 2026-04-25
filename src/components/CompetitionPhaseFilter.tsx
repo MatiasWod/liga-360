@@ -258,13 +258,13 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
 
   return (
     <div
-      className={`w-full rounded-xl border border-slate-200 bg-white ${className}`}
+      className={`w-full rounded-xl border border-border-subtle bg-surface-1 ${className}`}
       aria-label="Filtro por competiciones y fases"
     >
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50"
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition hover:bg-surface-2"
         aria-expanded={expanded}
         aria-label="Desplegar filtro de fases"
       >
@@ -281,13 +281,13 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
 
       <div className={`grid transition-all duration-200 ease-out ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
         <div className="overflow-hidden px-3 pb-3">
-          <div className="mb-2 inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Selector de modo de filtro">
+          <div className="mb-2 inline-flex w-full rounded-lg border border-border-subtle bg-surface-2 p-1" role="group" aria-label="Selector de modo de filtro">
             <button
               type="button"
               aria-pressed={mode === 'include'}
               onClick={() => setMode('include')}
               className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                mode === 'include' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                mode === 'include' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-surface-3'
               }`}
             >
               Mostrar solo
@@ -297,7 +297,7 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
               aria-pressed={mode === 'exclude'}
               onClick={() => setMode('exclude')}
               className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                mode === 'exclude' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                mode === 'exclude' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-surface-3'
               }`}
             >
               No mostrar
@@ -325,7 +325,7 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
                   <button
                     type="button"
                     onClick={() => handleRemoveChip(chip)}
-                    className="ml-0.5 rounded-sm text-emerald-700 transition hover:bg-emerald-100"
+                    className="ml-0.5 rounded-sm text-emerald-700 transition hover:bg-accent-soft"
                     aria-label={`Quitar filtro ${chip.label}`}
                   >
                     x
@@ -345,7 +345,7 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
                   const state = getCompetitionSelectionState(competition, selectedKeys);
 
                   return (
-                    <li key={competition.id} className="rounded-md border border-transparent hover:border-slate-200 hover:bg-slate-50">
+                    <li key={competition.id} className="rounded-md border border-transparent hover:border-border-subtle hover:bg-surface-2">
                       <div className="flex items-center gap-2 px-2 py-1.5">
                         <input
                           type="checkbox"
@@ -381,7 +381,7 @@ export const CompetitionPhaseFilter: React.FC<CompetitionPhaseFilterProps> = ({
 
                               return (
                                 <li key={phase.id}>
-                                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-700 transition hover:bg-slate-50">
+                                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-700 transition hover:bg-surface-2">
                                     <input
                                       type="checkbox"
                                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"

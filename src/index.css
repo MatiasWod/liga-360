@@ -1,32 +1,215 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+html,
+body,
+#root {
 	height: 100%;
 }
 
 body {
 	margin: 0;
-	background-color: #F5F7F9;
-	color: #0F2A33;
-	font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+	background-color: theme('colors.surface.0');
+	color: theme('colors.text.primary');
+	font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 * {
 	box-sizing: border-box;
 }
 
+::selection {
+	background-color: theme('colors.accent.primary');
+	color: theme('colors.text.primary');
+}
+
 @layer components {
 	.btn-primary {
-		@apply rounded-xl bg-[#2E7D32] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#256628] disabled:opacity-60;
+		@apply rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 disabled:opacity-60;
 	}
 	.btn-secondary {
-		@apply rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-[#0F2A33] hover:bg-slate-50 disabled:opacity-60;
+		@apply rounded-xl border border-border-subtle bg-surface-1 px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 disabled:opacity-60;
 	}
 	.card {
-		@apply rounded-xl border border-slate-200 bg-white shadow-md;
+		@apply rounded-xl border border-border-subtle bg-surface-1 text-text-primary shadow-lg shadow-black/30;
 	}
+}
+
+/*
+ * Sweep utilitario: redirige las clases light heredadas a la paleta dark global,
+ * para no migrar manualmente cada página. Reglas escritas DESPUÉS de
+ * `@tailwind utilities;` para ganar en orden de cascada con misma especificidad.
+ * Las primitivas y el shell ya usan tokens directamente; este bloque es red de
+ * seguridad para módulos y páginas legacy.
+ */
+.bg-white {
+	background-color: theme('colors.surface.1');
+}
+.hover\:bg-white:hover {
+	background-color: theme('colors.surface.1');
+}
+.bg-slate-50 {
+	background-color: theme('colors.surface.2');
+}
+.hover\:bg-slate-50:hover {
+	background-color: theme('colors.surface.2');
+}
+.bg-slate-100 {
+	background-color: theme('colors.surface.2');
+}
+.hover\:bg-slate-100:hover {
+	background-color: theme('colors.surface.2');
+}
+.bg-slate-200 {
+	background-color: theme('colors.surface.3');
+}
+.hover\:bg-slate-200:hover {
+	background-color: theme('colors.surface.3');
+}
+
+/* Emerald hover heredado → highlight con acento (evita mint claro en dark). */
+.hover\:bg-emerald-50:hover,
+.hover\:bg-emerald-100:hover {
+	background-color: theme('colors.accent.soft');
+}
+
+/* `hover:bg-white/N` en UI glass: mapear a surface (evita flash blanco). */
+.hover\:bg-white\/5:hover {
+	background-color: color-mix(in srgb, theme('colors.surface.2') 55%, transparent);
+}
+.hover\:bg-white\/10:hover {
+	background-color: theme('colors.surface.2');
+}
+.hover\:bg-white\/15:hover,
+.hover\:bg-white\/20:hover {
+	background-color: theme('colors.surface.3');
+}
+
+.text-slate-400 {
+	color: theme('colors.text.subtle');
+}
+.text-slate-500 {
+	color: theme('colors.text.muted');
+}
+.text-slate-600 {
+	color: theme('colors.text.muted');
+}
+.text-slate-700 {
+	color: theme('colors.text.primary');
+}
+.text-slate-800 {
+	color: theme('colors.text.primary');
+}
+.text-slate-900 {
+	color: theme('colors.text.primary');
+}
+
+.border-slate-100 {
+	border-color: theme('colors.border.subtle');
+}
+.border-slate-200 {
+	border-color: theme('colors.border.subtle');
+}
+.border-slate-300 {
+	border-color: theme('colors.border.strong');
+}
+
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+	border-color: theme('colors.border.subtle');
+}
+.divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+	border-color: theme('colors.border.subtle');
+}
+
+.bg-red-50 {
+	background-color: theme('colors.danger.soft');
+}
+.text-red-600 {
+	color: theme('colors.danger.base');
+}
+.hover\:bg-red-50:hover {
+	background-color: theme('colors.danger.soft');
+}
+
+/* Hex literales heredados (clases tipo `text-[#0F2A33]`) repetidos en muchas
+ * páginas; los redirigimos al token correspondiente para evitar tocar archivo
+ * por archivo. */
+.text-\[\#0F2A33\] {
+	color: theme('colors.text.primary');
+}
+.bg-\[\#0F2A33\] {
+	background-color: theme('colors.surface.1');
+}
+.border-\[\#0F2A33\] {
+	border-color: theme('colors.surface.1');
+}
+.bg-\[\#F5F7F9\] {
+	background-color: theme('colors.surface.0');
+}
+.bg-\[\#163A20\] {
+	background-color: theme('colors.surface.1');
+}
+.border-\[\#22512D\] {
+	border-color: theme('colors.border.subtle');
+}
+.bg-\[\#22512D\] {
+	background-color: theme('colors.surface.2');
+}
+.hover\:bg-\[\#22512D\]:hover {
+	background-color: theme('colors.surface.2');
+}
+.bg-\[\#EAF7EB\] {
+	background-color: theme('colors.accent.soft');
+}
+.text-\[\#2E7D32\] {
+	color: #66BB6A;
+}
+.bg-\[\#2E7D32\] {
+	background-color: theme('colors.accent.primary');
+}
+.hover\:bg-\[\#256628\]:hover {
+	background-color: theme('colors.accent.hover');
+}
+.border-\[\#66BB6A\] {
+	border-color: theme('colors.accent.primary');
+}
+.bg-\[\#66BB6A\] {
+	background-color: theme('colors.accent.primary');
+}
+.text-\[\#66BB6A\] {
+	color: #66BB6A;
+}
+.bg-\[\#FDECEC\] {
+	background-color: theme('colors.danger.soft');
+}
+.text-\[\#B42318\] {
+	color: theme('colors.danger.base');
+}
+.border-\[\#F9D5D5\] {
+	border-color: theme('colors.danger.base');
+}
+.bg-\[\#FFF8E7\] {
+	background-color: theme('colors.warning.soft');
+}
+.text-\[\#8A6D1A\] {
+	color: theme('colors.warning.base');
+}
+
+input,
+select,
+textarea {
+	color-scheme: dark;
+	background-color: theme('colors.surface.1');
+	color: theme('colors.text.primary');
+	border-color: theme('colors.border.subtle');
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: theme('colors.text.subtle');
 }

@@ -53,7 +53,8 @@ export function computeStandings(matches = [], inscriptions = [], config = {}) {
   }
 
   for (const match of matches) {
-    if (match?.matchStatus !== 'finished') continue;
+    const ms = String(match?.matchStatus || '').toLowerCase();
+    if (ms !== 'finished' && ms !== 'completed') continue;
     const homeScore = toSafeNumber(match?.homeScore);
     const awayScore = toSafeNumber(match?.awayScore);
     if (homeScore == null || awayScore == null) continue;

@@ -196,7 +196,7 @@ export const TournamentsList: React.FC<{
 						{t.competitions.map((c) => (
 							<div
 								key={c.id}
-								className="rounded-xl border border-white/10 bg-white/10 p-4 hover:bg-white/15 transition-colors"
+								className="rounded-xl border border-white/10 bg-white/10 p-4 hover:bg-surface-2/80 transition-colors"
 							>
 								<div className="flex items-center justify-between mb-3">
 									<div className="flex items-center gap-2">

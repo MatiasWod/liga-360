@@ -1,8 +1,10 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
+import type { GoalRecord } from '../../components/tournament-schedule/MatchCard';
 import { StandingsTable } from '../../components/standings';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
-import type { TournamentEntity, TournamentStage } from './types';
+import { listMatchEvents } from '../../services/matchEvents/matchEvents';
+import type { TournamentEntity, TournamentMatchRow, TournamentStage } from './types';
 
 function StageIcon({ format }: { format: TournamentStage['format'] }) {
 	const common = 'w-3.5 h-3.5';
@@ -61,6 +63,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [t, setT] = React.useState<TournamentEntity | null>(null);
+	const [goalsByMatchId, setGoalsByMatchId] = React.useState<Record<string, GoalRecord[]>>({});
 
 	React.useEffect(() => {
 		async function load() {
@@ -69,6 +72,45 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 			try {
 				const tournament = await getTournamentDetailById(id);
 				setT((tournament || null) as TournamentEntity | null);
+
+				// Carga goles para partidos completados del torneo.
+				if (tournament) {
+					const completedMatches: TournamentMatchRow[] = [];
+					for (const c of tournament.competitions || []) {
+						for (const s of c.stages || []) {
+							for (const m of s.matches || []) {
+								if (String(m.status || '').toLowerCase() === 'completed' || String(m.status || '').toLowerCase() === 'finished') {
+									completedMatches.push(m);
+								}
+							}
+							for (const g of s.groups || []) {
+								for (const m of g.matches || []) {
+									if (String(m.status || '').toLowerCase() === 'completed' || String(m.status || '').toLowerCase() === 'finished') {
+										completedMatches.push(m);
+									}
+								}
+							}
+						}
+					}
+					if (completedMatches.length > 0) {
+						const results = await Promise.allSettled(
+							completedMatches.map(async (m) => {
+								const events = await listMatchEvents(m.id);
+								return { matchId: m.id, goals: events.filter((e) => e.event_type === 'goal') };
+							})
+						);
+						const map: Record<string, GoalRecord[]> = {};
+						for (const r of results) {
+							if (r.status === 'fulfilled' && r.value.goals.length > 0) {
+								map[r.value.matchId] = r.value.goals.map((e) => ({
+									display_name: e.display_name,
+									minute: e.minute,
+								}));
+							}
+						}
+						setGoalsByMatchId(map);
+					}
+				}
 			} catch (e: any) {
 				setError(e?.message || 'Error al cargar torneo');
 			} finally {
@@ -170,7 +212,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void }> = ({
 																			? ' · Grupos'
 																			: ' · Eliminación'}
 																</p>
-																<TournamentSchedule type={built.type} data={built.data} theme="dark" />
+																<TournamentSchedule type={built.type} data={built.data} theme="dark" goalsByMatchId={goalsByMatchId} />
 																{s.format === 'league' ? (
 																	<div className="mt-3 space-y-2">
 																		<h3 className="text-sm font-semibold text-white/90">Tabla de posiciones</h3>

@@ -79,6 +79,29 @@ async function ensureSchema() {
 
   `);
 
+  // Tabla de eventos de partido (goles, tarjetas, suspensiones, sanciones).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "MatchEvent" (
+      id SERIAL PRIMARY KEY,
+      match_id TEXT NOT NULL,
+      tournament_id TEXT NOT NULL,
+      event_type TEXT NOT NULL CHECK(event_type IN ('goal','yellow_card','red_card','suspension','other_sanction')),
+      inscription_id INT REFERENCES "Inscription"(id) ON DELETE SET NULL,
+      linked_member_id INT NULL,
+      display_name TEXT NOT NULL,
+      minute INT NULL,
+      suspension_matches INT NULL,
+      notes TEXT NULL,
+      extra_json JSONB NULL,
+      created_by_user_id INT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_match_event_match_id ON "MatchEvent"(match_id);
+    CREATE INDEX IF NOT EXISTS idx_match_event_tournament_id ON "MatchEvent"(tournament_id);
+  `);
+
   // Migracion de columnas desde versiones previas de Inscription.
   await pool.query(`
     ALTER TABLE "Inscription" ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER NULL;
@@ -194,6 +217,20 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_invite_target_team_code ON "Invite"(target_team_code);
     CREATE INDEX IF NOT EXISTS idx_invite_target_participant_user_id ON "Invite"(target_participant_user_id);
     CREATE INDEX IF NOT EXISTS idx_invite_token ON "Invite"(token);
+  `);
+}
+
+/**
+ * Columnas de Invite que deben existir para los handlers HTTP.
+ * Idempotente: si `ensureSchema` falló antes del ALTER de Invite (p. ej. error en migración de Inscription),
+ * igual podemos recuperar el listado sin 500 por columna inexistente.
+ */
+async function ensureInviteHttpColumns() {
+  await pool.query(`
+    ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS competition_id TEXT NULL;
+    ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS target_team_code TEXT NULL;
+    ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS target_participant_user_id INTEGER NULL;
+    ALTER TABLE "Invite" ADD COLUMN IF NOT EXISTS invite_response_status TEXT NOT NULL DEFAULT 'pending';
   `);
 }
 
@@ -610,6 +647,7 @@ app.get('/invites', requireOrganizer, async (req, res) => {
   const tournamentId = String(req.query?.tournamentId || '').trim();
   if (!competitionId && !tournamentId) return res.status(400).json({ error: 'competitionId o tournamentId requerido' });
   try {
+    await ensureInviteHttpColumns();
     const listed = competitionId
       ? await pool.query(
           `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at
@@ -1721,6 +1759,152 @@ app.post('/participants/me/invites/:id/reject', requireParticipantUser, async (r
     return res.json({ ok: true });
   } catch (e) {
     logger.error({ err: e }, 'reject participant invite error');
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Match Events endpoints (goles, tarjetas, suspensiones, sanciones)
+// ---------------------------------------------------------------------------
+
+const VALID_EVENT_TYPES = ['goal', 'yellow_card', 'red_card', 'suspension', 'other_sanction'];
+
+// POST /matches/:matchId/events — crear evento (solo organizador)
+app.post('/matches/:matchId/events', requireOrganizer, async (req, res) => {
+  const { matchId } = req.params;
+  const { event_type, inscription_id, linked_member_id, display_name, minute, suspension_matches, notes, extra_json, tournament_id } = req.body;
+
+  if (!matchId) return res.status(400).json({ error: 'matchId requerido' });
+  if (!VALID_EVENT_TYPES.includes(event_type)) {
+    return res.status(400).json({ error: `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}` });
+  }
+  if (!tournament_id) return res.status(400).json({ error: 'tournament_id requerido' });
+  if (!display_name && !linked_member_id) {
+    return res.status(400).json({ error: 'display_name es requerido cuando no hay linked_member_id' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO "MatchEvent"(match_id, tournament_id, event_type, inscription_id, linked_member_id, display_name, minute, suspension_matches, notes, extra_json, created_by_user_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+       RETURNING *`,
+      [
+        matchId,
+        String(tournament_id),
+        event_type,
+        inscription_id ?? null,
+        linked_member_id ?? null,
+        display_name ?? '',
+        minute != null ? Number(minute) : null,
+        suspension_matches != null ? Number(suspension_matches) : null,
+        notes ?? null,
+        extra_json ? JSON.stringify(extra_json) : null,
+        req.user?.sub ?? null,
+      ]
+    );
+    return res.status(201).json(result.rows[0]);
+  } catch (e) {
+    logger.error({ err: e }, 'create match event error');
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /matches/:matchId/events — listar eventos (organizador ve todos; team user solo si su inscripción participa)
+app.get('/matches/:matchId/events', requireAuthMiddleware, async (req, res) => {
+  const { matchId } = req.params;
+  if (!matchId) return res.status(400).json({ error: 'matchId requerido' });
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT * FROM "MatchEvent"
+       WHERE match_id = $1
+       ORDER BY COALESCE(minute, 999999) ASC, created_at ASC`,
+      [matchId]
+    );
+    return res.json(result.rows);
+  } catch (e) {
+    logger.error({ err: e }, 'list match events error');
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /matches/:matchId/events/:eventId — actualizar evento (solo organizador)
+app.patch('/matches/:matchId/events/:eventId', requireOrganizer, async (req, res) => {
+  const { matchId, eventId } = req.params;
+  if (!matchId || !eventId) return res.status(400).json({ error: 'matchId y eventId requeridos' });
+
+  const { event_type, inscription_id, linked_member_id, display_name, minute, suspension_matches, notes, extra_json } = req.body;
+
+  if (event_type !== undefined && !VALID_EVENT_TYPES.includes(event_type)) {
+    return res.status(400).json({ error: `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}` });
+  }
+
+  const client = await pool.connect();
+  try {
+    const existing = await client.query(
+      `SELECT id FROM "MatchEvent" WHERE id = $1 AND match_id = $2 LIMIT 1`,
+      [Number(eventId), matchId]
+    );
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'evento no encontrado' });
+
+    const result = await client.query(
+      `UPDATE "MatchEvent"
+       SET event_type        = COALESCE($1, event_type),
+           inscription_id    = COALESCE($2, inscription_id),
+           linked_member_id  = COALESCE($3, linked_member_id),
+           display_name      = COALESCE($4, display_name),
+           minute            = COALESCE($5, minute),
+           suspension_matches = COALESCE($6, suspension_matches),
+           notes             = COALESCE($7, notes),
+           extra_json        = COALESCE($8, extra_json),
+           updated_at        = NOW()
+       WHERE id = $9 AND match_id = $10
+       RETURNING *`,
+      [
+        event_type ?? null,
+        inscription_id ?? null,
+        linked_member_id ?? null,
+        display_name ?? null,
+        minute != null ? Number(minute) : null,
+        suspension_matches != null ? Number(suspension_matches) : null,
+        notes ?? null,
+        extra_json ? JSON.stringify(extra_json) : null,
+        Number(eventId),
+        matchId,
+      ]
+    );
+    return res.json(result.rows[0]);
+  } catch (e) {
+    logger.error({ err: e }, 'update match event error');
+    return res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /matches/:matchId/events/:eventId — eliminar evento (solo organizador)
+app.delete('/matches/:matchId/events/:eventId', requireOrganizer, async (req, res) => {
+  const { matchId, eventId } = req.params;
+  if (!matchId || !eventId) return res.status(400).json({ error: 'matchId y eventId requeridos' });
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `DELETE FROM "MatchEvent" WHERE id = $1 AND match_id = $2 RETURNING id`,
+      [Number(eventId), matchId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'evento no encontrado' });
+    return res.json({ ok: true });
+  } catch (e) {
+    logger.error({ err: e }, 'delete match event error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();

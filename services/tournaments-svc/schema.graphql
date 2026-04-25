@@ -149,6 +149,12 @@ type Mutation {
     awayScore: Int
     status: String
   ): MatchResult!
+  updateMatchDateTime(
+    matchId: ID!
+    scheduledAt: String
+    venue: String
+    referee: String
+  ): MatchDateTimeResult!
 }
 
 type MatchResult {
@@ -156,6 +162,13 @@ type MatchResult {
   homeScore: Int
   awayScore: Int
   status: String!
+}
+
+type MatchDateTimeResult {
+  id: ID!
+  scheduledAt: String
+  venue: String
+  referee: String
 }
 
 type Tournament {
@@ -251,6 +264,8 @@ type Match {
   round: Int
   leg: Int
   scheduledAt: String
+  venue: String
+  referee: String
   slotIndex: Int
   fixtureCode: String
   groupId: ID

@@ -138,7 +138,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
               <button
                 type="button"
                 onClick={() => setMode('edicion')}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-border-subtle bg-surface-1 px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-2"
               >
                 Editar estructura (etapas y competiciones)
               </button>

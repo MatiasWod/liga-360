@@ -1,4 +1,11 @@
-import type { GroupsScheduleData, KnockoutScheduleData, LeagueScheduleData, MatchRecord, TeamRef } from './types';
+import type {
+  GroupsScheduleData,
+  KnockoutScheduleData,
+  LeagueScheduleData,
+  MatchRecord,
+  MatchStatus,
+  TeamRef,
+} from './types';
 
 /** Misma forma que devuelve GraphQL en configuración / detalle público */
 export type FixtureMatchInput = {
@@ -7,6 +14,13 @@ export type FixtureMatchInput = {
   leg?: number | null;
   slotIndex?: number | null;
   groupId?: string | null;
+  scheduledAt?: string | null;
+  venue?: string | null;
+  referee?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  /** Valor crudo del backend (p. ej. `finished`, `scheduled`). */
+  status?: string | null;
   homeAssignedInscription?: { inscriptionId: string; displayName: string } | null;
   awayAssignedInscription?: { inscriptionId: string; displayName: string } | null;
 };
@@ -26,6 +40,14 @@ export type FixtureStageInput = {
   groups?: FixtureGroupInput[];
 };
 
+function mapGraphqlStatusToMatchStatus(raw: string | null | undefined): MatchStatus {
+  const s = (raw || '').toLowerCase();
+  if (s === 'finished' || s === 'completed') return 'completed';
+  if (s === 'live' || s === 'in_progress' || s === 'playing') return 'live';
+  if (s === 'postponed' || s === 'delayed') return 'postponed';
+  return 'scheduled';
+}
+
 function teamFromSlot(
   slot: { inscriptionId: string; displayName: string } | null | undefined,
   side: 'home' | 'away',
@@ -41,12 +63,18 @@ function teamFromSlot(
 }
 
 export function matchInputToRecord(m: FixtureMatchInput): MatchRecord {
-  return {
+  const rec: MatchRecord = {
     id: m.id,
     homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id),
     awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id),
-    status: 'scheduled',
+    status: mapGraphqlStatusToMatchStatus(m.status),
   };
+  if (m.scheduledAt) rec.scheduledAt = m.scheduledAt;
+  if (m.venue) rec.venue = m.venue;
+  if (m.referee) rec.referee = m.referee;
+  if (m.homeScore != null) rec.homeScore = Number(m.homeScore);
+  if (m.awayScore != null) rec.awayScore = Number(m.awayScore);
+  return rec;
 }
 
 function sortMatches(list: FixtureMatchInput[]): FixtureMatchInput[] {

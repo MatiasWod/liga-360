@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "node --test src/utils.test.js",
     "test:integration": "cross-env NODE_ENV=test node --test src/http.integration.test.js"

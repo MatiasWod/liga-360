@@ -149,7 +149,7 @@ export const ParticipantTeamsPage: React.FC<ParticipantTeamsPageProps> = ({ link
             <button
               type="button"
               onClick={() => setCodeModalOpen(true)}
-              className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-surface-2"
               title="Ingresar codigo de edicion"
               aria-label="Ingresar codigo de edicion"
             >

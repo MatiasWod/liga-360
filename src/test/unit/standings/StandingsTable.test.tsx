@@ -54,14 +54,20 @@ describe('StandingsTable', () => {
     expect(screen.getByText('6')).toBeInTheDocument();
   });
 
-  it('resalta filas con position <= 2', () => {
+  it('resalta filas con position <= 2 (dark por defecto, accent-soft)', () => {
     render(<StandingsTable rows={rows} />);
     const atlasRow = screen.getByText('Atlas').closest('tr');
     const bocaRow = screen.getByText('Boca').closest('tr');
     const colonRow = screen.getByText('Colon').closest('tr');
+    expect(atlasRow?.className).toContain('bg-accent-soft');
+    expect(bocaRow?.className).toContain('bg-accent-soft');
+    expect(colonRow?.className).not.toContain('bg-accent-soft');
+  });
+
+  it('en theme light usa el highlight clásico bg-brand-green/10', () => {
+    render(<StandingsTable rows={rows} theme="light" />);
+    const atlasRow = screen.getByText('Atlas').closest('tr');
     expect(atlasRow?.className).toContain('bg-brand-green/10');
-    expect(bocaRow?.className).toContain('bg-brand-green/10');
-    expect(colonRow?.className).not.toContain('bg-brand-green/10');
   });
 
   it('no renderiza tabla cuando rows es vacio', () => {
@@ -69,9 +75,9 @@ describe('StandingsTable', () => {
     expect(queryByRole('table')).toBeNull();
   });
 
-  it('aplica clases de texto dark theme', () => {
-    const { container } = render(<StandingsTable rows={rows} theme="dark" />);
-    expect(container.firstElementChild?.className).toContain('bg-white/5');
-    expect(container.querySelector('table')?.className).toContain('text-white/90');
+  it('aplica clases de tokens dark por defecto', () => {
+    const { container } = render(<StandingsTable rows={rows} />);
+    expect(container.firstElementChild?.className).toContain('bg-surface-1');
+    expect(container.querySelector('table')?.className).toContain('text-text-primary');
   });
 });

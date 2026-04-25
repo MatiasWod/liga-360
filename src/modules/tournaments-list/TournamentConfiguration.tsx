@@ -21,7 +21,34 @@ import {
 } from '../../services/tournaments/configuration';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
-import type { TournamentCompetition as Competition, TournamentEntity as Tournament, TournamentStage as Stage } from './types';
+import type {
+  AssignedInscription,
+  TournamentCompetition as Competition,
+  TournamentEntity as Tournament,
+  TournamentStage as Stage,
+} from './types';
+
+/** Entrada en la grilla de una fase: fila en Postgres o asignación sólo en Neo4j (p. ej. seeds viejos). */
+type StageRosterEntry =
+  | { kind: 'inscription'; item: InscriptionItem }
+  | { kind: 'graphOnly'; assigned: AssignedInscription };
+
+function buildStageRosterEntries(
+  assignedList: AssignedInscription[] | undefined,
+  byId: Map<string, InscriptionItem>
+): StageRosterEntry[] {
+  const out: StageRosterEntry[] = [];
+  for (const assigned of assignedList || []) {
+    const item = byId.get(String(assigned.inscriptionId));
+    if (item && ['PENDIENTE', 'ACEPTADO'].includes(String(item.status))) {
+      out.push({ kind: 'inscription', item });
+      continue;
+    }
+    const label = (assigned.displayName || '').trim() || String(assigned.inscriptionId || '');
+    if (label) out.push({ kind: 'graphOnly', assigned });
+  }
+  return out;
+}
 
 type Tab = 'gestion' | 'inicializacion' | 'fixture';
 
@@ -261,6 +288,33 @@ function initialsFromName(name?: string | null): string {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || '').join('') || 'P';
 }
 
+function isInscriptionAcceptedStatus(status: unknown): boolean {
+  return String(status || '').trim().toUpperCase() === 'ACEPTADO';
+}
+
+function matchesParticipantPhaseFilter(
+  placement: { competitionIds: Set<string>; stageIds: Set<string> },
+  filter: { mode: 'include' | 'exclude'; selections: Array<{ competitionId: string; phaseId: string }> }
+): boolean {
+  const stageSel = new Set((filter.selections || []).map((s) => String(s.phaseId)));
+  const compSel = new Set((filter.selections || []).map((s) => String(s.competitionId)));
+  if (stageSel.size === 0 && compSel.size === 0) return true;
+  const matchesStage = [...stageSel].some((id) => placement.stageIds.has(id));
+  const matchesComp = [...compSel].some((id) => placement.competitionIds.has(id));
+  const matches = matchesStage || matchesComp;
+  return filter.mode === 'include' ? matches : !matches;
+}
+
+/** Fila en “Equipos participantes”: inscripción aceptada o asignación sólo en el grafo (sin fila en Postgres). */
+type GestionParticipantRow =
+  | { kind: 'inscription'; item: InscriptionItem }
+  | {
+      kind: 'graphOnly';
+      inscriptionId: string;
+      displayName: string;
+      placement: { competitionIds: Set<string>; stageIds: Set<string> };
+    };
+
 export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({ tournamentId, onBack }) => {
   const [tab, setTab] = React.useState<Tab>('gestion');
   const [loading, setLoading] = React.useState(true);
@@ -354,7 +408,6 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   }, [tournament]);
 
   const pendingRequests = React.useMemo(() => inscriptions.filter((item) => item.status === 'PENDIENTE'), [inscriptions]);
-  const acceptedTeams = React.useMemo(() => inscriptions.filter((item) => item.status === 'ACEPTADO'), [inscriptions]);
   const inscriptionById = React.useMemo(() => {
     const map = new Map<string, InscriptionItem>();
     for (const item of inscriptions) map.set(String(item.id), item);
@@ -496,29 +549,50 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     inscriptionIdsByStageId,
   ]);
 
-  const acceptedSelectedStageFilterIds = React.useMemo(() => {
-    return new Set((acceptedTeamsFilter.selections || []).map((item) => String(item.phaseId)));
-  }, [acceptedTeamsFilter]);
+  /** Inscripciones aceptadas + asignaciones en fase sin fila en inscriptions-svc (alineado con vista Inicialización / fixture). */
+  const gestionParticipantsPool = React.useMemo(() => {
+    const rows = new Map<string, GestionParticipantRow>();
 
-  const acceptedSelectedCompetitionIds = React.useMemo(() => {
-    return new Set((acceptedTeamsFilter.selections || []).map((item) => String(item.competitionId)));
-  }, [acceptedTeamsFilter]);
+    for (const item of inscriptions) {
+      if (!isInscriptionAcceptedStatus(item.status)) continue;
+      rows.set(String(item.id), { kind: 'inscription', item });
+    }
 
-  const acceptedTeamsPool = React.useMemo(() => {
-    return acceptedTeams
-      .filter((item) => {
-        if (acceptedSelectedStageFilterIds.size === 0 && acceptedSelectedCompetitionIds.size === 0) return true;
-        const placement = inscriptionPlacement(item);
-        const matchesStage = Array.from(acceptedSelectedStageFilterIds).some((stageId) => placement.stageIds.has(stageId));
-        const matchesCompetition = Array.from(acceptedSelectedCompetitionIds).some((competitionId) =>
-          placement.competitionIds.has(competitionId)
-        );
-        const matches = matchesStage || matchesCompetition;
-        if (acceptedTeamsFilter.mode === 'include') return matches;
-        return !matches;
-      })
-      .sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || ''), 'es', { sensitivity: 'base' }));
-  }, [acceptedTeams, acceptedSelectedStageFilterIds, acceptedSelectedCompetitionIds, acceptedTeamsFilter.mode]);
+    for (const competition of tournament?.competitions || []) {
+      for (const stage of competition.stages || []) {
+        for (const assigned of stage.assignedInscriptions || []) {
+          const id = String(assigned.inscriptionId);
+          if (rows.has(id)) continue;
+          if (inscriptionById.has(id)) continue;
+          const displayName = (assigned.displayName || '').trim() || id;
+          rows.set(id, {
+            kind: 'graphOnly',
+            inscriptionId: id,
+            displayName,
+            placement: {
+              competitionIds: new Set([String(competition.id)]),
+              stageIds: new Set([String(stage.id)]),
+            },
+          });
+        }
+      }
+    }
+
+    const filtered: GestionParticipantRow[] = [];
+    for (const row of rows.values()) {
+      const placement =
+        row.kind === 'inscription' ? inscriptionPlacement(row.item) : row.placement;
+      if (!matchesParticipantPhaseFilter(placement, acceptedTeamsFilter)) continue;
+      filtered.push(row);
+    }
+
+    filtered.sort((a, b) => {
+      const nameA = a.kind === 'inscription' ? a.item.display_name : a.displayName;
+      const nameB = b.kind === 'inscription' ? b.item.display_name : b.displayName;
+      return String(nameA || '').localeCompare(String(nameB || ''), 'es', { sensitivity: 'base' });
+    });
+    return filtered;
+  }, [inscriptions, tournament, acceptedTeamsFilter, inscriptionById, assignmentByInscriptionId]);
 
   const [teamsPage, setTeamsPage] = React.useState(1);
   const teamsPerPage = 12;
@@ -961,26 +1035,64 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
               onChange={setAcceptedTeamsFilter}
             />
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {acceptedTeamsPool.map((item) => {
-                const competitionLabels = getInscriptionCompetitionLabels(item);
-                const placement = inscriptionPlacement(item);
-                const stageLabels = Array.from(placement.stageIds)
+              {gestionParticipantsPool.map((row) => {
+                if (row.kind === 'inscription') {
+                  const item = row.item;
+                  const competitionLabels = getInscriptionCompetitionLabels(item);
+                  const placement = inscriptionPlacement(item);
+                  const stageLabels = Array.from(placement.stageIds)
+                    .map((stageId) => stageMetaById.get(stageId))
+                    .filter(Boolean)
+                    .map((meta) => `${meta!.stageName} (${meta!.competitionName})`)
+                    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+                  return (
+                    <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {renderEntryAvatar(item, 'h-9 w-9')}
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-slate-800">{item.display_name}</p>
+                          <p className="text-[11px] text-emerald-700">ACEPTADO</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        <span className="font-medium">Competiciones:</span>{' '}
+                        {competitionLabels.length > 0 ? competitionLabels.join(' · ') : 'Sin competencia'}
+                      </p>
+                      {stageLabels.length > 0 ? (
+                        <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
+                          <span className="font-medium">Fases:</span> {stageLabels.join(' · ')}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                }
+                const stageLabels = Array.from(row.placement.stageIds)
                   .map((stageId) => stageMetaById.get(stageId))
                   .filter(Boolean)
                   .map((meta) => `${meta!.stageName} (${meta!.competitionName})`)
                   .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+                const competitionLabels = Array.from(row.placement.competitionIds)
+                  .filter((id) => String(id || '').trim() && String(id || '').toLowerCase() !== 'null')
+                  .map((id) => competitionNameById.get(id) || id)
+                  .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
                 return (
-                  <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div
+                    key={`graph-${row.inscriptionId}`}
+                    className="rounded-lg border border-amber-200/90 bg-amber-50/90 px-3 py-2"
+                    title="Figura en el fixture / fases pero no hay inscripción ACEPTADA en la base de gestión (p. ej. seed antiguo). Corré seed:dev o creá la inscripción manual."
+                  >
                     <div className="flex items-center gap-2">
-                      {renderEntryAvatar(item, 'h-9 w-9')}
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200/90 text-xs font-semibold text-amber-950" aria-hidden>
+                        ?
+                      </span>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-800">{item.display_name}</p>
-                        <p className="text-[11px] text-emerald-700">ACEPTADO</p>
+                        <p className="truncate font-medium text-slate-800">{row.displayName}</p>
+                        <p className="text-[11px] font-medium text-amber-900">Sólo en competición</p>
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-slate-600">
                       <span className="font-medium">Competiciones:</span>{' '}
-                      {competitionLabels.length > 0 ? competitionLabels.join(' · ') : 'Sin competencia'}
+                      {competitionLabels.length > 0 ? competitionLabels.join(' · ') : '—'}
                     </p>
                     {stageLabels.length > 0 ? (
                       <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
@@ -990,8 +1102,10 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   </div>
                 );
               })}
-              {acceptedTeamsPool.length === 0 ? (
-                <p className="text-sm text-slate-500">No hay {entityPlural} aceptados para el filtro aplicado.</p>
+              {gestionParticipantsPool.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No hay {entityPlural} para mostrar con el filtro aplicado (inscripción aceptada o asignado en una fase).
+                </p>
               ) : null}
             </div>
           </Card>
@@ -1023,9 +1137,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     .slice()
                     .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
                     .map((stage) => {
-                    const stageCards = (stage.assignedInscriptions || [])
-                      .map((assigned) => inscriptionById.get(String(assigned.inscriptionId)))
-                      .filter((item): item is InscriptionItem => Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(item!.status));
+                    const stageRosterEntries = buildStageRosterEntries(stage.assignedInscriptions, inscriptionById);
                     const cap = stageCapacity(stage);
                     const stageAssignedList = stage.assignedInscriptions || [];
                     const idsInGroups =
@@ -1043,7 +1155,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     const occupancy =
                       stage.format === 'groups'
                         ? stageAssignedList.length
-                        : stageCards.length;
+                        : stageRosterEntries.length;
                     const incomingTr = collectIncomingTransitions(tournament, stage.id);
                     const previewLabels = flattenQualifierLabels(incomingTr);
                     const eliminationPairingCount =
@@ -1254,7 +1366,9 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                         className="mb-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
                                       >
                                         <span className="mr-1 font-semibold text-slate-500">{slotRole === 'home' ? 'A' : 'B'}:</span>
-                                        {slotItem ? slotItem.display_name : showBye ? 'BYE' : '—'}
+                                        {slotItem
+                                          ? slotItem.display_name
+                                          : slot?.displayName?.trim() || (showBye ? 'BYE' : '—')}
                                       </div>
                                     );
                                   })}
@@ -1265,19 +1379,39 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
 
                         {(stage.format === 'league' || stage.format === 'composed') ? (
                           <div className="flex flex-wrap gap-2">
-                            {stageCards.map((item) => (
-                              <div
-                                key={item.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, item)}
-                                onDragEnd={handleDragEnd}
-                                className={`w-24 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md ${draggingInscriptionId === String(item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
-                              >
-                                <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(item, 'h-8 w-8')}</div>
-                                <p className="line-clamp-2 font-medium text-slate-800">{item.display_name}</p>
-                              </div>
-                            ))}
-                            {stageCards.length === 0 ? <p className="text-xs text-slate-500">Sin {entityPlural} asignados</p> : null}
+                            {stageRosterEntries.map((entry) =>
+                              entry.kind === 'inscription' ? (
+                                <div
+                                  key={entry.item.id}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, entry.item)}
+                                  onDragEnd={handleDragEnd}
+                                  className={`w-24 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md ${draggingInscriptionId === String(entry.item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
+                                >
+                                  <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(entry.item, 'h-8 w-8')}</div>
+                                  <p className="line-clamp-2 font-medium text-slate-800">{entry.item.display_name}</p>
+                                </div>
+                              ) : (
+                                <div
+                                  key={`gql-${String(entry.assigned.inscriptionId)}`}
+                                  draggable={false}
+                                  title="Asignado en el torneo pero sin inscripción en la base de gestión; re-seed o creá la inscripción manual para arrastrar y editar aquí."
+                                  className="w-24 rounded-xl border border-amber-200/80 bg-amber-50/90 px-2 py-2 text-center text-xs shadow-sm"
+                                >
+                                  <div className="mx-auto mb-1 w-fit">
+                                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200/80 text-[10px] font-semibold text-amber-950" aria-hidden>
+                                      ?
+                                    </span>
+                                  </div>
+                                  <p className="line-clamp-2 font-medium text-slate-800">
+                                    {(entry.assigned.displayName || '').trim() || `Inscripción ${entry.assigned.inscriptionId}`}
+                                  </p>
+                                </div>
+                              )
+                            )}
+                            {stageRosterEntries.length === 0 ? (
+                              <p className="text-xs text-slate-500">Sin {entityPlural} asignados</p>
+                            ) : null}
                           </div>
                         ) : null}
 

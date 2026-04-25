@@ -44,7 +44,7 @@ export const TieBreakRules: React.FC = () => {
 						<div className="flex items-center gap-2 text-xs">
 							<button type="button" onClick={() => move(index, -1)} className="px-2 py-1 rounded bg-brand-blue/70 hover:bg-brand-blue">↑</button>
 							<button type="button" onClick={() => move(index, 1)} className="px-2 py-1 rounded bg-brand-blue/70 hover:bg-brand-blue">↓</button>
-							<button type="button" onClick={() => remove(index)} className="px-2 py-1 rounded bg-white/10 hover:bg-white/20">Eliminar</button>
+							<button type="button" onClick={() => remove(index)} className="px-2 py-1 rounded bg-white/10 hover:bg-surface-3">Eliminar</button>
 						</div>
 					</li>
 				))}

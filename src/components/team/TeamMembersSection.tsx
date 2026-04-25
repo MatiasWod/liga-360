@@ -52,7 +52,7 @@ export const TeamMembersSection: React.FC<TeamMembersSectionProps> = ({
 
       <Table headers={['Integrante', 'Apodo', 'DNI', 'Estado', ...(readOnly ? [] : ['Acciones'])]}>
         {participants.map((participant) => (
-          <tr key={participant.id} className="hover:bg-slate-50">
+          <tr key={participant.id} className="hover:bg-surface-2">
             <td className="px-4 py-3">
               <div className="flex items-center gap-3">
                 <Avatar
@@ -80,7 +80,7 @@ export const TeamMembersSection: React.FC<TeamMembersSectionProps> = ({
                   <button
                     type="button"
                     onClick={() => onEditParticipant(participant.id)}
-                    className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                    className="rounded-lg p-2 text-slate-600 hover:bg-surface-3"
                     aria-label="Editar integrante"
                   >
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
