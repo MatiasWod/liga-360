@@ -109,6 +109,8 @@ type Mutation {
   generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
   generateSingleEliminationBracket(stageId: ID!, doubleRound: Boolean!): [Match!]!
   generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  # Conserva sólo hasta `lastRoundInclusive` (elimina todas las llaves de ronda mayor).
+  trimEliminationBracketAfterRound(stageId: ID!, tournamentId: ID!, lastRoundInclusive: Int!): Boolean!
   assignInscriptionToMatchSlot(
     stageId: ID!
     matchId: ID!
@@ -155,6 +157,8 @@ type Mutation {
     venue: String
     referee: String
   ): MatchDateTimeResult!
+  # Transición (emitida por la etapa del partido) asociada al ganador para avance / referencia.
+  setMatchWinnerAdvancement(matchId: ID!, transitionId: ID): Match!
 }
 
 type MatchResult {
@@ -280,6 +284,7 @@ type Match {
   homeScore: Int
   awayScore: Int
   status: String
+  winnerAdvancementTransitionId: ID
 }
 
 type Key {

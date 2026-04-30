@@ -21,12 +21,22 @@ import {
 } from '../../services/tournaments/configuration';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
+import { EliminationInitWizard } from './EliminationInitWizard';
 import type {
   AssignedInscription,
   TournamentCompetition as Competition,
   TournamentEntity as Tournament,
   TournamentStage as Stage,
 } from './types';
+import {
+  countTeamsFromInboundTransition as countTeamsFromTransition,
+  describeInboundSelectionNatural as describeSelectionNatural,
+} from './transitionInboundCounts';
+import { shortPhaseTabTitle } from './BracketParticipantPicker';
+import {
+  deriveEligibleInscriptionsFromIncomingTransitions,
+  type EligibleInscription,
+} from './incomingTransitionEligibility';
 
 /** Entrada en la grilla de una fase: fila en Postgres o asignación sólo en Neo4j (p. ej. seeds viejos). */
 type StageRosterEntry =
@@ -48,6 +58,24 @@ function buildStageRosterEntries(
     if (label) out.push({ kind: 'graphOnly', assigned });
   }
   return out;
+}
+
+/** Círculo punteado: plaza sintética sin equipo (compacto frente a la palabra «pendiente»). */
+function InboundEligiblePendingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <circle
+        cx="6"
+        cy="6"
+        r="4.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeDasharray="1.85 1.45"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 type Tab = 'gestion' | 'inicializacion' | 'fixture';
@@ -92,89 +120,6 @@ function teamsPerGroup(stage: Stage): number | null {
 
 type StageTransition = NonNullable<Stage['transitions']>[number];
 
-function countTeamsFromTransition(tr: StageTransition, fromStage: Stage): number {
-  const kind = String(tr.selectionKind || 'top').toLowerCase();
-  const cfg = parseJsonSafe(fromStage.configJson || null) || {};
-  if (kind === 'range') {
-    const from = Number(tr.rangeFrom) || 0;
-    const to = Number(tr.rangeTo) || 0;
-    return Math.max(0, to - from + 1);
-  }
-  if (kind === 'bottom') {
-    const b = Number(tr.bottomN) || 0;
-    if (fromStage.format === 'groups') {
-      const numGroups = (fromStage.groups || []).length || Number(cfg.numGroups) || 0;
-      const perGroup = Math.min(b, Number(cfg.teamsPerGroup) || b);
-      return numGroups > 0 ? numGroups * perGroup : b;
-    }
-    return b;
-  }
-  const t = Number(tr.topN) || 0;
-  if (fromStage.format === 'groups') {
-    const numGroups = (fromStage.groups || []).length || Number(cfg.numGroups) || 0;
-    const teamsPerG = Number(cfg.teamsPerGroup) || 0;
-    if (numGroups <= 0) return t;
-    const perGroup = Math.min(t, teamsPerG || t);
-    return perGroup * numGroups;
-  }
-  return t;
-}
-
-function describeSelectionNatural(tr: StageTransition, fromStage: Stage): string {
-  const kind = String(tr.selectionKind || 'top').toLowerCase();
-  if (kind === 'range') {
-    const from = Number(tr.rangeFrom) || 0;
-    const to = Number(tr.rangeTo) || 0;
-    return `puestos ${from} a ${to} en la tabla`;
-  }
-  if (kind === 'bottom') {
-    const b = Number(tr.bottomN) || 0;
-    return fromStage.format === 'groups' ? `últimos ${b} por grupo` : `últimos ${b} en la tabla`;
-  }
-  const t = Number(tr.topN) || 0;
-  return fromStage.format === 'groups' ? `primeros ${t} por grupo` : `primeros ${t} en la tabla`;
-}
-
-/** Etiquetas previstas por cupo (p. ej. 1° Grupo A, 2° Grupo B) para cruzar con la 1ª ronda. */
-function buildQualifierLabels(tr: StageTransition, fromStage: Stage): string[] {
-  const kind = String(tr.selectionKind || 'top').toLowerCase();
-  const cfg = parseJsonSafe(fromStage.configJson || null) || {};
-  const groups = [...(fromStage.groups || [])].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
-  if (kind === 'range') {
-    const from = Number(tr.rangeFrom) || 0;
-    const to = Number(tr.rangeTo) || 0;
-    const n = Math.max(0, to - from + 1);
-    return Array.from({ length: n }, (_, i) => `${from + i}° puesto · ${fromStage.name}`);
-  }
-  if (kind === 'bottom') {
-    const b = Number(tr.bottomN) || 0;
-    if (fromStage.format === 'groups') {
-      const out: string[] = [];
-      for (const g of groups) {
-        for (let k = 1; k <= b; k++) {
-          out.push(`${k}° desde abajo · ${g.name}`);
-        }
-      }
-      return out.length > 0 ? out : Array.from({ length: b }, (_, i) => `Último ${i + 1} · ${fromStage.name}`);
-    }
-    return Array.from({ length: b }, (_, i) => `Último ${i + 1} · ${fromStage.name}`);
-  }
-  const t = Number(tr.topN) || 0;
-  if (fromStage.format === 'groups') {
-    const out: string[] = [];
-    for (const g of groups) {
-      for (let rank = 1; rank <= t; rank++) {
-        out.push(`${rank}° ${g.name}`);
-      }
-    }
-    return out.length > 0 ? out : Array.from({ length: t }, (_, i) => `${i + 1}° (grupo) · ${fromStage.name}`);
-  }
-  if (fromStage.format === 'league') {
-    return Array.from({ length: t }, (_, i) => `${i + 1}° ${fromStage.name}`);
-  }
-  return Array.from({ length: t }, (_, i) => `Clasificado ${i + 1} · ${fromStage.name}`);
-}
-
 function collectIncomingTransitions(
   tournament: Tournament | null,
   targetStageId: string
@@ -197,20 +142,6 @@ function collectIncomingTransitions(
   return out;
 }
 
-function flattenQualifierLabels(
-  incoming: Array<{ fromStage: Stage; tr: StageTransition; fromCompetitionName: string }>
-): string[] {
-  const labels: string[] = [];
-  for (const { fromStage, tr, fromCompetitionName } of incoming) {
-    const part = buildQualifierLabels(tr, fromStage);
-    const prefix = fromCompetitionName ? `[${fromCompetitionName}] ` : '';
-    for (const p of part) {
-      labels.push(`${prefix}${p}`);
-    }
-  }
-  return labels;
-}
-
 type IncomingTransitionRow = ReturnType<typeof collectIncomingTransitions>[number];
 
 function InitializationInboundBanner({
@@ -228,22 +159,22 @@ function InitializationInboundBanner({
   );
   if (incoming.length === 0) {
     return (
-      <div className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-snug text-slate-600">
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2">
-          <span className="font-medium text-slate-800">Origen:</span> ninguna relación de avance desde otra etapa apunta a esta
+      <div className="mt-3 border-t border-border-subtle pt-3 text-[11px] leading-snug text-text-muted">
+        <div className="rounded-lg border border-dashed border-border-subtle bg-surface-1 px-3 py-2">
+          <span className="font-medium text-text-primary">Origen:</span> ninguna relación de avance desde otra etapa apunta a esta
           fase. Podés asignar {entityPlural} manualmente o usar esta etapa como entrada directa.
         </div>
       </div>
     );
   }
   return (
-    <div className="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-snug text-slate-800">
-      <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2">
-        <p className="font-medium text-emerald-950">
+    <div className="mt-3 border-t border-border-subtle pt-3 text-[11px] leading-snug text-text-primary">
+      <div className="rounded-lg border border-accent-primary/40 bg-accent-soft px-3 py-2">
+        <p className="font-medium text-success-base">
           {total} {total === 1 ? entitySingular : entityPlural} desde otra{incoming.length > 1 ? 's' : ''} fase
           {incoming.length > 1 ? 's' : ''}
         </p>
-        <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-slate-700">
+        <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-text-muted">
           {incoming.map(({ fromStage, tr, fromCompetitionName }) => {
             const n = countTeamsFromTransition(tr, fromStage);
             const sel = describeSelectionNatural(tr, fromStage);
@@ -251,7 +182,7 @@ function InitializationInboundBanner({
             return (
               <li key={tr.id}>
                 <span className="font-medium">{n}</span> {n === 1 ? entitySingular : entityPlural} desde{' '}
-                <strong>{fromStage.name}</strong>
+                <strong className="text-text-primary">{fromStage.name}</strong>
                 {fromCompetitionName ? ` · ${fromCompetitionName}` : ''}: {sel}
                 {lbl ? ` · ${lbl}` : ''}
               </li>
@@ -324,6 +255,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   const [tournament, setTournament] = React.useState<Tournament | null>(null);
   const [inscriptions, setInscriptions] = React.useState<InscriptionItem[]>([]);
   const [initializationCompetitionId, setInitializationCompetitionId] = React.useState('');
+  const [initializationStageId, setInitializationStageId] = React.useState('');
   const [publicInviteCode, setPublicInviteCode] = React.useState('');
   const [targetedInvitesPendingCount, setTargetedInvitesPendingCount] = React.useState(0);
   const [targetedInvitesRejectedCount, setTargetedInvitesRejectedCount] = React.useState(0);
@@ -594,6 +526,37 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     return filtered;
   }, [inscriptions, tournament, acceptedTeamsFilter, inscriptionById, assignmentByInscriptionId]);
 
+  /** Mismo criterio de cupo que el listado de Inicialización (PENDIENTE + ACEPTADO) + asignados sólo en grafo cuando faltaban en ese listado por estado. */
+  const eliminationBracketParticipantPool = React.useMemo(() => {
+    const rows = new Map<string, { id: string | number; display_name: string }>();
+
+    const addRow = (sid: string, idVal: string | number, displayName: string) => {
+      if (rows.has(sid)) return;
+      rows.set(sid, { id: idVal, display_name: displayName });
+    };
+
+    for (const item of inscriptions) {
+      if (!['PENDIENTE', 'ACEPTADO'].includes(String(item.status ?? ''))) continue;
+      addRow(String(item.id), item.id, item.display_name);
+    }
+
+    for (const competition of tournament?.competitions || []) {
+      for (const st of competition.stages || []) {
+        for (const assigned of st.assignedInscriptions || []) {
+          const sid = String(assigned.inscriptionId ?? '').trim();
+          if (!sid) continue;
+          if (rows.has(sid)) continue;
+          const dn = (assigned.displayName || '').trim() || sid;
+          addRow(sid, sid, dn);
+        }
+      }
+    }
+
+    return [...rows.values()].sort((a, b) =>
+      String(a.display_name || '').localeCompare(String(b.display_name || ''), 'es', { sensitivity: 'base' })
+    );
+  }, [inscriptions, tournament]);
+
   const [teamsPage, setTeamsPage] = React.useState(1);
   const teamsPerPage = 12;
   const totalTeamsPages = Math.max(1, Math.ceil(initializationPool.length / teamsPerPage));
@@ -665,6 +628,17 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   React.useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  React.useEffect(() => {
+    const sorted = (initializationCompetition?.stages || [])
+      .slice()
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    if (sorted.length === 0) return;
+    setInitializationStageId((prev) => {
+      const stillValid = sorted.some((s) => s.id === prev);
+      return stillValid ? prev : (sorted[0]?.id ?? '');
+    });
+  }, [initializationCompetition?.id, initializationCompetition?.stages]);
 
   React.useEffect(() => {
     if (tab !== 'inicializacion') return;
@@ -1113,30 +1087,60 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       ) : tab === 'inicializacion' ? (
         <div className="overflow-x-auto">
           <div className="flex min-w-[980px] items-start gap-4">
-          <div className="min-w-0 flex-1 space-y-4">
-            <Card>
-              <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-1">
-                {(tournament.competitions || []).map((competition) => (
-                  <button
-                    key={competition.id}
-                    type="button"
-                    onClick={() => setInitializationCompetitionId(competition.id)}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium ${initializationCompetitionId === competition.id ? 'bg-white text-[#0F2A33] shadow-sm' : 'text-slate-600'}`}
-                  >
-                    {competition.name}
-                  </button>
-                ))}
-              </div>
-          </Card>
+            <div className="min-w-0 flex-1 space-y-4">
+              {/* Tabs de competencia */}
+              <Card>
+                <div className="inline-flex flex-wrap rounded-xl bg-surface-0 p-1">
+                  {(tournament.competitions || []).map((competition) => (
+                    <button
+                      key={competition.id}
+                      type="button"
+                      onClick={() => setInitializationCompetitionId(competition.id)}
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        initializationCompetitionId === competition.id
+                          ? 'bg-surface-3 text-text-primary shadow-sm'
+                          : 'text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      {competition.name}
+                    </button>
+                  ))}
+                </div>
+              </Card>
 
-            {initializationCompetition ? (
-          <Card>
-                <h3 className="mb-2 text-sm font-semibold text-slate-800">{initializationCompetition.name}</h3>
-                <div className="space-y-3">
-                  {(initializationCompetition.stages || [])
-                    .slice()
-                    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
-                    .map((stage) => {
+              {initializationCompetition ? (
+                <>
+                  {/* Tabs de fase */}
+                  {(initializationCompetition.stages || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(initializationCompetition.stages || [])
+                        .slice()
+                        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+                        .map((stage) => (
+                          <button
+                            key={stage.id}
+                            type="button"
+                            onClick={() => setInitializationStageId(stage.id)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              initializationStageId === stage.id
+                                ? 'border-accent-primary bg-accent-soft text-success-base'
+                                : 'border-border-subtle bg-surface-2 text-text-muted hover:border-border-strong hover:text-text-primary'
+                            }`}
+                          >
+                            {stage.order}. {stage.name}
+                          </button>
+                        ))}
+                    </div>
+                  ) : null}
+
+                  {/* Contenido de la fase activa */}
+                  {(() => {
+                    const sortedStages = (initializationCompetition.stages || [])
+                      .slice()
+                      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+                    const stage = sortedStages.find((s) => s.id === initializationStageId) ?? sortedStages[0];
+                    if (!stage) return null;
+
                     const stageRosterEntries = buildStageRosterEntries(stage.assignedInscriptions, inscriptionById);
                     const cap = stageCapacity(stage);
                     const stageAssignedList = stage.assignedInscriptions || [];
@@ -1153,363 +1157,378 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                         ? stageAssignedList.filter((a) => !idsInGroups.has(String(a.inscriptionId)))
                         : [];
                     const occupancy =
-                      stage.format === 'groups'
-                        ? stageAssignedList.length
-                        : stageRosterEntries.length;
+                      stage.format === 'groups' ? stageAssignedList.length : stageRosterEntries.length;
                     const incomingTr = collectIncomingTransitions(tournament, stage.id);
-                    const previewLabels = flattenQualifierLabels(incomingTr);
-                    const eliminationPairingCount =
-                      stage.format === 'elimination' ? Math.floor(previewLabels.length / 2) : 0;
+                    const inboundEligibles: EligibleInscription[] =
+                      stage.format === 'league' || stage.format === 'composed'
+                        ? deriveEligibleInscriptionsFromIncomingTransitions(tournament, stage.id)
+                        : [];
+                    const inboundSectionOrder: string[] = [];
+                    const inboundBySection = new Map<string, EligibleInscription[]>();
+                    for (const el of inboundEligibles) {
+                      const st = el.sectionTitle;
+                      if (!inboundBySection.has(st)) {
+                        inboundSectionOrder.push(st);
+                        inboundBySection.set(st, []);
+                      }
+                      inboundBySection.get(st)!.push(el);
+                    }
+                    const assignedToStageIds = new Set<string>();
+                    for (const row of stageRosterEntries) {
+                      if (row.kind === 'inscription') assignedToStageIds.add(String(row.item.id));
+                      else assignedToStageIds.add(String(row.assigned.inscriptionId));
+                    }
+
                     return (
-                      <div
-                        key={stage.id}
-                        className={`rounded-xl border bg-white p-3 transition-all duration-150 ${
-                          dragOverZone === `stage-${stage.id}`
-                            ? 'border-emerald-400 ring-2 ring-emerald-100 shadow-md'
-                            : 'border-slate-200'
-                        }`}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDragEnter={() => setDragOverZone(`stage-${stage.id}`)}
-                        onDragLeave={() => setDragOverZone((prev) => (prev === `stage-${stage.id}` ? null : prev))}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setDragOverZone(null);
-                          if (stage.format === 'groups' || stage.format === 'elimination') return;
-                          const id = Number(e.dataTransfer.getData('text/inscription-id'));
-                          const item = inscriptions.find((x) => x.id === id);
-                          if (item) moveToStage(item, initializationCompetition.id, stage.id);
-                        }}
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-slate-700">{stage.order}. {stage.name}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {stage.format === 'groups' ? (
-                              <>
-                                {occupancy}
-                                {cap ? ` / ${cap}` : ''} cupo fase · {idsInGroups.size} en grupos
-                              </>
-                            ) : (
-                              <>
-                                {occupancy}
-                                {cap ? ` / ${cap}` : ''}
-                              </>
-                            )}{' '}
-                            · {stage.format}
-                          </p>
-                        </div>
-
-                        {stage.format === 'groups' && floatingInStageOnly.length > 0 ? (
-                          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2">
-                            <p className="mb-1.5 text-[11px] font-medium text-amber-900">
-                              Pendientes de ubicar en un grupo ({floatingInStageOnly.length})
+                      <Card>
+                        <div
+                          className={`rounded-xl border p-3 transition-all duration-150 ${
+                            dragOverZone === `stage-${stage.id}`
+                              ? 'border-accent-primary ring-2 ring-accent-soft shadow-md'
+                              : 'border-border-subtle bg-surface-2'
+                          }`}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDragEnter={() => setDragOverZone(`stage-${stage.id}`)}
+                          onDragLeave={() => setDragOverZone((prev) => (prev === `stage-${stage.id}` ? null : prev))}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setDragOverZone(null);
+                            if (stage.format === 'groups' || stage.format === 'elimination') return;
+                            const id = Number(e.dataTransfer.getData('text/inscription-id'));
+                            const item = inscriptions.find((x) => x.id === id);
+                            if (item) moveToStage(item, initializationCompetition.id, stage.id);
+                          }}
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-text-primary">
+                              {stage.order}. {stage.name}
                             </p>
-                            <p className="mb-2 text-[11px] text-amber-800/90">
-                              Los equipos ya están en la fase, pero hay que asignarlos a <strong>Grupo A</strong>,{' '}
-                              <strong>Grupo B</strong>, etc. Arrastrá cada uno al recuadro del grupo.
+                            <p className="text-[11px] text-text-muted">
+                              {stage.format === 'groups' ? (
+                                <>
+                                  {occupancy}
+                                  {cap ? ` / ${cap}` : ''} cupo fase · {idsInGroups.size} en grupos
+                                </>
+                              ) : (
+                                <>
+                                  {occupancy}
+                                  {cap ? ` / ${cap}` : ''}
+                                </>
+                              )}{' '}
+                              · {stage.format}
                             </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {floatingInStageOnly.map((assigned) => {
-                                const item = inscriptionById.get(String(assigned.inscriptionId));
-                                const label =
-                                  item?.display_name?.trim() ||
-                                  assigned.displayName?.trim() ||
-                                  `Inscripción ${assigned.inscriptionId}`;
-                                const canDrag =
-                                  Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
-                                return (
-                                  <div
-                                    key={`float-${stage.id}-${String(assigned.inscriptionId)}`}
-                                    draggable={canDrag}
-                                    onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
-                                    onDragEnd={handleDragEnd}
-                                    className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-md border border-amber-300/80 bg-white px-2 py-1 text-[11px] text-amber-950 shadow-sm ${
-                                      canDrag ? 'cursor-grab active:cursor-grabbing' : ''
-                                    }`}
-                                  >
-                                    {item ? (
-                                      renderEntryAvatar(item, 'h-5 w-5')
-                                    ) : (
-                                      <span className="inline-flex h-5 w-5 shrink-0 rounded-full bg-amber-200/80" aria-hidden />
-                                    )}
-                                    <span className="truncate font-medium">{label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
                           </div>
-                        ) : null}
 
-                        {stage.format === 'groups' ? (
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                            {(stage.groups || [])
-                              .slice()
-                              .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
-                              .map((group) => {
-                                const assignedList = group.assignedInscriptions || [];
-                                const groupCap = Number(group.capacity || teamsPerGroup(stage) || 0);
-                                return (
-                                  <div
-                                    key={group.id}
-                                    className={`rounded-lg border p-2 ${dragOverZone === `group-${group.id}` ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'}`}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDragEnter={() => setDragOverZone(`group-${group.id}`)}
-                                    onDragLeave={() => setDragOverZone((prev) => (prev === `group-${group.id}` ? null : prev))}
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      setDragOverZone(null);
-                                      const id = Number(e.dataTransfer.getData('text/inscription-id'));
-                                      const item = inscriptions.find((x) => x.id === id);
-                                      if (item) moveToGroup(item, stage, group.id);
-                                    }}
-                                  >
-                                    <p className="mb-2 text-xs font-semibold text-slate-700">
-                                      {group.name} · {assignedList.length}
-                                      {groupCap > 0 ? `/${groupCap}` : ''}
-                                    </p>
-                                    <div className="space-y-1">
-                                      {assignedList.map((assigned) => {
-                                        const item = inscriptionById.get(String(assigned.inscriptionId));
-                                        const label =
-                                          item?.display_name?.trim() ||
-                                          assigned.displayName?.trim() ||
-                                          `Inscripción ${assigned.inscriptionId}`;
-                                        const canDrag =
-                                          Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
-                                        return (
-                                          <div
-                                            key={`${group.id}-${String(assigned.inscriptionId)}`}
-                                            draggable={canDrag}
-                                            onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
-                                            onDragEnd={handleDragEnd}
-                                            className={`flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs transition-all duration-150 hover:border-emerald-300 ${
-                                              canDrag
-                                                ? draggingInscriptionId === String(item!.id)
-                                                  ? 'opacity-60'
-                                                  : 'cursor-grab active:cursor-grabbing'
-                                                : 'opacity-95'
-                                            }`}
-                                          >
-                                            {item ? (
-                                              renderEntryAvatar(item, 'h-6 w-6')
-                                            ) : (
-                                              <span className="inline-flex h-6 w-6 shrink-0 rounded-full bg-slate-200" aria-hidden />
-                                            )}
-                                            <p className="line-clamp-1 font-medium text-slate-800">{label}</p>
-                                          </div>
-                                        );
-                                      })}
-                                      {assignedList.length === 0 ? (
-                                        <p className="text-[11px] text-slate-500">Sin {entityPlural}</p>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        ) : null}
-
-                        {stage.format === 'elimination' ? (
-                          <div className="space-y-3">
-                            {eliminationPairingCount > 0 ? (
-                              <div className="grid gap-4">
-                                {Array.from({ length: eliminationPairingCount }, (_, idx) => {
-                                  const home = previewLabels[idx * 2] ?? '—';
-                                  const away = previewLabels[idx * 2 + 1] ?? '—';
+                          {stage.format === 'groups' && floatingInStageOnly.length > 0 ? (
+                            <div className="mb-3 rounded-lg border border-warning-base/40 bg-warning-soft px-3 py-2">
+                              <p className="mb-1.5 text-[11px] font-medium text-warning-base">
+                                Pendientes de ubicar en un grupo ({floatingInStageOnly.length})
+                              </p>
+                              <p className="mb-2 text-[11px] text-text-muted">
+                                Los equipos ya están en la fase, pero hay que asignarlos a <strong className="text-text-primary">Grupo A</strong>,{' '}
+                                <strong className="text-text-primary">Grupo B</strong>, etc. Arrastrá cada uno al recuadro del grupo.
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {floatingInStageOnly.map((assigned) => {
+                                  const item = inscriptionById.get(String(assigned.inscriptionId));
+                                  const label =
+                                    item?.display_name?.trim() ||
+                                    assigned.displayName?.trim() ||
+                                    `Inscripción ${assigned.inscriptionId}`;
+                                  const canDrag =
+                                    Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
                                   return (
                                     <div
-                                      key={`elim-preview-${stage.id}-${idx}`}
-                                      className="overflow-hidden rounded-xl border border-slate-300/90 bg-gradient-to-b from-slate-100/90 to-white shadow-sm"
+                                      key={`float-${stage.id}-${String(assigned.inscriptionId)}`}
+                                      draggable={canDrag}
+                                      onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
+                                      onDragEnd={handleDragEnd}
+                                      className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-md border border-warning-base/50 bg-surface-2 px-2 py-1 text-[11px] text-warning-base shadow-sm ${
+                                        canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+                                      }`}
                                     >
-                                      <div className="flex items-stretch gap-1.5 p-2 sm:gap-2">
-                                        <div className="flex min-h-[3rem] flex-1 flex-col justify-center rounded-lg border border-slate-200/90 bg-white px-2 py-2 text-center text-[11px] font-semibold leading-snug text-slate-900 shadow-sm">
-                                          {home}
-                                        </div>
-                                        <div className="flex shrink-0 flex-col items-center justify-center px-0.5">
-                                          <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-black tracking-wider text-white">
-                                            VS
-                                          </span>
-                                        </div>
-                                        <div className="flex min-h-[3rem] flex-1 flex-col justify-center rounded-lg border border-slate-200/90 bg-white px-2 py-2 text-center text-[11px] font-semibold leading-snug text-slate-900 shadow-sm">
-                                          {away}
-                                        </div>
-                                      </div>
-                                      <div className="flex flex-col items-center border-t border-slate-200/80 bg-slate-50/50 px-2 pb-2 pt-1">
-                                        <div className="mb-1 h-3 w-px bg-slate-400/80" aria-hidden />
-                                        <div className="w-full max-w-[min(100%,14rem)] rounded-lg border-2 border-dashed border-emerald-500/60 bg-emerald-50 px-3 py-2 text-center shadow-sm">
-                                          <p className="text-[11px] font-bold text-emerald-900">Ganador</p>
-                                          <p className="mt-0.5 text-[10px] font-medium text-emerald-800/90">
-                                            Avanza a la siguiente ronda
-                                          </p>
-                                        </div>
-                                      </div>
+                                      {item ? (
+                                        renderEntryAvatar(item, 'h-5 w-5')
+                                      ) : (
+                                        <span className="inline-flex h-5 w-5 shrink-0 rounded-full bg-warning-soft" aria-hidden />
+                                      )}
+                                      <span className="truncate font-medium">{label}</span>
                                     </div>
                                   );
                                 })}
                               </div>
-                            ) : null}
-                            {(stage.matches || [])
-                              .slice()
-                              .sort((a, b) => (Number(a.round || 0) - Number(b.round || 0)) || String(a.id).localeCompare(String(b.id)))
-                              .map((match, index) => (
-                                <div key={match.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                                  <p className="mb-2 text-[11px] font-semibold text-slate-600">
-                                    Llave {index + 1} · Ronda {match.round || 1}
-                                    {match.fixtureCode ? ` · ${match.fixtureCode}` : ''}
-                                  </p>
-                                  {(['home', 'away'] as const).map((slotRole) => {
-                                    const slot = slotRole === 'home' ? match.homeAssignedInscription : match.awayAssignedInscription;
-                                    const slotItem = slot ? inscriptionById.get(String(slot.inscriptionId)) : null;
-                                    const showBye = slotRole === 'away' && !slot && Boolean(match.homeAssignedInscription);
-                                    return (
-                                      <div
-                                        key={`${match.id}-${slotRole}`}
-                                        className="mb-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
-                                      >
-                                        <span className="mr-1 font-semibold text-slate-500">{slotRole === 'home' ? 'A' : 'B'}:</span>
-                                        {slotItem
-                                          ? slotItem.display_name
-                                          : slot?.displayName?.trim() || (showBye ? 'BYE' : '—')}
+                            </div>
+                          ) : null}
+
+                          {stage.format === 'groups' ? (
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                              {(stage.groups || [])
+                                .slice()
+                                .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+                                .map((group) => {
+                                  const assignedList = group.assignedInscriptions || [];
+                                  const groupCap = Number(group.capacity || teamsPerGroup(stage) || 0);
+                                  return (
+                                    <div
+                                      key={group.id}
+                                      className={`rounded-lg border p-2 ${
+                                        dragOverZone === `group-${group.id}`
+                                          ? 'border-accent-primary ring-2 ring-accent-soft'
+                                          : 'border-border-subtle bg-surface-1'
+                                      }`}
+                                      onDragOver={(e) => e.preventDefault()}
+                                      onDragEnter={() => setDragOverZone(`group-${group.id}`)}
+                                      onDragLeave={() => setDragOverZone((prev) => (prev === `group-${group.id}` ? null : prev))}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        setDragOverZone(null);
+                                        const id = Number(e.dataTransfer.getData('text/inscription-id'));
+                                        const item = inscriptions.find((x) => x.id === id);
+                                        if (item) moveToGroup(item, stage, group.id);
+                                      }}
+                                    >
+                                      <p className="mb-2 text-xs font-semibold text-text-primary">
+                                        {group.name} · {assignedList.length}
+                                        {groupCap > 0 ? `/${groupCap}` : ''}
+                                      </p>
+                                      <div className="space-y-1">
+                                        {assignedList.map((assigned) => {
+                                          const item = inscriptionById.get(String(assigned.inscriptionId));
+                                          const label =
+                                            item?.display_name?.trim() ||
+                                            assigned.displayName?.trim() ||
+                                            `Inscripción ${assigned.inscriptionId}`;
+                                          const canDrag =
+                                            Boolean(item) && ['PENDIENTE', 'ACEPTADO'].includes(String(item!.status));
+                                          return (
+                                            <div
+                                              key={`${group.id}-${String(assigned.inscriptionId)}`}
+                                              draggable={canDrag}
+                                              onDragStart={canDrag ? (e) => handleDragStart(e, item!) : undefined}
+                                              onDragEnd={handleDragEnd}
+                                              className={`flex items-center gap-2 rounded-md border border-border-subtle bg-surface-2 px-2 py-1 text-xs transition-all duration-150 hover:border-accent-primary ${
+                                                canDrag
+                                                  ? draggingInscriptionId === String(item!.id)
+                                                    ? 'opacity-60'
+                                                    : 'cursor-grab active:cursor-grabbing'
+                                                  : 'opacity-95'
+                                              }`}
+                                            >
+                                              {item ? (
+                                                renderEntryAvatar(item, 'h-6 w-6')
+                                              ) : (
+                                                <span className="inline-flex h-6 w-6 shrink-0 rounded-full bg-surface-3" aria-hidden />
+                                              )}
+                                              <p className="line-clamp-1 font-medium text-text-primary">{label}</p>
+                                            </div>
+                                          );
+                                        })}
+                                        {assignedList.length === 0 ? (
+                                          <p className="text-[11px] text-text-subtle">Sin {entityPlural}</p>
+                                        ) : null}
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                          </div>
-                        ) : null}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ) : null}
 
-                        {(stage.format === 'league' || stage.format === 'composed') ? (
-                          <div className="flex flex-wrap gap-2">
-                            {stageRosterEntries.map((entry) =>
-                              entry.kind === 'inscription' ? (
-                                <div
-                                  key={entry.item.id}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, entry.item)}
-                                  onDragEnd={handleDragEnd}
-                                  className={`w-24 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md ${draggingInscriptionId === String(entry.item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
-                                >
-                                  <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(entry.item, 'h-8 w-8')}</div>
-                                  <p className="line-clamp-2 font-medium text-slate-800">{entry.item.display_name}</p>
-                                </div>
-                              ) : (
-                                <div
-                                  key={`gql-${String(entry.assigned.inscriptionId)}`}
-                                  draggable={false}
-                                  title="Asignado en el torneo pero sin inscripción en la base de gestión; re-seed o creá la inscripción manual para arrastrar y editar aquí."
-                                  className="w-24 rounded-xl border border-amber-200/80 bg-amber-50/90 px-2 py-2 text-center text-xs shadow-sm"
-                                >
-                                  <div className="mx-auto mb-1 w-fit">
-                                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200/80 text-[10px] font-semibold text-amber-950" aria-hidden>
-                                      ?
-                                    </span>
+                          {inboundEligibles.length > 0 ? (
+                            <div className="mb-3 rounded-lg border border-border-subtle bg-surface-1 px-2.5 py-2">
+                              <p className="mb-2 text-[11px] font-semibold text-text-primary">Origen por plaza</p>
+                              <div className="space-y-2">
+                                {inboundSectionOrder.map((sectionTitle) => (
+                                  <div key={`inbound-${stage.id}-${sectionTitle}`}>
+                                    <p className="mb-1 truncate text-[10px] font-medium text-text-muted" title={sectionTitle}>
+                                      {shortPhaseTabTitle(sectionTitle)}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {(inboundBySection.get(sectionTitle) ?? []).map((el) => {
+                                        const synthetic = String(el.inscriptionId || '').startsWith('liga360-slot:');
+                                        const enLista = assignedToStageIds.has(String(el.inscriptionId));
+                                        return (
+                                          <div
+                                            key={`slot-${el.sectionTitle}-${el.inscriptionId}`}
+                                            className={`inline-flex max-w-[200px] min-w-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] leading-snug tabular-nums ${
+                                              enLista
+                                                ? 'border-success-base/35 bg-accent-soft text-text-primary'
+                                                : synthetic
+                                                  ? 'border-dashed border-border-strong bg-surface-2 text-text-muted'
+                                                  : 'border-border-subtle bg-surface-2 text-text-primary'
+                                            }`}
+                                            title={el.optionLabel}
+                                          >
+                                            <span className="shrink-0 font-mono text-[10px] font-semibold text-accent-primary">{el.shortLabel}</span>
+                                            <span className="min-w-0 truncate">{el.displayName}</span>
+                                            {enLista ? (
+                                              <span className="shrink-0 text-[9px] font-medium uppercase text-success-base" aria-label="Ya en lista">
+                                                ✓
+                                              </span>
+                                            ) : null}
+                                            {synthetic ? (
+                                              <InboundEligiblePendingIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
-                                  <p className="line-clamp-2 font-medium text-slate-800">
-                                    {(entry.assigned.displayName || '').trim() || `Inscripción ${entry.assigned.inscriptionId}`}
-                                  </p>
-                                </div>
-                              )
-                            )}
-                            {stageRosterEntries.length === 0 ? (
-                              <p className="text-xs text-slate-500">Sin {entityPlural} asignados</p>
-                            ) : null}
-                          </div>
-                        ) : null}
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
 
-                        <InitializationInboundBanner
-                          incoming={incomingTr}
-                          entitySingular={entitySingular}
-                          entityPlural={entityPlural}
-                        />
-                      </div>
+                          {stage.format === 'elimination' ? (
+                            <EliminationInitWizard
+                              tournamentId={tournamentId}
+                              tournament={tournament}
+                              stage={stage}
+                              participantPoolItems={eliminationBracketParticipantPool}
+                              inscriptionById={inscriptionById}
+                              onReload={async () => {
+                                await loadTournament();
+                              }}
+                              setSaving={setSaving}
+                              setError={setError}
+                            />
+                          ) : null}
+
+                          {(stage.format === 'league' || stage.format === 'composed') ? (
+                            <div className="flex flex-wrap gap-2">
+                              {stageRosterEntries.map((entry) =>
+                                entry.kind === 'inscription' ? (
+                                  <div
+                                    key={entry.item.id}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, entry.item)}
+                                    onDragEnd={handleDragEnd}
+                                    className={`w-24 rounded-xl border border-border-subtle bg-surface-2 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-primary hover:shadow-md ${
+                                      draggingInscriptionId === String(entry.item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'
+                                    }`}
+                                  >
+                                    <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(entry.item, 'h-8 w-8')}</div>
+                                    <p className="line-clamp-2 font-medium text-text-primary">{entry.item.display_name}</p>
+                                  </div>
+                                ) : (
+                                  <div
+                                    key={`gql-${String(entry.assigned.inscriptionId)}`}
+                                    draggable={false}
+                                    title="Asignado en el torneo pero sin inscripción en la base de gestión; re-seed o creá la inscripción manual para arrastrar y editar aquí."
+                                    className="w-24 rounded-xl border border-warning-base/40 bg-warning-soft px-2 py-2 text-center text-xs shadow-sm"
+                                  >
+                                    <div className="mx-auto mb-1 w-fit">
+                                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-warning-soft text-[10px] font-semibold text-warning-base" aria-hidden>
+                                        ?
+                                      </span>
+                                    </div>
+                                    <p className="line-clamp-2 font-medium text-text-primary">
+                                      {(entry.assigned.displayName || '').trim() || `Inscripción ${entry.assigned.inscriptionId}`}
+                                    </p>
+                                  </div>
+                                )
+                              )}
+                              {stageRosterEntries.length === 0 ? (
+                                <p className="text-xs text-text-muted">Sin {entityPlural} asignados</p>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <InitializationInboundBanner
+                            incoming={incomingTr}
+                            entitySingular={entitySingular}
+                            entityPlural={entityPlural}
+                          />
+                        </div>
+                      </Card>
                     );
-                  })}
-                </div>
-              </Card>
-            ) : null}
-          </div>
+                  })()}
+                </>
+              ) : null}
+            </div>
 
-          <Card className="sticky top-4 h-fit w-[360px] shrink-0">
-            <h3 className="mb-2 text-sm font-semibold text-slate-800">Panel de {entityPlural} (A-Z)</h3>
-            <p className="mb-3 text-xs text-slate-500">12 por página · arrastrar a fases</p>
-            <CompetitionPhaseFilter
-              className="mb-3"
-              competitions={phaseFilterCompetitions}
-              onChange={setPhaseFilter}
-            />
-            {visibleRelationOptions.length > 0 ? (
-              <div className="mb-3 rounded-lg border border-slate-200 bg-white p-2">
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Filtro por relaciones</p>
-                <div className="mb-1 flex gap-2">
-                  <select
-                    className="w-[122px] rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                    value={relationFilterMode}
-                    onChange={(e) => setRelationFilterMode(e.target.value as 'include' | 'exclude')}
-                  >
-                    <option value="include">Mostrar solo</option>
-                    <option value="exclude">No mostrar</option>
-                  </select>
-                  <select
-                    multiple
-                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                    value={selectedRelationTransitionIds}
-                    onChange={(e) =>
-                      setSelectedRelationTransitionIds(Array.from(e.target.selectedOptions).map((opt) => opt.value))
-                    }
-                  >
-                    {visibleRelationOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+            {/* Panel lateral de participantes */}
+            <Card className="sticky top-4 h-fit w-[360px] shrink-0">
+              <h3 className="mb-2 text-sm font-semibold text-text-primary">Panel de {entityPlural} (A-Z)</h3>
+              <p className="mb-3 text-xs text-text-muted">12 por página · arrastrar a fases</p>
+              <CompetitionPhaseFilter
+                className="mb-3"
+                competitions={phaseFilterCompetitions}
+                onChange={setPhaseFilter}
+              />
+              {visibleRelationOptions.length > 0 ? (
+                <div className="mb-3 rounded-lg border border-border-subtle bg-surface-2 p-2">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Filtro por relaciones</p>
+                  <div className="mb-1 flex gap-2">
+                    <select
+                      className="w-[122px] rounded-lg border border-border-subtle bg-surface-1 px-2 py-1.5 text-xs text-text-primary"
+                      value={relationFilterMode}
+                      onChange={(e) => setRelationFilterMode(e.target.value as 'include' | 'exclude')}
+                    >
+                      <option value="include">Mostrar solo</option>
+                      <option value="exclude">No mostrar</option>
+                    </select>
+                    <select
+                      multiple
+                      className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface-1 px-2 py-1.5 text-xs text-text-primary"
+                      value={selectedRelationTransitionIds}
+                      onChange={(e) =>
+                        setSelectedRelationTransitionIds(Array.from(e.target.selectedOptions).map((opt) => opt.value))
+                      }
+                    >
+                      {visibleRelationOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-text-subtle">
+                    {selectedRelationTransitionIds.length > 0
+                      ? `${selectedRelationTransitionIds.length} relación(es) seleccionada(s)`
+                      : 'Sin filtro por relaciones'}
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  {selectedRelationTransitionIds.length > 0
-                    ? `${selectedRelationTransitionIds.length} relación(es) seleccionada(s)`
-                    : 'Sin filtro por relaciones'}
-                </p>
+              ) : null}
+              <div className="grid grid-cols-3 gap-2">
+                {pagedPool.map((item) => {
+                  const assignedInfo = assignmentByInscriptionId.get(String(item.id)) || [];
+                  const isInActiveCompetition =
+                    initializationCompetitionId &&
+                    (String(item.competition_id || '') === initializationCompetitionId ||
+                      assignedInfo.some((placement) => placement.competitionId === initializationCompetitionId));
+                  return (
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      onDragEnd={handleDragEnd}
+                      className={`relative rounded-xl border px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-primary hover:shadow-md ${
+                        isInActiveCompetition
+                          ? 'border-accent-primary bg-accent-soft'
+                          : 'border-border-subtle bg-surface-2'
+                      } ${draggingInscriptionId === String(item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
+                      title={item.display_name}
+                    >
+                      <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(item, 'h-10 w-10')}</div>
+                      <p className="line-clamp-2 font-medium text-text-primary">{item.display_name}</p>
+                      <p className="text-[10px] text-text-subtle">{item.status}</p>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null}
-            <div className="grid grid-cols-3 gap-2">
-              {pagedPool.map((item) => {
-                const assignedInfo = assignmentByInscriptionId.get(String(item.id)) || [];
-                const isInActiveCompetition =
-                  initializationCompetitionId &&
-                  (String(item.competition_id || '') === initializationCompetitionId ||
-                    assignedInfo.some((placement) => placement.competitionId === initializationCompetitionId));
-                return (
-                  <div
-                    key={item.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, item)}
-                    onDragEnd={handleDragEnd}
-                    className={`relative rounded-xl border px-2 py-2 text-center text-xs shadow-sm ${
-                      isInActiveCompetition
-                        ? 'border-emerald-300 bg-emerald-50'
-                        : 'border-slate-200 bg-slate-100'
-                    } transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md ${
-                      draggingInscriptionId === String(item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'
-                    }`}
-                    title={item.display_name}
-                  >
-                    <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(item, 'h-10 w-10')}</div>
-                    <p className="line-clamp-2 font-medium text-slate-800">{item.display_name}</p>
-                    <p className="text-[10px] text-slate-500">{item.status}</p>
-        </div>
-                );
-              })}
-                      </div>
-            {initializationPool.length === 0 ? <p className="mt-2 text-xs text-slate-500">No hay {entityPlural} para mostrar.</p> : null}
-            {initializationPool.length > 0 ? (
-              <div className="mt-3 flex items-center justify-between">
-                <p className="text-xs text-slate-500">Página {teamsPage} de {totalTeamsPages}</p>
-                <div className="flex gap-2">
-                  <Button type="button" variant="secondary" disabled={teamsPage <= 1} onClick={() => setTeamsPage((prev) => Math.max(1, prev - 1))}>Anterior</Button>
-                  <Button type="button" variant="secondary" disabled={teamsPage >= totalTeamsPages} onClick={() => setTeamsPage((prev) => Math.min(totalTeamsPages, prev + 1))}>Siguiente</Button>
+              {initializationPool.length === 0 ? (
+                <p className="mt-2 text-xs text-text-muted">No hay {entityPlural} para mostrar.</p>
+              ) : null}
+              {initializationPool.length > 0 ? (
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xs text-text-muted">Página {teamsPage} de {totalTeamsPages}</p>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" disabled={teamsPage <= 1} onClick={() => setTeamsPage((prev) => Math.max(1, prev - 1))}>Anterior</Button>
+                    <Button type="button" variant="secondary" disabled={teamsPage >= totalTeamsPages} onClick={() => setTeamsPage((prev) => Math.min(totalTeamsPages, prev + 1))}>Siguiente</Button>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </Card>
+              ) : null}
+            </Card>
           </div>
         </div>
       ) : null}

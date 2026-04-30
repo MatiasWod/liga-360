@@ -108,12 +108,12 @@ export async function updateStage(
   ).then((response: any) => response.updateStage);
 }
 
-export async function generateEliminationBracket(stageId: string) {
+export async function generateEliminationBracket(stageId: string, doubleRound: boolean = false) {
   await gql(
-    `mutation GenerateEliminationBracket($stageId: ID!) {
-        generateEliminationBracket(stageId: $stageId) { id }
+    `mutation GenerateSingleEliminationBracket($stageId: ID!, $doubleRound: Boolean!) {
+        generateSingleEliminationBracket(stageId: $stageId, doubleRound: $doubleRound) { id }
     }`,
-    { stageId }
+    { stageId, doubleRound }
   );
 }
 

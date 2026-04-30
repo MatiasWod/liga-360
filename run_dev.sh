@@ -207,6 +207,9 @@ start_backend inscriptions-svc \
 
 # Gateway depende de tournaments-svc — le damos 2 segundos
 sleep 2
+# El gateway (Apollo IntrospectAndCompose) toma el schema del subgraph sólo AL ARRANCAR.
+# Si tocás tournaments-svc/schema.graphql o resolvers nuevos, reiniciá el gateway tras levantar
+# tournaments-svc: ./run_dev.sh --svc gateway   (o Ctrl+C run_dev.sh y ./run_dev.sh de nuevo).
 start_backend gateway \
   PORT=4000 NODE_ENV=development \
   TOURNAMENTS_SUBGRAPH_URL=http://localhost:4001/graphql

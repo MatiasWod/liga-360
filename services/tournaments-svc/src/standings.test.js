@@ -94,7 +94,8 @@ test('computeStandings: ignora partidos no finalizados', () => {
   assert.equal(rows[1].points, 0);
 });
 
-test('computeStandings: descarta match finished con score null', () => {
+test('computeStandings: trata score null como 0 en match finished (consistente con UI)', () => {
+  // homeScore null → se interpreta como 0; el partido sí cuenta (0-1 → Boca gana).
   const rows = computeStandings(
     [{ homeInscriptionId: 'A', awayInscriptionId: 'B', homeDisplayName: 'Atlas', awayDisplayName: 'Boca', homeScore: null, awayScore: 1, matchStatus: 'finished' }],
     [
@@ -102,8 +103,12 @@ test('computeStandings: descarta match finished con score null', () => {
       { inscriptionId: 'B', displayName: 'Boca' },
     ]
   );
-  assert.equal(rows[0].played, 0);
-  assert.equal(rows[1].played, 0);
+  const atlas = rows.find((r) => r.inscriptionId === 'A');
+  const boca  = rows.find((r) => r.inscriptionId === 'B');
+  assert.equal(atlas.played, 1);
+  assert.equal(atlas.lost,   1);
+  assert.equal(boca.played,  1);
+  assert.equal(boca.won,     1);
 });
 
 test('computeStandings: usa config de puntos personalizada', () => {

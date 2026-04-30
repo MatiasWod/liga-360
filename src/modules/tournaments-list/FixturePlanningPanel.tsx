@@ -1,6 +1,8 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
 import { MatchEditDrawer } from '../../components/match-edit/MatchEditDrawer';
+import { FixtureViewer } from '../../components/fixture-viewer';
+import type { FixtureGroup, Round } from '../../components/fixture-viewer';
 import { StandingsTable } from '../../components/standings';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -9,7 +11,16 @@ import {
   generateLeagueRoundRobin,
   generateSingleEliminationBracket,
 } from '../../services/tournaments/configuration';
+import { buildLiga360FixtureModel, stageMatchesSignature } from './liga360FixtureAdapter';
+import {
+  persistFixtureGroupsChange,
+  persistFixtureRoundsChange,
+  persistKnockoutFixtureChange,
+} from './persistLiga360Fixture';
+import { useFixtureSchedulingPrefs } from './useFixtureSchedulingPrefs';
 import type { TournamentEntity, TournamentMatchRow } from './types';
+
+type ViewMode = 'cards' | 'calendar';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
@@ -20,6 +31,7 @@ export const FixturePlanningPanel: React.FC<{
   const [competitionId, setCompetitionId] = React.useState(tournament.competitions[0]?.id || '');
   const [stageId, setStageId] = React.useState('');
   const [matchIdDrawerOpen, setMatchIdDrawerOpen] = React.useState<string | null>(null);
+  const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
 
   const competition = tournament.competitions.find((c) => c.id === competitionId);
   const selectableStages = React.useMemo(
@@ -65,6 +77,79 @@ export const FixturePlanningPanel: React.FC<{
       groups: stage.groups,
     });
   }, [stage]);
+
+  // -- Modo calendario (FixtureViewer) --
+
+  const stageSig = React.useMemo(() => (stage ? stageMatchesSignature(stage) : ''), [stage]);
+  const builtModel = React.useMemo(
+    () => (stage ? buildLiga360FixtureModel(stage, null) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stage, stageSig]
+  );
+
+  const [draftLeague, setDraftLeague] = React.useState<Round[] | null>(null);
+  const [draftKnockout, setDraftKnockout] = React.useState<Round[] | null>(null);
+  const [draftGroups, setDraftGroups] = React.useState<FixtureGroup[] | null>(null);
+
+  React.useEffect(() => {
+    if (!builtModel) {
+      setDraftLeague(null);
+      setDraftKnockout(null);
+      setDraftGroups(null);
+      return;
+    }
+    if (builtModel.layout === 'league') {
+      setDraftLeague(builtModel.fixture);
+      setDraftKnockout(null);
+      setDraftGroups(null);
+    } else if (builtModel.layout === 'knockout') {
+      setDraftKnockout(builtModel.fixture);
+      setDraftLeague(null);
+      setDraftGroups(null);
+    } else {
+      setDraftGroups(builtModel.groups);
+      setDraftLeague(null);
+      setDraftKnockout(null);
+    }
+  }, [builtModel, stage?.id]);
+
+  const schedApi = useFixtureSchedulingPrefs(tournament.id, stage?.id);
+  const schedulingAssistForScope = React.useMemo(() => {
+    if (!schedApi) return undefined;
+    return (scope: string) => ({
+      presetTimes: schedApi.presetTimes,
+      setPresetTimes: schedApi.setPresetTimes,
+      addPresetTime: schedApi.addPresetTime,
+      removePresetTime: schedApi.removePresetTime,
+      getPlayWindow: (roundId: string) => schedApi.getPlayWindow(scope, roundId),
+      setPlayWindowForRound: (roundId: string, start: string, end: string) =>
+        schedApi.setPlayWindow(scope, roundId, start, end),
+    });
+  }, [schedApi]);
+
+  async function handleSaveCalendar() {
+    if (!stage) return;
+    setSaving(true);
+    setError('');
+    try {
+      if ((stage.format === 'league') && draftLeague) {
+        await persistFixtureRoundsChange(draftLeague, stage, tournament.id);
+      } else if (stage.format === 'elimination' && draftKnockout) {
+        await persistKnockoutFixtureChange(draftKnockout, stage, tournament.id);
+      } else if (stage.format === 'groups' && draftGroups) {
+        await persistFixtureGroupsChange(
+          draftGroups.map((g) => ({ id: g.id, rounds: g.rounds })),
+          stage,
+          tournament.id
+        );
+      }
+      await onRefresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al guardar el calendario');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const hasAnyMatch =
     stage &&
@@ -197,43 +282,118 @@ export const FixturePlanningPanel: React.FC<{
         ) : null}
       </Card>
 
-      {stage && scheduleView && hasAnyMatch ? (
+      {stage && hasAnyMatch ? (
         <Card>
-          <div className="mb-3">
+          {/* Toggle de vista */}
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-800">
               Vista del fixture
-              {stage.format === 'league'
-                ? ' · Liga'
-                : stage.format === 'groups'
-                  ? ' · Grupos'
-                  : ' · Eliminación'}
+              {stage.format === 'league' ? ' · Liga' : stage.format === 'groups' ? ' · Grupos' : ' · Eliminación'}
             </h3>
+            <div className="flex rounded-lg border border-slate-200 text-xs">
+              {(['cards', 'calendar'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={`px-3 py-1.5 font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                    viewMode === mode
+                      ? 'bg-slate-800 text-white'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                  }`}
+                >
+                  {mode === 'cards' ? 'Partidos' : 'Calendario'}
+                </button>
+              ))}
+            </div>
           </div>
-          <TournamentSchedule
-            type={scheduleView.type}
-            data={scheduleView.data}
-            theme="dark"
-            onEdit={(matchId) => setMatchIdDrawerOpen(matchId)}
-          />
-          {stage.format === 'league' ? (
-            <div className="mt-4 space-y-2">
-              <h3 className="text-sm font-semibold text-slate-800">Tabla de posiciones</h3>
-              <StandingsTable rows={stage.standings ?? []} />
+
+          {/* Vista "Partidos" — comportamiento actual */}
+          {viewMode === 'cards' && scheduleView ? (
+            <>
+              <TournamentSchedule
+                type={scheduleView.type}
+                data={scheduleView.data}
+                theme="dark"
+                onEdit={(matchId) => setMatchIdDrawerOpen(matchId)}
+              />
+              {stage.format === 'league' ? (
+                <div className="mt-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-slate-800">Tabla de posiciones</h3>
+                  <StandingsTable rows={stage.standings ?? []} />
+                </div>
+              ) : null}
+              {stage.format === 'groups'
+                ? (stage.groups || [])
+                    .slice()
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                    .map((group) => (
+                      <div key={`standings-${group.id}`} className="mt-4 space-y-2">
+                        <h3 className="text-sm font-semibold text-slate-800">
+                          Tabla de posiciones · {group.name}
+                        </h3>
+                        <StandingsTable rows={group.standings ?? []} />
+                      </div>
+                    ))
+                : null}
+            </>
+          ) : null}
+
+          {/* Vista "Calendario" — FixtureViewer con drag & drop */}
+          {viewMode === 'calendar' ? (
+            <div className="space-y-3">
+              {stage.format === 'league' && draftLeague ? (
+                <FixtureViewer
+                  mode="edit"
+                  layout="league"
+                  fixture={draftLeague}
+                  teams={builtModel?.teams ?? []}
+                  onChange={setDraftLeague}
+                  theme="light"
+                  schedulingAssistForScope={schedulingAssistForScope}
+                />
+              ) : null}
+              {stage.format === 'elimination' && draftKnockout ? (
+                <FixtureViewer
+                  mode="edit"
+                  layout="knockout"
+                  fixture={draftKnockout}
+                  teams={builtModel?.teams ?? []}
+                  onChange={setDraftKnockout}
+                  theme="light"
+                  disableDragDrop={false}
+                  schedulingAssistForScope={schedulingAssistForScope}
+                />
+              ) : null}
+              {stage.format === 'groups' && draftGroups ? (
+                <FixtureViewer
+                  mode="edit"
+                  layout="groups"
+                  groups={draftGroups}
+                  teams={builtModel?.teams ?? []}
+                  onChange={setDraftGroups}
+                  theme="light"
+                  schedulingAssistForScope={schedulingAssistForScope}
+                />
+              ) : null}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    if (builtModel?.layout === 'league') setDraftLeague(builtModel.fixture);
+                    else if (builtModel?.layout === 'knockout') setDraftKnockout(builtModel.fixture);
+                    else if (builtModel?.layout === 'groups') setDraftGroups(builtModel.groups);
+                  }}
+                >
+                  Descartar cambios
+                </Button>
+                <Button type="button" onClick={handleSaveCalendar}>
+                  Guardar calendario
+                </Button>
+              </div>
             </div>
           ) : null}
-          {stage.format === 'groups'
-            ? (stage.groups || [])
-                .slice()
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                .map((group) => (
-                  <div key={`standings-${group.id}`} className="mt-4 space-y-2">
-                    <h3 className="text-sm font-semibold text-slate-800">
-                      Tabla de posiciones · {group.name}
-                    </h3>
-                    <StandingsTable rows={group.standings ?? []} />
-                  </div>
-                ))
-            : null}
         </Card>
       ) : null}
 

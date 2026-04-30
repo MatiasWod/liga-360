@@ -284,7 +284,15 @@ function ResultSection({
       const as_ = awayScore !== '' ? parseInt(awayScore, 10) : null;
       if (hs !== null && (isNaN(hs) || hs < 0)) throw new Error('Marcador local inválido');
       if (as_ !== null && (isNaN(as_) || as_ < 0)) throw new Error('Marcador visitante inválido');
-      await updateMatchResult(matchId, hs, as_, status);
+      // Validar que ambos marcadores estén presentes cuando el partido es finalizado.
+      if ((status === 'completed' || status === 'finished') && (hs === null || as_ === null)) {
+        throw new Error('Ingresá ambos marcadores para marcar el partido como Finalizado');
+      }
+      // Si el usuario cargó ambos marcadores pero dejó el estado en "programado",
+      // lo marcamos automáticamente como "finalizado" para que aparezca en la tabla.
+      const effectiveStatus =
+        status === 'scheduled' && hs != null && as_ != null ? 'completed' : status;
+      await updateMatchResult(matchId, hs, as_, effectiveStatus);
       setSuccess(true);
       // Esperar a que el refresh (onSaved) complete antes de continuar;
       // así el card ya refleja el nuevo estado cuando el drawer cierra.
@@ -345,6 +353,12 @@ function ResultSection({
           ))}
         </select>
       </div>
+
+      {status === 'scheduled' && homeScore !== '' && awayScore !== '' ? (
+        <p className="text-xs text-amber-500">
+          Al guardar con marcadores completos, el partido quedará marcado como Finalizado automáticamente.
+        </p>
+      ) : null}
 
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
       {success ? <p className="text-xs text-emerald-400">Resultado guardado</p> : null}

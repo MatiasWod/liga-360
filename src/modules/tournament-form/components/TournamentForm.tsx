@@ -210,7 +210,12 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         );
                         stageIdMap.set(st.id, createdStage.id);
                         if (format === 'elimination') {
-                            await generateEliminationBracket(createdStage.id);
+                            const cfg = (st.config as Record<string, unknown>) ?? {};
+                            const numParticipants = Number(cfg.numParticipants);
+                            if (Number.isInteger(numParticipants) && numParticipants >= 2) {
+                                const doubleRound = cfg.matchesPerTie === 'double';
+                                await generateEliminationBracket(createdStage.id, doubleRound);
+                            }
                         }
                     }
                 }

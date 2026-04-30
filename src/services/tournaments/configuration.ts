@@ -1,4 +1,5 @@
 import { gqlRequest } from './client';
+import { updateMatchDateTime } from './matchDateTime';
 
 export async function getTournamentConfigurationById(tournamentId: string) {
   const data = await gqlRequest<{ tournament: any }>(
@@ -81,6 +82,7 @@ export async function getTournamentConfigurationById(tournamentId: string) {
                 leagueAwaySeed
                 homeAssignedInscription { inscriptionId displayName }
                 awayAssignedInscription { inscriptionId displayName }
+                winnerAdvancementTransitionId
               }
             }
             matches {
@@ -100,6 +102,7 @@ export async function getTournamentConfigurationById(tournamentId: string) {
               leagueAwaySeed
               homeAssignedInscription { inscriptionId displayName }
               awayAssignedInscription { inscriptionId displayName }
+              winnerAdvancementTransitionId
             }
             assignedInscriptions { inscriptionId displayName }
           }
@@ -163,6 +166,20 @@ export async function assignInscriptionToGroup(payload: {
   );
 }
 
+export async function setMatchWinnerAdvancement(matchId: string, transitionId: string | null) {
+  const data = await gqlRequest<{ setMatchWinnerAdvancement: { id: string; winnerAdvancementTransitionId?: string | null } }>(
+    `mutation SetMatchWinnerAdvance($matchId: ID!, $transitionId: ID) {
+      setMatchWinnerAdvancement(matchId: $matchId, transitionId: $transitionId) {
+        id
+        winnerAdvancementTransitionId
+      }
+    }`,
+    { matchId, transitionId: transitionId ?? null },
+    { auth: true }
+  );
+  return data?.setMatchWinnerAdvancement ?? null;
+}
+
 export async function generateLeagueRoundRobin(stageId: string, doubleRound: boolean) {
   await gqlRequest(
     `mutation GenLeague($stageId: ID!, $doubleRound: Boolean!) {
@@ -183,12 +200,108 @@ export async function generateSingleEliminationBracket(stageId: string, doubleRo
   );
 }
 
+export async function trimEliminationBracketAfterRound(payload: {
+  stageId: string;
+  tournamentId: string;
+  lastRoundInclusive: number;
+}) {
+  await gqlRequest(
+    `mutation TrimElim($stageId: ID!, $tournamentId: ID!, $lastRoundInclusive: Int!) {
+      trimEliminationBracketAfterRound(
+        stageId: $stageId
+        tournamentId: $tournamentId
+        lastRoundInclusive: $lastRoundInclusive
+      )
+    }`,
+    {
+      stageId: payload.stageId,
+      tournamentId: payload.tournamentId,
+      lastRoundInclusive: Math.trunc(payload.lastRoundInclusive),
+    },
+    { auth: true }
+  );
+}
+
 export async function generateGroupsStageRoundRobin(stageId: string, doubleRound: boolean) {
   await gqlRequest(
     `mutation GenGroups($stageId: ID!, $doubleRound: Boolean!) {
       generateGroupsStageRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode groupId }
     }`,
     { stageId, doubleRound },
+    { auth: true }
+  );
+}
+
+export async function assignInscriptionToMatchSlot(payload: {
+  stageId: string;
+  matchId: string;
+  slotRole: 'home' | 'away';
+  inscriptionId: string | null;
+  tournamentId: string;
+  displayName?: string | null;
+}) {
+  await gqlRequest(
+    `mutation AssignMatchSlot($stageId: ID!, $matchId: ID!, $slotRole: String!, $inscriptionId: ID, $tournamentId: ID!, $displayName: String) {
+      assignInscriptionToMatchSlot(stageId: $stageId, matchId: $matchId, slotRole: $slotRole, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName)
+    }`,
+    {
+      stageId: payload.stageId,
+      matchId: payload.matchId,
+      slotRole: payload.slotRole,
+      inscriptionId: payload.inscriptionId,
+      tournamentId: payload.tournamentId,
+      displayName: payload.displayName ?? null,
+    },
+    { auth: true }
+  );
+}
+
+export async function updateMatchScheduling(payload: {
+  stageId: string;
+  matchId: string;
+  round: number;
+  leg: number;
+  slotIndex: number;
+}) {
+  await gqlRequest(
+    `mutation UpdateMatchScheduling($stageId: ID!, $matchId: ID!, $round: Int!, $leg: Int!, $slotIndex: Int!) {
+      updateMatchScheduling(stageId: $stageId, matchId: $matchId, round: $round, leg: $leg, slotIndex: $slotIndex)
+    }`,
+    payload,
+    { auth: true }
+  );
+}
+
+/** Alias de updateMatchDateTime enfocado solo en la fecha/hora del partido. */
+export async function updateMatchScheduledAt(payload: {
+  tournamentId: string;
+  stageId: string;
+  matchId: string;
+  scheduledAt: string | null;
+}) {
+  await updateMatchDateTime(payload.matchId, { scheduledAt: payload.scheduledAt });
+}
+
+/** Alias de updateMatchResult para usarse desde el fixture viewer (solo scores, status → completed). */
+export async function updateMatchResultFromViewer(payload: {
+  tournamentId: string;
+  stageId: string;
+  matchId: string;
+  homeScore: number;
+  awayScore: number;
+}) {
+  await gqlRequest(
+    `mutation UpdateMatchResult($matchId: ID!, $homeScore: Int, $awayScore: Int, $status: String) {
+      updateMatchResult(matchId: $matchId, homeScore: $homeScore, awayScore: $awayScore, status: $status) {
+        id homeScore awayScore status
+      }
+    }`,
+    {
+      matchId: payload.matchId,
+      homeScore: payload.homeScore,
+      awayScore: payload.awayScore,
+      status: 'completed',
+    },
     { auth: true }
   );
 }

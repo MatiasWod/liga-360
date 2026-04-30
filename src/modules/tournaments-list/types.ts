@@ -22,6 +22,8 @@ export type TournamentMatchRow = {
   leagueAwaySeed?: number | null;
   homeAssignedInscription?: AssignedInscription | null;
   awayAssignedInscription?: AssignedInscription | null;
+  /** Transición desde esta etapa cuyo avance está asociado al ganador (configuración inicial). */
+  winnerAdvancementTransitionId?: string | null;
 };
 
 export type StandingsRow = {

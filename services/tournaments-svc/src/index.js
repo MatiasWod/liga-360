@@ -54,6 +54,11 @@ function normalizeInscriptionId(raw) {
   return String(raw);
 }
 
+/** Slots pendientes desde UI (`liga360-slot:*`); no ocupan cupo físico de equipos reales en la etapa. */
+function isSyntheticSlotInscriptionId(raw) {
+  return normalizeInscriptionId(raw).startsWith('liga360-slot:');
+}
+
 function deriveCompetitionCapacityFromStage(stageProps) {
   const format = String(stageProps?.format || '').toLowerCase();
   const cfg = parseJsonSafe(stageProps?.configJson) || {};
@@ -229,6 +234,9 @@ function matchFromNeoProps(m) {
     status: m.status ?? null,
     venue: m.venue ?? null,
     referee: m.referee ?? null,
+    winnerAdvancementTransitionId: m.winnerAdvancementTransitionId
+      ? String(m.winnerAdvancementTransitionId)
+      : null,
   };
 }
 
@@ -1419,6 +1427,38 @@ const resolvers = {
         await session.close();
       }
     },
+    trimEliminationBracketAfterRound: async (_, { stageId, tournamentId, lastRoundInclusive }, context) => {
+      requireOrganizer(context);
+      const L = Number(lastRoundInclusive);
+      if (!Number.isFinite(L) || L < 1 || !Number.isInteger(L)) {
+        throw new Error('BAD_REQUEST: lastRoundInclusive debe ser entero >= 1');
+      }
+      const session = context.driver.session();
+      try {
+        const chk = await session.run(
+          `MATCH (t:Tournament {id:$tid})-[:HAS_COMPETITION]->(:Competition)-[:HAS_STAGE]->(s:Stage {id:$stageId})
+           RETURN s
+           LIMIT 1`,
+          { tid: tournamentId, stageId }
+        );
+        if (chk.records.length === 0) {
+          throw new Error('BAD_REQUEST: stage no pertenece al torneo');
+        }
+        const props = chk.records[0].get('s').properties;
+        if (String(props?.format || '').toLowerCase() !== 'elimination') {
+          throw new Error('BAD_REQUEST: la etapa no es de eliminación');
+        }
+        await session.run(
+          `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
+           WHERE coalesce(toInteger(m.round), 1) > $last
+           DETACH DELETE m`,
+          { stageId, last: Math.trunc(L) }
+        );
+        return true;
+      } finally {
+        await session.close();
+      }
+    },
     generateGroupsStageRoundRobin: async (_, { stageId, doubleRound }, context) => {
       requireOrganizer(context);
       const session = context.driver.session();
@@ -1584,15 +1624,23 @@ const resolvers = {
         if (stageCap && stageCap > 0) {
           const stageCountR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-             WITH COLLECT(DISTINCT m.homeInscriptionId) + COLLECT(DISTINCT m.awayInscriptionId) AS ids
-             UNWIND ids AS raw
-             WITH raw WHERE raw IS NOT NULL AND raw <> ''
-             RETURN COUNT(DISTINCT raw) AS count`,
-            { stageId }
+             WITH m.homeInscriptionId AS h, m.awayInscriptionId AS aw
+             UNWIND [h, aw] AS raw
+             WITH raw WHERE raw IS NOT NULL AND toString(raw) <> ''
+               AND NOT toString(raw) STARTS WITH $slotPrefix
+             RETURN count(DISTINCT toString(raw)) AS count`,
+            { stageId, slotPrefix: 'liga360-slot:' }
           );
           const stageCount = Number(stageCountR.records[0]?.get('count') || 0);
           const existsAlready = duplicateR.records.length > 0;
-          if (!existsAlready && stageCount >= stageCap) throw new Error('STAGE_CAPACITY_REACHED');
+          const assigningSynthetic = isSyntheticSlotInscriptionId(iidNorm);
+          if (
+            !assigningSynthetic &&
+            !existsAlready &&
+            stageCount >= stageCap
+          ) {
+            throw new Error('STAGE_CAPACITY_REACHED');
+          }
         }
 
         const setField = role === 'home'
@@ -1900,6 +1948,51 @@ const resolvers = {
           venue: mp.venue ?? null,
           referee: mp.referee ?? null,
         };
+      } finally {
+        await session.close();
+      }
+    },
+    setMatchWinnerAdvancement: async (_, { matchId, transitionId }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const stageMatch = await session.run(
+          `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$matchId})
+           RETURN s.id AS stageId, m
+           LIMIT 1`,
+          { matchId }
+        );
+        if (stageMatch.records.length === 0) {
+          throw new Error('NOT_FOUND: match no existe o no está enlazado a una etapa');
+        }
+        const stageId = String(stageMatch.records[0].get('stageId') || '');
+        const tidNorm = transitionId ? String(transitionId).trim() : '';
+        if (!tidNorm) {
+          await session.run(
+            `MATCH (m:Match {id:$matchId})
+             SET m.winnerAdvancementTransitionId = null`,
+            { matchId }
+          );
+        } else {
+          const trR = await session.run(
+            `MATCH (s:Stage {id:$stageId})-[:EMITS|HAS_TRANSITION]->(tr:Transition {id:$tid})
+             RETURN tr.id AS id LIMIT 1`,
+            { stageId, tid: tidNorm }
+          );
+          if (trR.records.length === 0) {
+            throw new Error('BAD_REQUEST: la transición no está emitida por la etapa de este partido');
+          }
+          await session.run(
+            `MATCH (m:Match {id:$matchId})
+             SET m.winnerAdvancementTransitionId = $tid`,
+            { matchId, tid: tidNorm }
+          );
+        }
+        const out = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        return matchFromNeoProps(out.records[0].get('m').properties);
       } finally {
         await session.close();
       }

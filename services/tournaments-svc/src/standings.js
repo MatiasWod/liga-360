@@ -55,9 +55,9 @@ export function computeStandings(matches = [], inscriptions = [], config = {}) {
   for (const match of matches) {
     const ms = String(match?.matchStatus || '').toLowerCase();
     if (ms !== 'finished' && ms !== 'completed') continue;
-    const homeScore = toSafeNumber(match?.homeScore);
-    const awayScore = toSafeNumber(match?.awayScore);
-    if (homeScore == null || awayScore == null) continue;
+    // Para partidos finalizados, un score null se trata como 0 (consistente con la UI).
+    const homeScore = toSafeNumber(match?.homeScore) ?? 0;
+    const awayScore = toSafeNumber(match?.awayScore) ?? 0;
 
     const homeRow = ensureTeamRow(rowsByInscriptionId, match?.homeInscriptionId, match?.homeDisplayName);
     const awayRow = ensureTeamRow(rowsByInscriptionId, match?.awayInscriptionId, match?.awayDisplayName);
