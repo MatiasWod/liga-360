@@ -36,16 +36,16 @@ pipelines:
           caches:
             - docker
           script:
-            - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin "$DOCKER_REGISTRY"
-            - docker build -t "$DOCKER_REGISTRY/liga360-frontend:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
-            - docker build -t "$DOCKER_REGISTRY/liga360-auth-svc:$BITBUCKET_COMMIT" ./services/auth-svc
-            - docker build -t "$DOCKER_REGISTRY/liga360-gateway:$BITBUCKET_COMMIT" ./services/gateway
-            - docker build -t "$DOCKER_REGISTRY/liga360-inscriptions-svc:$BITBUCKET_COMMIT" ./services/inscriptions-svc
-            - docker build -t "$DOCKER_REGISTRY/liga360-teams-svc:$BITBUCKET_COMMIT" ./services/teams-svc
-            - docker build -t "$DOCKER_REGISTRY/liga360-tournaments-svc:$BITBUCKET_COMMIT" ./services/tournaments-svc
-            - docker push "$DOCKER_REGISTRY/liga360-frontend:$BITBUCKET_COMMIT"
-            - docker push "$DOCKER_REGISTRY/liga360-auth-svc:$BITBUCKET_COMMIT"
-            - docker push "$DOCKER_REGISTRY/liga360-gateway:$BITBUCKET_COMMIT"
-            - docker push "$DOCKER_REGISTRY/liga360-inscriptions-svc:$BITBUCKET_COMMIT"
-            - docker push "$DOCKER_REGISTRY/liga360-teams-svc:$BITBUCKET_COMMIT"
-            - docker push "$DOCKER_REGISTRY/liga360-tournaments-svc:$BITBUCKET_COMMIT"
+            - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+            - docker build -t "$DOCKER_USER/liga360-frontend:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
+            - docker build -t "$DOCKER_USER/liga360-auth-svc:$BITBUCKET_COMMIT" ./services/auth-svc
+            - docker build -t "$DOCKER_USER/liga360-gateway:$BITBUCKET_COMMIT" ./services/gateway
+            - docker build -t "$DOCKER_USER/liga360-inscriptions-svc:$BITBUCKET_COMMIT" ./services/inscriptions-svc
+            - docker build -t "$DOCKER_USER/liga360-teams-svc:$BITBUCKET_COMMIT" ./services/teams-svc
+            - docker build -t "$DOCKER_USER/liga360-tournaments-svc:$BITBUCKET_COMMIT" ./services/tournaments-svc
+            - docker push "$DOCKER_USER/liga360-frontend:$BITBUCKET_COMMIT"
+            - docker push "$DOCKER_USER/liga360-auth-svc:$BITBUCKET_COMMIT"
+            - docker push "$DOCKER_USER/liga360-gateway:$BITBUCKET_COMMIT"
+            - docker push "$DOCKER_USER/liga360-inscriptions-svc:$BITBUCKET_COMMIT"
+            - docker push "$DOCKER_USER/liga360-teams-svc:$BITBUCKET_COMMIT"
+            - docker push "$DOCKER_USER/liga360-tournaments-svc:$BITBUCKET_COMMIT"
