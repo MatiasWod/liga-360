@@ -82,13 +82,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
           />
         );
       })}
-      <div className="absolute inset-0 bg-[#0F2A33]/70" aria-hidden="true" />
+      <div className="absolute inset-0 bg-surface-0/80" aria-hidden="true" />
 
-      <header className="relative border-b border-[#22512D] bg-[#163A20] px-6">
+      <header className="relative border-b border-border-subtle bg-surface-1/90 backdrop-blur-sm px-6">
         <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
           <div className="flex items-center gap-3">
             <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
-            <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
+            <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
           </div>
           <div aria-hidden="true" />
           <div className="flex items-center justify-self-end gap-2">
@@ -96,7 +96,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
               <button
                 type="button"
                 onClick={onBackToPublic}
-                className="rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
+                className="rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
               >
                 Volver a Torneos públicos
               </button>
@@ -105,21 +105,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
         </div>
       </header>
 
-      <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-sm">
-        <p className="text-sm text-slate-600">Inicia sesion o registrate para usar el flujo completo.</p>
+      <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-border-subtle bg-surface-1/95 p-6 text-text-primary shadow-2xl shadow-black/40 backdrop-blur-md">
+        <p className="text-sm text-text-muted">Inicia sesion o registrate para usar el flujo completo.</p>
 
-        <div className="mt-5 inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1">
+        <div className="mt-5 inline-flex rounded-xl border border-border-subtle bg-surface-2 p-1">
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${mode === 'login' ? 'bg-[#2E7D32] text-white shadow-sm' : 'text-slate-700 hover:bg-white/80'}`}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${mode === 'login' ? 'bg-accent-primary text-white shadow-sm shadow-black/30' : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'}`}
           >
             Login
           </button>
           <button
             type="button"
             onClick={() => setMode('register')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${mode === 'register' ? 'bg-[#2E7D32] text-white shadow-sm' : 'text-slate-700 hover:bg-white/80'}`}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${mode === 'register' ? 'bg-accent-primary text-white shadow-sm shadow-black/30' : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'}`}
           >
             Registro
           </button>
@@ -134,7 +134,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
                     key={r}
                     type="button"
                     onClick={() => setRole(r)}
-                    className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${role === r ? 'border-[#2E7D32] bg-[#2E7D32] text-white shadow-sm' : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+                    className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${role === r ? 'border-accent-primary bg-accent-primary text-white shadow-sm shadow-black/30' : 'border-border-subtle bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text-primary'}`}
                   >
                     {r === 'team' ? 'Equipo' : r === 'participant' ? 'Participante' : 'Organizador'}
                   </button>
@@ -229,7 +229,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
             />
           </label>
 
-          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="rounded-xl border border-danger-base/40 bg-danger-soft px-3 py-2 text-sm text-danger-base">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Procesando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}

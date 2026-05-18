@@ -13,10 +13,31 @@ export type TournamentMatchRow = {
   fixtureCode?: string | null;
   groupId?: string | null;
   scheduledAt?: string | null;
+  venue?: string | null;
+  referee?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  status?: string | null;
   leagueHomeSeed?: number | null;
   leagueAwaySeed?: number | null;
   homeAssignedInscription?: AssignedInscription | null;
   awayAssignedInscription?: AssignedInscription | null;
+  /** Transición desde esta etapa cuyo avance está asociado al ganador (configuración inicial). */
+  winnerAdvancementTransitionId?: string | null;
+};
+
+export type StandingsRow = {
+  position: number;
+  inscriptionId: string;
+  displayName: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
 };
 
 export type TournamentGroupBlock = {
@@ -25,6 +46,7 @@ export type TournamentGroupBlock = {
   order: number;
   capacity?: number | null;
   assignedInscriptions?: AssignedInscription[];
+  standings?: StandingsRow[];
   matches?: TournamentMatchRow[];
 };
 
@@ -52,6 +74,7 @@ export type TournamentStage = {
   childrenJson?: string | null;
   transitions?: TournamentTransition[];
   assignedInscriptions?: AssignedInscription[];
+  standings?: StandingsRow[];
   matches?: TournamentMatchRow[];
   groups?: TournamentGroupBlock[];
 };

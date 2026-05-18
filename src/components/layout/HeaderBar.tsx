@@ -23,11 +23,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 }) => {
   const [open, setOpen] = React.useState(false);
   return (
-    <header className="border-b border-[#22512D] bg-[#163A20] px-6">
+    <header className="border-b border-border-subtle bg-surface-1 px-6">
       <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
         <div className="flex items-center gap-3">
           <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
-          <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
+          <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
         </div>
 
         <nav className="min-w-0 flex items-center justify-center gap-2 overflow-x-auto whitespace-nowrap">
@@ -38,10 +38,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onNavigate(item.id)}
-                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${
                   selected
-                    ? 'bg-[#66BB6A] text-[#0F2A33]'
-                    : 'text-white hover:bg-[#22512D]'
+                    ? 'bg-accent-primary text-white shadow-sm shadow-black/30'
+                    : 'text-text-muted hover:bg-surface-2 hover:text-text-primary'
                 }`}
               >
                 {item.label}
@@ -54,24 +54,27 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
-            className="flex items-center gap-2 rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-3 py-1.5 text-sm text-white hover:bg-[#256628]"
+            className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-2 px-3 py-1.5 text-sm text-text-primary transition-colors hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
           >
             <Avatar name={user.fullName} imageUrl={user.avatarUrl} size="sm" />
             <span className="hidden lg:block">{user.fullName}</span>
           </button>
           {open && (
-            <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-md">
+            <div className="absolute right-0 mt-2 w-44 rounded-xl border border-border-subtle bg-surface-1 p-2 shadow-xl shadow-black/40">
               <button
                 type="button"
                 onClick={() => {
                   onOpenProfile();
                   setOpen(false);
                 }}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
               >
                 Mi perfil
               </button>
-              <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+              <button
+                type="button"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
+              >
                 Configuracion
               </button>
               <button
@@ -80,7 +83,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   onLogout();
                   setOpen(false);
                 }}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-danger-base transition-colors hover:bg-danger-soft"
               >
                 Cerrar sesion
               </button>
@@ -91,4 +94,3 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     </header>
   );
 };
-

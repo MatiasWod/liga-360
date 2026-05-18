@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScheduleFromStage } from '../../../components/tournament-schedule/adaptFixtureData';
+import { buildScheduleFromStage, matchInputToRecord } from '../../../components/tournament-schedule/adaptFixtureData';
 
 describe('buildScheduleFromStage (groups)', () => {
   it('usa el mismo id de ronda en todos los grupos para la misma fecha', () => {
@@ -44,6 +44,49 @@ describe('buildScheduleFromStage (groups)', () => {
     expect(r0a.id).toBe(r0b.id);
     expect(r0a.matches).toHaveLength(1);
     expect(r0b.matches).toHaveLength(1);
+  });
+});
+
+describe('matchInputToRecord', () => {
+  it('mapea status finished y goles desde GraphQL', () => {
+    const m = matchInputToRecord({
+      id: 'm1',
+      round: 1,
+      leg: 1,
+      homeScore: 2,
+      awayScore: 1,
+      status: 'finished',
+      homeAssignedInscription: { inscriptionId: 'a', displayName: 'A' },
+      awayAssignedInscription: { inscriptionId: 'b', displayName: 'B' },
+    });
+    expect(m.status).toBe('completed');
+    expect(m.homeScore).toBe(2);
+    expect(m.awayScore).toBe(1);
+  });
+
+  it('mapea venue y referee desde GraphQL', () => {
+    const m = matchInputToRecord({
+      id: 'm2',
+      round: 1,
+      leg: 1,
+      venue: 'Estadio Municipal',
+      referee: 'Juan Pérez',
+      homeAssignedInscription: { inscriptionId: 'c', displayName: 'C' },
+      awayAssignedInscription: { inscriptionId: 'd', displayName: 'D' },
+    });
+    expect(m.venue).toBe('Estadio Municipal');
+    expect(m.referee).toBe('Juan Pérez');
+  });
+
+  it('no incluye venue ni referee cuando están ausentes', () => {
+    const m = matchInputToRecord({
+      id: 'm3',
+      round: 1,
+      homeAssignedInscription: null,
+      awayAssignedInscription: null,
+    });
+    expect(m.venue).toBeUndefined();
+    expect(m.referee).toBeUndefined();
   });
 });
 

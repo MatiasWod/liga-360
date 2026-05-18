@@ -22,13 +22,20 @@ export const Avatar: React.FC<AvatarProps> = ({ name, imageUrl, size = 'md' }) =
     .join('');
 
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} className={`${sizeMap[size]} rounded-full object-cover`} />;
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className={`${sizeMap[size]} rounded-full object-cover ring-1 ring-border-subtle`}
+      />
+    );
   }
 
   return (
-    <div className={`${sizeMap[size]} inline-flex items-center justify-center rounded-full bg-[#0F2A33] font-semibold text-white`}>
+    <div
+      className={`${sizeMap[size]} inline-flex items-center justify-center rounded-full bg-surface-2 text-text-primary font-semibold ring-1 ring-border-subtle`}
+    >
       {initials || 'U'}
     </div>
   );
 };
-

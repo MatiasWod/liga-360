@@ -109,6 +109,8 @@ type Mutation {
   generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
   generateSingleEliminationBracket(stageId: ID!, doubleRound: Boolean!): [Match!]!
   generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  # Conserva sólo hasta `lastRoundInclusive` (elimina todas las llaves de ronda mayor).
+  trimEliminationBracketAfterRound(stageId: ID!, tournamentId: ID!, lastRoundInclusive: Int!): Boolean!
   assignInscriptionToMatchSlot(
     stageId: ID!
     matchId: ID!
@@ -143,6 +145,34 @@ type Mutation {
     inscriptionId: ID!
     tournamentId: ID!
   ): Boolean!
+  updateMatchResult(
+    matchId: ID!
+    homeScore: Int
+    awayScore: Int
+    status: String
+  ): MatchResult!
+  updateMatchDateTime(
+    matchId: ID!
+    scheduledAt: String
+    venue: String
+    referee: String
+  ): MatchDateTimeResult!
+  # Transición (emitida por la etapa del partido) asociada al ganador para avance / referencia.
+  setMatchWinnerAdvancement(matchId: ID!, transitionId: ID): Match!
+}
+
+type MatchResult {
+  id: ID!
+  homeScore: Int
+  awayScore: Int
+  status: String!
+}
+
+type MatchDateTimeResult {
+  id: ID!
+  scheduledAt: String
+  venue: String
+  referee: String
 }
 
 type Tournament {
@@ -173,6 +203,7 @@ type Stage {
   format: StageFormat!
   isInitial: Boolean!
   assignedInscriptions: [AssignedInscription!]!
+  standings: [StandingsRow!]!
   configJson: String
   childrenJson: String
   transitions: [Transition!]!
@@ -213,8 +244,23 @@ type Group {
   competitorIds: [ID!]!
   competitors: [Competitor!]!
   assignedInscriptions: [AssignedInscription!]!
+  standings: [StandingsRow!]!
   capacity: Int
   matches: [Match!]!
+}
+
+type StandingsRow {
+  position: Int!
+  inscriptionId: ID!
+  displayName: String!
+  played: Int!
+  won: Int!
+  drawn: Int!
+  lost: Int!
+  goalsFor: Int!
+  goalsAgainst: Int!
+  goalDifference: Int!
+  points: Int!
 }
 
 type Match {
@@ -222,6 +268,8 @@ type Match {
   round: Int
   leg: Int
   scheduledAt: String
+  venue: String
+  referee: String
   slotIndex: Int
   fixtureCode: String
   groupId: ID
@@ -233,6 +281,10 @@ type Match {
   awayCompetitor: Competitor
   homeAssignedInscription: AssignedInscription
   awayAssignedInscription: AssignedInscription
+  homeScore: Int
+  awayScore: Int
+  status: String
+  winnerAdvancementTransitionId: ID
 }
 
 type Key {

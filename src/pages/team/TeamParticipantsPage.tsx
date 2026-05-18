@@ -238,7 +238,7 @@ export const TeamParticipantsPage: React.FC<TeamParticipantsPageProps> = ({
               <button
                 type="button"
                 onClick={() => setLogoModalOpen(true)}
-                className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-surface-2"
                 title="Editar escudo"
                 aria-label="Editar escudo"
               >

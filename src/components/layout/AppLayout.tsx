@@ -24,7 +24,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   children,
 }) => {
   return (
-    <div className="min-h-screen bg-[#F5F7F9] text-[#0F2A33]">
+    <div className="min-h-screen bg-surface-0 text-text-primary">
       <HeaderBar
         activeTeamName={activeTeamName}
         showActiveTeam={showActiveTeam}
@@ -39,4 +39,3 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     </div>
   );
 };
-

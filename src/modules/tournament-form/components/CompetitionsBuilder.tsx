@@ -105,7 +105,7 @@ export const CompetitionsBuilder: React.FC<CompetitionsBuilderProps> = ({
 							aria-label={`Eliminar ${c.name}`}
 							title="Eliminar competencia"
 							onClick={(e) => { e.stopPropagation(); removeCompetition(i); }}
-							className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/20 hover:bg-white/20 text-[10px]"
+							className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/20 hover:bg-surface-3 text-[10px]"
 						>
 							×
 						</span>

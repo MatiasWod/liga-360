@@ -46,8 +46,8 @@ export const RoundSelector: React.FC<RoundSelectorProps> = ({
                   ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/20'
                   : 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 ring-offset-0'
                 : isDark
-                  ? 'text-white/55 hover:bg-white/5 hover:text-white/90'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                  ? 'text-white/55 hover:bg-surface-2/90 hover:text-text-primary'
+                  : 'text-slate-500 hover:bg-surface-2 hover:text-text-primary'
             }`}
           >
             {r.label}

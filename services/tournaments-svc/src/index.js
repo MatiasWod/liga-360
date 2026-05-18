@@ -16,6 +16,7 @@ import {
   singleRoundRobinSchedule,
   validateSingleRoundRobin,
 } from './roundRobin.js';
+import { computeStandings } from './standings.js';
 
 const PORT = process.env.PORT || 4001;
 const NEO4J_URI = process.env.NEO4J_URI || 'bolt://localhost:7687';
@@ -51,6 +52,11 @@ function parseJsonSafe(value) {
 function normalizeInscriptionId(raw) {
   if (raw == null) return '';
   return String(raw);
+}
+
+/** Slots pendientes desde UI (`liga360-slot:*`); no ocupan cupo físico de equipos reales en la etapa. */
+function isSyntheticSlotInscriptionId(raw) {
+  return normalizeInscriptionId(raw).startsWith('liga360-slot:');
 }
 
 function deriveCompetitionCapacityFromStage(stageProps) {
@@ -223,6 +229,14 @@ function matchFromNeoProps(m) {
     awayDisplayName: m.awayDisplayName ?? null,
     homeTournamentId: m.homeTournamentId ?? null,
     awayTournamentId: m.awayTournamentId ?? null,
+    homeScore: m.homeScore != null ? Number(m.homeScore) : null,
+    awayScore: m.awayScore != null ? Number(m.awayScore) : null,
+    status: m.status ?? null,
+    venue: m.venue ?? null,
+    referee: m.referee ?? null,
+    winnerAdvancementTransitionId: m.winnerAdvancementTransitionId
+      ? String(m.winnerAdvancementTransitionId)
+      : null,
   };
 }
 
@@ -608,9 +622,18 @@ const resolvers = {
         if (!owner || !requester || owner !== requester) {
           throw new Error('FORBIDDEN: solo el organizador creador puede eliminar este torneo');
         }
+        // Cascada real: borrar todo el subgrafo del torneo
+        // DETACH DELETE t solo borra relaciones directas; Competition, Stage, etc. están a más hops
         await session.run(
           `MATCH (t:Tournament {id:$id})
-           DETACH DELETE t`,
+           OPTIONAL MATCH (t)-[:HAS_COMPETITION]->(c:Competition)
+           OPTIONAL MATCH (c)-[:HAS_STAGE]->(s:Stage)
+           OPTIONAL MATCH (s)-[:HAS_GROUP]->(g:Group)
+           OPTIONAL MATCH (s)-[:HAS_MATCH]->(m:Match)
+           OPTIONAL MATCH (g)-[:HAS_MATCH]->(gm:Match)
+           OPTIONAL MATCH (s)-[:EMITS|HAS_TRANSITION]->(tr:Transition)
+           OPTIONAL MATCH (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           DETACH DELETE tr, gm, m, g, i, s, c, t`,
           { id }
         );
         return true;
@@ -1404,6 +1427,38 @@ const resolvers = {
         await session.close();
       }
     },
+    trimEliminationBracketAfterRound: async (_, { stageId, tournamentId, lastRoundInclusive }, context) => {
+      requireOrganizer(context);
+      const L = Number(lastRoundInclusive);
+      if (!Number.isFinite(L) || L < 1 || !Number.isInteger(L)) {
+        throw new Error('BAD_REQUEST: lastRoundInclusive debe ser entero >= 1');
+      }
+      const session = context.driver.session();
+      try {
+        const chk = await session.run(
+          `MATCH (t:Tournament {id:$tid})-[:HAS_COMPETITION]->(:Competition)-[:HAS_STAGE]->(s:Stage {id:$stageId})
+           RETURN s
+           LIMIT 1`,
+          { tid: tournamentId, stageId }
+        );
+        if (chk.records.length === 0) {
+          throw new Error('BAD_REQUEST: stage no pertenece al torneo');
+        }
+        const props = chk.records[0].get('s').properties;
+        if (String(props?.format || '').toLowerCase() !== 'elimination') {
+          throw new Error('BAD_REQUEST: la etapa no es de eliminación');
+        }
+        await session.run(
+          `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
+           WHERE coalesce(toInteger(m.round), 1) > $last
+           DETACH DELETE m`,
+          { stageId, last: Math.trunc(L) }
+        );
+        return true;
+      } finally {
+        await session.close();
+      }
+    },
     generateGroupsStageRoundRobin: async (_, { stageId, doubleRound }, context) => {
       requireOrganizer(context);
       const session = context.driver.session();
@@ -1569,15 +1624,23 @@ const resolvers = {
         if (stageCap && stageCap > 0) {
           const stageCountR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-             WITH COLLECT(DISTINCT m.homeInscriptionId) + COLLECT(DISTINCT m.awayInscriptionId) AS ids
-             UNWIND ids AS raw
-             WITH raw WHERE raw IS NOT NULL AND raw <> ''
-             RETURN COUNT(DISTINCT raw) AS count`,
-            { stageId }
+             WITH m.homeInscriptionId AS h, m.awayInscriptionId AS aw
+             UNWIND [h, aw] AS raw
+             WITH raw WHERE raw IS NOT NULL AND toString(raw) <> ''
+               AND NOT toString(raw) STARTS WITH $slotPrefix
+             RETURN count(DISTINCT toString(raw)) AS count`,
+            { stageId, slotPrefix: 'liga360-slot:' }
           );
           const stageCount = Number(stageCountR.records[0]?.get('count') || 0);
           const existsAlready = duplicateR.records.length > 0;
-          if (!existsAlready && stageCount >= stageCap) throw new Error('STAGE_CAPACITY_REACHED');
+          const assigningSynthetic = isSyntheticSlotInscriptionId(iidNorm);
+          if (
+            !assigningSynthetic &&
+            !existsAlready &&
+            stageCount >= stageCap
+          ) {
+            throw new Error('STAGE_CAPACITY_REACHED');
+          }
         }
 
         const setField = role === 'home'
@@ -1851,6 +1914,135 @@ const resolvers = {
         await session.close();
       }
     },
+    updateMatchDateTime: async (_, { matchId, scheduledAt, venue, referee }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const matchR = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
+        await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.scheduledAt = coalesce($scheduledAt, m.scheduledAt),
+               m.venue = coalesce($venue, m.venue),
+               m.referee = coalesce($referee, m.referee),
+               m.updatedAt = $updatedAt`,
+          {
+            matchId,
+            scheduledAt: scheduledAt ?? null,
+            venue: venue ?? null,
+            referee: referee ?? null,
+            updatedAt: new Date().toISOString(),
+          }
+        );
+        const updated = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        const mp = updated.records[0].get('m').properties;
+        return {
+          id: matchId,
+          scheduledAt: mp.scheduledAt ?? null,
+          venue: mp.venue ?? null,
+          referee: mp.referee ?? null,
+        };
+      } finally {
+        await session.close();
+      }
+    },
+    setMatchWinnerAdvancement: async (_, { matchId, transitionId }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const stageMatch = await session.run(
+          `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$matchId})
+           RETURN s.id AS stageId, m
+           LIMIT 1`,
+          { matchId }
+        );
+        if (stageMatch.records.length === 0) {
+          throw new Error('NOT_FOUND: match no existe o no está enlazado a una etapa');
+        }
+        const stageId = String(stageMatch.records[0].get('stageId') || '');
+        const tidNorm = transitionId ? String(transitionId).trim() : '';
+        if (!tidNorm) {
+          await session.run(
+            `MATCH (m:Match {id:$matchId})
+             SET m.winnerAdvancementTransitionId = null`,
+            { matchId }
+          );
+        } else {
+          const trR = await session.run(
+            `MATCH (s:Stage {id:$stageId})-[:EMITS|HAS_TRANSITION]->(tr:Transition {id:$tid})
+             RETURN tr.id AS id LIMIT 1`,
+            { stageId, tid: tidNorm }
+          );
+          if (trR.records.length === 0) {
+            throw new Error('BAD_REQUEST: la transición no está emitida por la etapa de este partido');
+          }
+          await session.run(
+            `MATCH (m:Match {id:$matchId})
+             SET m.winnerAdvancementTransitionId = $tid`,
+            { matchId, tid: tidNorm }
+          );
+        }
+        const out = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        return matchFromNeoProps(out.records[0].get('m').properties);
+      } finally {
+        await session.close();
+      }
+    },
+    updateMatchResult: async (_, { matchId, homeScore, awayScore, status }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const matchR = await session.run(
+          `MATCH (m:Match {id:$matchId}) RETURN m LIMIT 1`,
+          { matchId }
+        );
+        if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
+        const m = matchR.records[0].get('m').properties;
+        const homeScoreNum = homeScore != null ? Number(homeScore) : null;
+        const awayScoreNum = awayScore != null ? Number(awayScore) : null;
+        if (homeScoreNum != null && (!Number.isInteger(homeScoreNum) || homeScoreNum < 0)) {
+          throw new Error('BAD_REQUEST: homeScore debe ser entero no negativo');
+        }
+        if (awayScoreNum != null && (!Number.isInteger(awayScoreNum) || awayScoreNum < 0)) {
+          throw new Error('BAD_REQUEST: awayScore debe ser entero no negativo');
+        }
+        // Normalizar 'completed'/'finished' → 'finished' para que computeStandings lo cuente.
+        const rawStatus = status ?? m.status ?? 'scheduled';
+        const rawLower = String(rawStatus).toLowerCase();
+        const matchStatus = (rawLower === 'completed' || rawLower === 'finished') ? 'finished' : rawStatus;
+        // COALESCE preserva scores existentes cuando el frontend envía null (el usuario no tocó los campos).
+        await session.run(
+          `MATCH (m:Match {id:$matchId})
+           SET m.homeScore = coalesce($homeScore, m.homeScore),
+               m.awayScore = coalesce($awayScore, m.awayScore),
+               m.status = $status,
+               m.updatedAt = $updatedAt`,
+          { matchId, homeScore: homeScoreNum, awayScore: awayScoreNum, status: matchStatus, updatedAt: new Date().toISOString() }
+        );
+        // Valores finales: si el usuario no envió score, usar el previo del nodo.
+        const neoHomeScore = m.homeScore != null ? Number(m.homeScore) : null;
+        const neoAwayScore = m.awayScore != null ? Number(m.awayScore) : null;
+        const finalHomeScore = homeScoreNum != null ? homeScoreNum : neoHomeScore;
+        const finalAwayScore = awayScoreNum != null ? awayScoreNum : neoAwayScore;
+        return {
+          id: matchId,
+          homeScore: finalHomeScore,
+          awayScore: finalAwayScore,
+          status: matchStatus,
+        };
+      } finally {
+        await session.close();
+      }
+    },
   },
   Tournament: {
     competitions: async (parent, _args, { driver }) => {
@@ -1940,6 +2132,47 @@ const resolvers = {
         await session.close();
       }
     },
+    standings: async (parent, _args, { driver }) => {
+      if (parent.format === 'elimination') return [];
+      const session = driver.session();
+      try {
+        const inscriptionsResult = await session.run(
+          `MATCH (s:Stage {id:$id})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           RETURN i.inscriptionId AS inscriptionId, i.displayName AS displayName
+           ORDER BY i.displayName, i.inscriptionId`,
+          { id: parent.id }
+        );
+        const inscriptions = inscriptionsResult.records.map((record) => ({
+          inscriptionId: record.get('inscriptionId'),
+          displayName: record.get('displayName'),
+        }));
+
+        const matchesResult = await session.run(
+          `MATCH (s:Stage {id:$id})-[:HAS_MATCH]->(m:Match)
+           RETURN m.homeInscriptionId AS homeInscriptionId,
+                  m.awayInscriptionId AS awayInscriptionId,
+                  m.homeDisplayName AS homeDisplayName,
+                  m.awayDisplayName AS awayDisplayName,
+                  m.homeScore AS homeScore,
+                  m.awayScore AS awayScore,
+                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+          { id: parent.id }
+        );
+        const matches = matchesResult.records.map((record) => ({
+          homeInscriptionId: record.get('homeInscriptionId'),
+          awayInscriptionId: record.get('awayInscriptionId'),
+          homeDisplayName: record.get('homeDisplayName'),
+          awayDisplayName: record.get('awayDisplayName'),
+          homeScore: record.get('homeScore'),
+          awayScore: record.get('awayScore'),
+          matchStatus: record.get('matchStatus'),
+        }));
+
+        return computeStandings(matches, inscriptions);
+      } finally {
+        await session.close();
+      }
+    },
     transitions: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {
@@ -2018,7 +2251,6 @@ const resolvers = {
       try {
         const res = await session.run(
           `MATCH (s:Stage {id:$id})-[:HAS_MATCH]->(m:Match)
-           WHERE m.groupId IS NULL
            RETURN m ORDER BY COALESCE(m.round, 1), COALESCE(m.leg, 1), COALESCE(m.slotIndex, 999), m.id`,
           { id: parent.id }
         );
@@ -2088,6 +2320,46 @@ const resolvers = {
         await session.close();
       }
     },
+    standings: async (parent, _args, { driver }) => {
+      const session = driver.session();
+      try {
+        const inscriptionsResult = await session.run(
+          `MATCH (g:Group {id:$id})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+           RETURN i.inscriptionId AS inscriptionId, i.displayName AS displayName
+           ORDER BY i.displayName, i.inscriptionId`,
+          { id: parent.id }
+        );
+        const inscriptions = inscriptionsResult.records.map((record) => ({
+          inscriptionId: record.get('inscriptionId'),
+          displayName: record.get('displayName'),
+        }));
+
+        const matchesResult = await session.run(
+          `MATCH (g:Group {id:$id})-[:HAS_MATCH]->(m:Match)
+           RETURN m.homeInscriptionId AS homeInscriptionId,
+                  m.awayInscriptionId AS awayInscriptionId,
+                  m.homeDisplayName AS homeDisplayName,
+                  m.awayDisplayName AS awayDisplayName,
+                  m.homeScore AS homeScore,
+                  m.awayScore AS awayScore,
+                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+          { id: parent.id }
+        );
+        const matches = matchesResult.records.map((record) => ({
+          homeInscriptionId: record.get('homeInscriptionId'),
+          awayInscriptionId: record.get('awayInscriptionId'),
+          homeDisplayName: record.get('homeDisplayName'),
+          awayDisplayName: record.get('awayDisplayName'),
+          homeScore: record.get('homeScore'),
+          awayScore: record.get('awayScore'),
+          matchStatus: record.get('matchStatus'),
+        }));
+
+        return computeStandings(matches, inscriptions);
+      } finally {
+        await session.close();
+      }
+    },
     capacity: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {
@@ -2132,23 +2404,47 @@ const resolvers = {
     homeCompetitor: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {
+        // Primero intentar por relación HAS_COMPETITOR (modelo legacy de createMatch)
         const res = await session.run(
           `MATCH (m:Match {id:$id})-[:HAS_COMPETITOR {role:'home'}]->(c:Competitor)
            RETURN c LIMIT 1`,
           { id: parent.id }
         );
-        if (res.records.length === 0) return null;
-        const c = res.records[0].get('c').properties;
-        return {
-          id: c.id,
-          kind: c.kind ?? 'team',
-          displayName: c.displayName ?? c.id,
-          shortName: c.shortName ?? null,
-          avatarUrl: c.avatarUrl ?? null,
-          badgeUrl: c.badgeUrl ?? null,
-          source: c.source ?? null,
-          updatedAt: c.updatedAt ?? null,
-        };
+        if (res.records.length > 0) {
+          const c = res.records[0].get('c').properties;
+          return {
+            id: c.id,
+            kind: c.kind ?? 'team',
+            displayName: c.displayName ?? c.id,
+            shortName: c.shortName ?? null,
+            avatarUrl: c.avatarUrl ?? null,
+            badgeUrl: c.badgeUrl ?? null,
+            source: c.source ?? null,
+            updatedAt: c.updatedAt ?? null,
+          };
+        }
+        // Fallback: resolver desde InscriptionRef (modelo de generateLeagueRoundRobin, etc.)
+        if (parent.homeInscriptionId) {
+          const ir = await session.run(
+            `MATCH (i:InscriptionRef {inscriptionId:$iid})
+             RETURN i LIMIT 1`,
+            { iid: String(parent.homeInscriptionId) }
+          );
+          if (ir.records.length > 0) {
+            const i = ir.records[0].get('i').properties;
+            return {
+              id: String(i.inscriptionId),
+              kind: 'team',
+              displayName: i.displayName ?? String(i.inscriptionId),
+              shortName: null,
+              avatarUrl: null,
+              badgeUrl: null,
+              source: 'inscription-ref',
+              updatedAt: null,
+            };
+          }
+        }
+        return null;
       } finally {
         await session.close();
       }
@@ -2161,18 +2457,40 @@ const resolvers = {
            RETURN c LIMIT 1`,
           { id: parent.id }
         );
-        if (res.records.length === 0) return null;
-        const c = res.records[0].get('c').properties;
-        return {
-          id: c.id,
-          kind: c.kind ?? 'team',
-          displayName: c.displayName ?? c.id,
-          shortName: c.shortName ?? null,
-          avatarUrl: c.avatarUrl ?? null,
-          badgeUrl: c.badgeUrl ?? null,
-          source: c.source ?? null,
-          updatedAt: c.updatedAt ?? null,
-        };
+        if (res.records.length > 0) {
+          const c = res.records[0].get('c').properties;
+          return {
+            id: c.id,
+            kind: c.kind ?? 'team',
+            displayName: c.displayName ?? c.id,
+            shortName: c.shortName ?? null,
+            avatarUrl: c.avatarUrl ?? null,
+            badgeUrl: c.badgeUrl ?? null,
+            source: c.source ?? null,
+            updatedAt: c.updatedAt ?? null,
+          };
+        }
+        if (parent.awayInscriptionId) {
+          const ir = await session.run(
+            `MATCH (i:InscriptionRef {inscriptionId:$iid})
+             RETURN i LIMIT 1`,
+            { iid: String(parent.awayInscriptionId) }
+          );
+          if (ir.records.length > 0) {
+            const i = ir.records[0].get('i').properties;
+            return {
+              id: String(i.inscriptionId),
+              kind: 'team',
+              displayName: i.displayName ?? String(i.inscriptionId),
+              shortName: null,
+              avatarUrl: null,
+              badgeUrl: null,
+              source: 'inscription-ref',
+              updatedAt: null,
+            };
+          }
+        }
+        return null;
       } finally {
         await session.close();
       }
