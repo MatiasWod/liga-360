@@ -11,12 +11,15 @@ definitions:
        script:
         - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
 
-        - echo "Building and pushing service $SERVICE_NAME..."
+        - export CURRENT_SERVICE_NAME=$SERVICE_NAME
+        - echo "Building and pushing service $CURRENT_SERVICE_NAME..."
 
-        - docker build -t "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT" $DOCKERFILE_PATH
-        - docker tag "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT" "$DOCKER_USER/$SERVICE_NAME:latest"
-        - docker push "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT"
-        - docker push "$DOCKER_USER/$SERVICE_NAME:latest"
+        - docker build -t "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT" $DOCKERFILE_PATH
+
+        - docker tag "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT" "$DOCKER_USER/$CURRENT_SERVICE_NAME:latest"
+
+        - docker push "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT"
+        - docker push "$DOCKER_USER/$CURRENT_SERVICE_NAME:latest"
 
     - step: &build
         name: Build (required)
