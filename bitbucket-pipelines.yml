@@ -10,20 +10,13 @@ definitions:
         - docker
        script:
         - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-        # Definimos las variables completas de la imagen usando las del entorno de Bitbucket
-        - IMAGE_COMMIT="$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT"
-        - IMAGE_LATEST="$DOCKER_USER/$SERVICE_NAME:latest"
 
         - echo "Building and pushing service $SERVICE_NAME..."
-        # Build de la imagen con el tag del commit
-        - docker build -t "$IMAGE_COMMIT" "$DOCKERFILE_PATH"
 
-        # Creamos el tag latest apuntando al mismo build
-        - docker tag "$IMAGE_COMMIT" "$IMAGE_LATEST"
-
-        # Push de ambos tags a Docker Hub
-        - docker push "$IMAGE_COMMIT"
-        - docker push "$IMAGE_LATEST"
+        - docker build -t "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT" $DOCKERFILE_PATH
+        - docker tag "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT" "$DOCKER_USER/$SERVICE_NAME:latest"
+        - docker push "$DOCKER_USER/$SERVICE_NAME:$BITBUCKET_COMMIT"
+        - docker push "$DOCKER_USER/$SERVICE_NAME:latest"
 
     - step: &build
         name: Build (required)
