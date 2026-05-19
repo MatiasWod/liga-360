@@ -2,25 +2,6 @@ image: node:20
 
 definitions:
   steps:
-    - step: &build-and-push-service
-       name: Build & Push Service
-       services:
-        - docker
-       caches:
-        - docker
-       script:
-        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-
-        - export CURRENT_SERVICE_NAME=$SERVICE_NAME
-        - echo "Building and pushing service $CURRENT_SERVICE_NAME..."
-
-        - docker build -t "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT" $DOCKERFILE_PATH
-
-        - docker tag "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT" "$DOCKER_USER/$CURRENT_SERVICE_NAME:latest"
-
-        - docker push "$DOCKER_USER/$CURRENT_SERVICE_NAME:$BITBUCKET_COMMIT"
-        - docker push "$DOCKER_USER/$CURRENT_SERVICE_NAME:latest"
-
     - step: &build
         name: Build (required)
         caches:
@@ -39,49 +20,80 @@ definitions:
           - npm run test:ci
 
 pipelines:
-#  pull-requests:
-#    '**':
-#      - step: *build
-#      - step: *test
-
   branches:
     main:
       - step: *build
       - step: *test
+
       - parallel:
           - step:
-              <<: *build-and-push-service
               name: Deploy — Frontend
-              env:
-                SERVICE_NAME: "liga360-frontend"
-                DOCKERFILE_PATH: "-f Dockerfile.frontend ."
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-frontend"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
           - step:
-              <<: *build-and-push-service
               name: Deploy — Auth Svc
-              env:
-                SERVICE_NAME: "liga360-auth-svc"
-                DOCKERFILE_PATH: "./services/auth-svc"
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-auth-svc"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
           - step:
-              <<: *build-and-push-service
               name: Deploy — Gateway
-              env:
-                SERVICE_NAME: "liga360-gateway"
-                DOCKERFILE_PATH: "./services/gateway"
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-gateway"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/gateway
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
           - step:
-              <<: *build-and-push-service
               name: Deploy — Inscriptions Svc
-              env:
-                SERVICE_NAME: "liga360-inscriptions-svc"
-                DOCKERFILE_PATH: "./services/inscriptions-svc"
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-inscriptions-svc"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/inscriptions-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
           - step:
-              <<: *build-and-push-service
               name: Deploy — Teams Svc
-              env:
-                SERVICE_NAME: "liga360-teams-svc"
-                DOCKERFILE_PATH: "./services/teams-svc"
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-teams-svc"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
           - step:
-              <<: *build-and-push-service
               name: Deploy — Tournaments Svc
-              env:
-                SERVICE_NAME: "liga360-tournaments-svc"
-                DOCKERFILE_PATH: "./services/tournaments-svc"
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-tournaments-svc"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/tournaments-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
