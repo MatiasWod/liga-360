@@ -20,10 +20,10 @@ definitions:
           - npm run test:ci
 
 pipelines:
-  pull-requests:
-    '**':
-      - step: *build
-      - step: *test
+#  pull-requests:
+#    '**':
+#      - step: *build
+#      - step: *test
 
   branches:
     main:
