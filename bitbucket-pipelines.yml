@@ -33,7 +33,7 @@ pipelines:
               script:
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-frontend"
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/Dockerfile.frontend .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
