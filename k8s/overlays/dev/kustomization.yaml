@@ -24,3 +24,11 @@ images:
   - name: liga360/inscriptions-svc
     newName: bcanevaro/liga360-inscriptions-svc
     newTag: latest
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value: [{name: credenciales-dockerhub}]
