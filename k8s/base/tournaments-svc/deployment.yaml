@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tournaments-svc
+  labels:
+    app: tournaments-svc
+    app.kubernetes.io/part-of: liga360
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tournaments-svc
+  template:
+    metadata:
+      labels:
+        app: tournaments-svc
+    spec:
+      containers:
+        - name: tournaments-svc
+          image: liga360/tournaments-svc:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4001
+          env:
+            - name: PORT
+              value: "4001"
+          envFrom:
+            - configMapRef:
+                name: liga360-config
+            - secretRef:
+                name: liga360-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4001
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4001
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 500m
