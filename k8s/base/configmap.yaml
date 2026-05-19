@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: liga360-config
+  labels:
+    app.kubernetes.io/part-of: liga360
+data:
+  NODE_ENV: production
+  POSTGRES_USER: liga
+  POSTGRES_DB: liga360
+  NEO4J_URI: bolt://neo4j:7687
+  NEO4J_USERNAME: neo4j
+  TOURNAMENTS_SUBGRAPH_URL: http://tournaments-svc:4001/graphql
+  TOURNAMENTS_GRAPHQL_URL: http://gateway:4000/graphql

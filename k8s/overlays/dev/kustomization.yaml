@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+images:
+  - name: liga360/frontend
+    newName: liga360/frontend
+    newTag: local
+  - name: liga360/gateway
+    newName: liga360/gateway
+    newTag: local
+  - name: liga360/auth-svc
+    newName: liga360/auth-svc
+    newTag: local
+  - name: liga360/teams-svc
+    newName: liga360/teams-svc
+    newTag: local
+  - name: liga360/tournaments-svc
+    newName: liga360/tournaments-svc
+    newTag: local
+  - name: liga360/inscriptions-svc
+    newName: liga360/inscriptions-svc
+    newTag: local

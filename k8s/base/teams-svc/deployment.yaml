@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teams-svc
+  labels:
+    app: teams-svc
+    app.kubernetes.io/part-of: liga360
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: teams-svc
+  template:
+    metadata:
+      labels:
+        app: teams-svc
+    spec:
+      containers:
+        - name: teams-svc
+          image: liga360/teams-svc:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4002
+          env:
+            - name: PORT
+              value: "4002"
+          envFrom:
+            - configMapRef:
+                name: liga360-config
+            - secretRef:
+                name: liga360-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 500m

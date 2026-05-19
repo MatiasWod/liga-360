@@ -27,9 +27,13 @@ test-results/
 .env
 .env.*
 !.env.example
+k8s/secrets.env
 *.pem
 *.key
 *.crt
+
+# Local kubectl binary (do not commit)
+kubectl.exe
 
 # Docker / local runtime leftovers
 *.pid
@@ -39,6 +43,7 @@ temp/
 # Keep only main README markdown
 **/*.md
 !README.md
+!k8s/README.md
 
 # Local notes (never push)
 local-notes/

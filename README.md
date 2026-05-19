@@ -70,6 +70,16 @@ curl -s http://localhost:4004/health
 - `index.html` en raíz: correcto para Vite.
 - Assets estáticos sueltos en `public/` y referenciados como `/archivo.ext`.
 
+## Despliegue en Kubernetes
+
+Manifiestos Kustomize en `k8s/` (overlay `dev` para cluster local). Guía completa: [k8s/README.md](k8s/README.md).
+
+```bash
+cp k8s/secrets.env.example k8s/secrets.env
+kubectl create secret generic liga360-secrets -n liga360 --from-env-file=k8s/secrets.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -k k8s/overlays/dev
+```
+
 ## Comandos útiles
 
 ```bash
