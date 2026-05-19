@@ -7,20 +7,20 @@ resources:
 
 images:
   - name: liga360/frontend
-    newName: liga360/frontend
+    newName: bcanevaro/liga360-frontend
     newTag: local
   - name: liga360/gateway
-    newName: liga360/gateway
+    newName: bcanevaro/liga360-gateway
     newTag: local
   - name: liga360/auth-svc
-    newName: liga360/auth-svc
+    newName: bcanevaro/liga360-auth-svc
     newTag: local
   - name: liga360/teams-svc
-    newName: liga360/teams-svc
+    newName: bcanevaro/liga360-teams-svc
     newTag: local
   - name: liga360/tournaments-svc
-    newName: liga360/tournaments-svc
+    newName: bcanevaro/liga360-tournaments-svc
     newTag: local
   - name: liga360/inscriptions-svc
-    newName: liga360/inscriptions-svc
+    newName: bcanevaro/liga360-inscriptions-svc
     newTag: local
