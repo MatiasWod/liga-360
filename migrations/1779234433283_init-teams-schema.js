@@ -1,4 +1,4 @@
-exports.up = (pgm) => {
+export const up = (pgm) => {
     // 1. Creación de Tablas Base y Relaciones
     pgm.sql(`
     CREATE TABLE IF NOT EXISTS "Team" (
@@ -58,7 +58,7 @@ exports.up = (pgm) => {
   `);
 };
 
-exports.down = (pgm) => {
+export const down = (pgm) => {
     // Rollback en orden inverso para respetar las llaves foráneas
     pgm.sql(`
     DROP TABLE IF EXISTS "Team_Member" CASCADE;

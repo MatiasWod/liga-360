@@ -1,4 +1,4 @@
-exports.up = (pgm) => {
+export const up = (pgm) => {
     // 1. Tipos ENUM
     pgm.sql(`
     DO $$
@@ -96,27 +96,47 @@ exports.up = (pgm) => {
     DO $$
     BEGIN
       IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'Inscription' AND column_name = 'requested_by_user_id'
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Inscription' AND column_name = 'requested_by_user_id'
       ) THEN
         EXECUTE 'UPDATE "Inscription" SET created_by_user_id = requested_by_user_id WHERE created_by_user_id IS NULL';
       END IF;
     END$$;
 
-    UPDATE "Inscription"
-    SET status = CASE
-      WHEN UPPER(status) = 'PENDING' THEN 'PENDIENTE'
-      WHEN UPPER(status) = 'APPROVED' THEN 'ACEPTADO'
-      WHEN UPPER(status) = 'REJECTED' THEN 'RECHAZADO'
-      ELSE COALESCE(status, 'PENDIENTE')
-    END;
+    -- Legacy backfill: only when status/source were TEXT (pre-enum schema).
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Inscription'
+          AND column_name = 'status' AND data_type = 'text'
+      ) THEN
+        EXECUTE $sql$
+          UPDATE "Inscription"
+          SET status = CASE
+            WHEN UPPER(status) = 'PENDING' THEN 'PENDIENTE'
+            WHEN UPPER(status) = 'APPROVED' THEN 'ACEPTADO'
+            WHEN UPPER(status) = 'REJECTED' THEN 'RECHAZADO'
+            ELSE COALESCE(status, 'PENDIENTE')
+          END
+        $sql$;
+      END IF;
 
-    UPDATE "Inscription"
-    SET source = CASE
-      WHEN LOWER(source) = 'self' THEN 'public'
-      WHEN LOWER(source) IN ('manual', 'invitation', 'public') THEN LOWER(source)
-      ELSE 'public'
-    END;
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Inscription'
+          AND column_name = 'source' AND data_type = 'text'
+      ) THEN
+        EXECUTE $sql$
+          UPDATE "Inscription"
+          SET source = CASE
+            WHEN LOWER(source) = 'self' THEN 'public'
+            WHEN LOWER(source) IN ('manual', 'invitation', 'public') THEN LOWER(source)
+            ELSE 'public'
+          END
+        $sql$;
+      END IF;
+    END$$;
 
     WITH ranked_linked AS (
       SELECT id, ROW_NUMBER() OVER (PARTITION BY tournament_id, linked_team_id ORDER BY created_at ASC, id ASC) AS rn
@@ -154,7 +174,7 @@ exports.up = (pgm) => {
   `);
 };
 
-exports.down = (pgm) => {
+export const down = (pgm) => {
     // Función para revertir (rollback) en caso de fallo crítico
     pgm.sql(`
     DROP TABLE IF EXISTS "MatchEvent" CASCADE;
