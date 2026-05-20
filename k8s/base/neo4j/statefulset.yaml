@@ -5,6 +5,8 @@ metadata:
   labels:
     app: neo4j
     app.kubernetes.io/part-of: liga360
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   serviceName: neo4j
   replicas: 1

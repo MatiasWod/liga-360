@@ -3,7 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY src ./src
-COPY migrations ./migrations
 ENV NODE_ENV=production
 EXPOSE 4004
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=15s \

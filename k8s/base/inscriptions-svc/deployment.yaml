@@ -1,30 +1,52 @@
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: inscriptions-svc-migration
+  name: inscriptions-svc
   labels:
-    app: inscriptions-svc-migration
+    app: inscriptions-svc
     app.kubernetes.io/part-of: liga360
   annotations:
-    # Ejecutar la migración antes de desplegar los nuevos pods
-    argocd.argoproj.io/hook: PreSync
-    # Eliminar el pod efímero de migración tras el éxito
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "2"
 spec:
-  backoffLimit: 1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inscriptions-svc
   template:
     metadata:
       labels:
-        app: inscriptions-svc-migration
+        app: inscriptions-svc
     spec:
       containers:
-        - name: migrate
-          image: liga360/inscriptions-svc:latest # Misma imagen que tu Deployment
+        - name: inscriptions-svc
+          image: liga360/inscriptions-svc
           imagePullPolicy: IfNotPresent
-          command: ["npm", "run", "migrate"]     # Comando para node-pg-migrate
+          ports:
+            - containerPort: 4004
+          env:
+            - name: PORT
+              value: "4004"
           envFrom:
             - configMapRef:
                 name: liga360-config
             - secretRef:
                 name: liga360-secrets
-      restartPolicy: Never
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4004
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4004
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 500m

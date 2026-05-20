@@ -6,6 +6,9 @@ resources:
   - ingress.yaml
 
 images:
+  - name: liga360/migrator
+    newName: bcanevaro/liga360-migrator
+    newTag: latest
   - name: liga360/frontend
     newName: bcanevaro/liga360-frontend
     newTag: latest

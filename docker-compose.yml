@@ -37,6 +37,18 @@ services:
       retries: 10
       start_period: 10s
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrator
+    container_name: liga360-migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   auth-svc:
     build: ./services/auth-svc
     container_name: liga360-auth-svc
@@ -48,6 +60,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - '4003:4003'
     healthcheck:
@@ -89,6 +103,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - '4002:4002'
     healthcheck:
@@ -110,6 +126,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - '4004:4004'
     healthcheck:

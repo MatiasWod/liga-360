@@ -5,6 +5,8 @@ metadata:
   labels:
     app: postgres
     app.kubernetes.io/part-of: liga360
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   serviceName: postgres
   replicas: 1
