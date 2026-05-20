@@ -1,9 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: teams-svc-migration
+  name: inscriptions-svc-migration
   labels:
-    app: teams-svc-migration
+    app: inscriptions-svc-migration
     app.kubernetes.io/part-of: liga360
   annotations:
     # Ejecutar la migración antes de desplegar los nuevos pods
