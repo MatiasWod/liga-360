@@ -22,44 +22,6 @@ function sendDebugLog(payload) {
   }).catch(() => {});
 }
 
-async function ensureSchema() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS "Users" (
-      id SERIAL PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      type TEXT NOT NULL,
-      type_id INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "Team" (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "Participant" (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "Organizer" (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "Participant_Team" (
-      id_team INTEGER NOT NULL REFERENCES "Team"(id) ON DELETE CASCADE,
-      id_participant INTEGER NOT NULL REFERENCES "Participant"(id) ON DELETE CASCADE,
-      PRIMARY KEY (id_team, id_participant)
-    );
-  `);
-  // #region agent log
-  sendDebugLog({
-    runId: 'initial',
-    hypothesisId: 'H1',
-    location: 'services/auth-svc/src/index.js:ensureSchema-complete',
-    message: 'Schema initialization completed',
-    data: { status: 'ok' }
-  });
-  // #endregion
-}
-
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -197,25 +159,4 @@ app.post('/login', async (req, res) => {
   const token = jwt.sign({ sub: user.id, username: user.username, type: user.type, type_id: user.type_id }, JWT_SECRET, { expiresIn: '1d' });
   return res.json({ token, user: { id: user.id, username: user.username, type: user.type, type_id: user.type_id } });
 });
-
-app.listen(PORT, async () => {
-  await ensureSchema().catch((e) => {
-    // #region agent log
-    sendDebugLog({
-      runId: 'initial',
-      hypothesisId: 'H1',
-      location: 'services/auth-svc/src/index.js:ensureSchema-error',
-      message: 'Schema initialization failed',
-      data: {
-        code: e?.code || null,
-        message: e?.message || null
-      }
-    });
-    // #endregion
-    logger.error({ err: e }, 'schema init error');
-  });
-  logger.info({ port: PORT }, 'running');
-});
-
-
 

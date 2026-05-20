@@ -1,9 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: inscriptions-svc-migration
+  name: teams-svc-migration
   labels:
-    app: inscriptions-svc-migration
+    app: teams-svc-migration
     app.kubernetes.io/part-of: liga360
   annotations:
     # Ejecutar la migración antes de desplegar los nuevos pods
@@ -15,11 +15,11 @@ spec:
   template:
     metadata:
       labels:
-        app: inscriptions-svc-migration
+        app: teams-svc-migration
     spec:
       containers:
         - name: migrate
-          image: liga360/inscriptions-svc:latest # Misma imagen que tu Deployment
+          image: liga360/teams-svc:latest # Misma imagen que tu Deployment
           imagePullPolicy: IfNotPresent
           command: ["npm", "run", "migrate"]     # Comando para node-pg-migrate
           envFrom:
@@ -27,4 +27,7 @@ spec:
                 name: liga360-config
             - secretRef:
                 name: liga360-secrets
+          env:
+            - name: DATABASE_URL
+              value: $(POSTGRES_URL)
       restartPolicy: Never

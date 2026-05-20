@@ -1,9 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: inscriptions-svc-migration
+  name: teams-svc-migration
   labels:
-    app: inscriptions-svc-migration
+    app: teams-svc-migration
     app.kubernetes.io/part-of: liga360
   annotations:
     # Ejecutar la migración antes de desplegar los nuevos pods
@@ -27,4 +27,7 @@ spec:
                 name: liga360-config
             - secretRef:
                 name: liga360-secrets
+          env:
+            - name: DATABASE_URL
+              value: $(POSTGRES_URL)
       restartPolicy: Never

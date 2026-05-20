@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: auth-svc-migration
+  labels:
+    app: auth-svc-migration
+    app.kubernetes.io/part-of: liga360
+  annotations:
+    # La magia de ArgoCD: Ejecutar antes de tocar el Deployment
+    argocd.argoproj.io/hook: PreSync
+    # Borrar el pod de migración si termina con éxito
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  # Si falla, no lo intentes en bucle infinito
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: auth-svc-migration
+    spec:
+      containers:
+        - name: migrate
+          image: liga360/auth-svc
+          imagePullPolicy: IfNotPresent
+          # Sobreescribimos el inicio normal para correr la migración
+          command: ["npm", "run", "migrate"]
+          # Usamos las mismas credenciales que el Deployment
+          envFrom:
+            - configMapRef:
+                name: liga360-config
+            - secretRef:
+                name: liga360-secrets
+      # Un Job debe terminar, no reiniciarse como un servidor web
+          env:
+            - name: DATABASE_URL
+              value: $(POSTGRES_URL)
+      restartPolicy: Never

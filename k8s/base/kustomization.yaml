@@ -12,12 +12,15 @@ resources:
   - neo4j/statefulset.yaml
   - auth-svc/deployment.yaml
   - auth-svc/service.yaml
+  - auth-svc/migration-job.yaml
   - teams-svc/deployment.yaml
   - teams-svc/service.yaml
+  - teams-svc/migration-job.yaml
   - tournaments-svc/deployment.yaml
   - tournaments-svc/service.yaml
   - inscriptions-svc/deployment.yaml
   - inscriptions-svc/service.yaml
+  - inscriptions-svc/migration-job.yaml
   - gateway/deployment.yaml
   - gateway/service.yaml
   - frontend/deployment.yaml

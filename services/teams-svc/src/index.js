@@ -36,85 +36,6 @@ const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localho
 const { Pool } = pkg;
 const pool = new Pool({ connectionString: POSTGRES_URL });
 
-async function ensureSchema() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS "Team" (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS "Participant" (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS "Person_Profile" (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER UNIQUE NOT NULL,
-      dni TEXT UNIQUE,
-      first_name TEXT,
-      last_name TEXT,
-      avatar_url TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-
-    CREATE TABLE IF NOT EXISTS "Team_Member" (
-      team_id INTEGER NOT NULL REFERENCES "Team"(id) ON DELETE CASCADE,
-      participant_id INTEGER NOT NULL REFERENCES "Participant"(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (team_id, participant_id)
-    );
-
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS owner_user_id INTEGER;
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS badge_url TEXT;
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS access_code_hash TEXT;
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS invite_code TEXT;
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
-    ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS first_name TEXT;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS last_name TEXT;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS nickname TEXT;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS dni TEXT;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS person_profile_id INTEGER REFERENCES "Person_Profile"(id) ON DELETE SET NULL;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
-    ALTER TABLE "Participant" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-
-    CREATE INDEX IF NOT EXISTS idx_participant_dni ON "Participant"(dni);
-    CREATE INDEX IF NOT EXISTS idx_team_member_participant ON "Team_Member"(participant_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_invite_code_unique ON "Team"(invite_code);
-  `);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const missingCodes = await client.query(
-      `SELECT id, name
-       FROM "Team"
-       WHERE invite_code IS NULL OR trim(invite_code) = ''
-       ORDER BY id`
-    );
-    for (const row of missingCodes.rows) {
-      const inviteCode = await generateUniqueInviteCode(client, row.name);
-      await client.query(
-        `UPDATE "Team"
-         SET invite_code = $2,
-             updated_at = $3
-         WHERE id = $1`,
-        [row.id, inviteCode, nowIso()]
-      );
-    }
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
 function optionalAuthMiddleware(req, _res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -697,10 +618,6 @@ app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req
   }
 });
 
-app.listen(PORT, async () => {
-  await ensureSchema().catch((e) => logger.error({ err: e }, 'schema init error'));
-  logger.info({ port: PORT }, 'running');
-});
 
 
 
