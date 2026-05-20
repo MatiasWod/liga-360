@@ -15,7 +15,7 @@ spec:
   project: default
   source:
     repoURL: https://bitbucket.org/itba/pf-2025b-liga360.git
-    targetRevision: HEAD
+    targetRevision: LIGA-155
     path: k8s/overlays/dev
   destination:
     server: https://kubernetes.default.svc
