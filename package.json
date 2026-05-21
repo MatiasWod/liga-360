@@ -12,6 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "hooks:install": "node scripts/setup-hooks.mjs",
+    "migrate": "node-pg-migrate up",
     "test:changed:guard": "node scripts/check-tests-required.mjs",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
@@ -19,6 +20,7 @@
     "test:integration": "npm run test --prefix services/inscriptions-svc && npm run test --prefix services/tournaments-svc",
     "setup:e2e": "node scripts/setup-e2e.mjs",
     "setup:e2e:clean": "node scripts/setup-e2e.mjs --clean",
+    "start": "node index.js",
     "test:e2e": "playwright test --project=smoke",
     "test:e2e:smoke": "playwright test --project=smoke",
     "test:e2e:critical": "playwright test --project=critical",
@@ -33,6 +35,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "framer-motion": "^12.38.0",
+    "node-pg-migrate": "^8.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-select": "^5.10.2"

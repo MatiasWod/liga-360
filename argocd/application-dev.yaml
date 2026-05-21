@@ -1,0 +1,29 @@
+# Apply once Argo CD is installed in the cluster:
+#   kubectl apply -f argocd/application-dev.yaml
+#
+# Replace spec.source.repoURL with this repository URL before applying.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: liga360-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: liga360
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://bitbucket.org/itba/pf-2025b-liga360.git
+    targetRevision: LIGA-155
+    path: k8s/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: liga360
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=false

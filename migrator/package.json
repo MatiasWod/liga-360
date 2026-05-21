@@ -1,0 +1,12 @@
+{
+  "name": "liga360-migrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "node-pg-migrate up"
+  },
+  "dependencies": {
+    "node-pg-migrate": "^8.0.4"
+  }
+}

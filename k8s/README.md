@@ -1,63 +1,57 @@
-# Liga360 — Kubernetes
+# Liga360 — Kubernetes (GitOps)
 
-Manifiestos [Kustomize](https://kustomize.io/) para desplegar el stack completo de Liga360 en un clúster Kubernetes (kind, minikube o remoto).
+Manifiestos [Kustomize](https://kustomize.io/) desplegados vía **Argo CD**. Un solo overlay de entorno en Git: **`k8s/overlays/dev`**.
+
+## Modelo DevOps
+
+```
+Bitbucket (main) → CI build/test → push imágenes Docker Hub
+                                        ↓
+Git (k8s/overlays/dev) ← Argo CD Application liga360-dev → namespace liga360
+                                        ↓
+                         wave 0: Postgres, Neo4j
+                         wave 1: Job db-migrate (liga360-migrator)
+                         wave 2: Deployments (apps)
+```
+
+| Capa | Ubicación |
+|------|-----------|
+| Manifiestos | `k8s/base/` + `k8s/overlays/dev/` |
+| GitOps | `argocd/application-dev.yaml` → `path: k8s/overlays/dev` |
+| Imágenes | Docker Hub `bcanevaro/liga360-*` (CI en `bitbucket-pipelines.yml`) |
+| Migraciones SQL | `migrations/` → imagen `Dockerfile.migrator` → Job `db-migrate` |
+| Dev en máquina (sin K8s) | `docker-compose.yml` — camino aparte, no usa overlays K8s |
+
+No hay overlay `local`: el clúster (kind, minikube o remoto) usa el **mismo** `overlays/dev` y las imágenes del registry.
 
 ## Requisitos
 
 - `kubectl` 1.28+
-- Clúster local ([kind](https://kind.sigs.k8s.io/) o [minikube](https://minikube.sigs.k8s.io/)) con al menos **6 GB RAM** libres (Neo4j + PostgreSQL + 6 apps)
-- [Docker](https://www.docker.com/) para construir imágenes
-- Ingress controller (p. ej. `ingress-nginx` en kind/minikube)
+- Clúster con **6 GB RAM** libres (Neo4j + PostgreSQL + apps)
+- [Argo CD](https://argo-cd.readthedocs.io/) instalado
+- Ingress controller (p. ej. `ingress-nginx`)
+- Imágenes publicadas en Docker Hub (CI en `main` o push manual del migrator la primera vez)
+- `imagePullSecret` `credenciales-dockerhub` en el namespace (overlay `dev`)
 
 ## Estructura
 
 ```
 k8s/
-├── base/                 # Namespace, ConfigMap, StatefulSets, Deployments, Services
-├── overlays/dev/         # Ingress liga360.local, tags :local, imagePullPolicy
-├── secrets.env.example   # Plantilla de secretos (no commitear secrets.env)
+├── base/                 # Recursos comunes + Job db-migrate
+├── overlays/dev/         # Único overlay: Hub, Ingress, imagePullSecrets
+├── secrets.env.example
 └── README.md
+argocd/
+└── application-dev.yaml
+Dockerfile.migrator
+migrations/
 ```
 
-## 1. Construir imágenes locales
-
-Desde la raíz del repositorio:
-
-```bash
-docker compose build
-```
-
-Etiquetar para Kustomize overlay `dev` (`liga360/<service>:local`):
-
-```bash
-for svc in frontend gateway auth-svc teams-svc tournaments-svc inscriptions-svc; do
-  docker tag "pf-2025b-liga360-${svc}-1" "liga360/${svc}:local" 2>/dev/null || \
-  docker tag "liga360-${svc}" "liga360/${svc}:local" 2>/dev/null || \
-  docker tag "$(docker compose images -q ${svc} 2>/dev/null | head -1 | xargs -I{} docker inspect --format='{{.RepoTags}}' {} 2>/dev/null | tr -d '[]')" "liga360/${svc}:local"
-done
-```
-
-En Windows/PowerShell, etiquetá manualmente cada imagen que produzca `docker compose build`, por ejemplo:
-
-```powershell
-docker tag pf-2025b-liga360-frontend-1 liga360/frontend:local
-docker tag pf-2025b-liga360-gateway-1 liga360/gateway:local
-# ... auth-svc, teams-svc, tournaments-svc, inscriptions-svc
-```
-
-Para **kind**, cargá las imágenes al nodo:
-
-```bash
-kind load docker-image liga360/frontend:local
-kind load docker-image liga360/gateway:local
-# ... resto de servicios
-```
-
-## 2. Crear secretos
+## 1. Secretos (una vez por clúster)
 
 ```bash
 cp k8s/secrets.env.example k8s/secrets.env
-# Editar k8s/secrets.env con valores seguros en entornos reales
+# Editar valores en entornos reales
 
 kubectl create namespace liga360 --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic liga360-secrets \
@@ -66,98 +60,112 @@ kubectl create secret generic liga360-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Claves requeridas: `JWT_SECRET`, `POSTGRES_PASSWORD`, `POSTGRES_URL`, `NEO4J_PASSWORD`, `NEO4J_AUTH`.
+Claves: `JWT_SECRET`, `POSTGRES_PASSWORD`, `POSTGRES_URL`, `NEO4J_PASSWORD`, `NEO4J_AUTH`.
 
-## 3. Aplicar manifiestos
+Registry privado: crear `credenciales-dockerhub` en `liga360` (el overlay `dev` lo referencia en Deployments).
 
-Vista previa:
+## 2. Argo CD (camino recomendado)
+
+1. Ajustar `argocd/application-dev.yaml` (`repoURL`, `targetRevision` = rama con los manifiestos).
+2. Registrar el repo en Argo si es privado.
+3. Aplicar la Application:
+
+   ```bash
+   kubectl apply -f argocd/application-dev.yaml
+   ```
+
+4. Sync `liga360-dev` en la UI o:
+
+   ```bash
+   argocd app sync liga360-dev
+   ```
+
+### Sync waves (orden automático)
+
+| Wave | Recursos |
+|------|----------|
+| `0` | Postgres, Neo4j |
+| `1` | Job `db-migrate` (imagen `bcanevaro/liga360-migrator`) |
+| `2` | frontend, gateway, auth-svc, teams-svc, tournaments-svc, inscriptions-svc |
+
+Si `db-migrate` falla, el sync debe quedar **Failed**; no desplegar apps sin esquema.
+
+## 3. Imágenes en Docker Hub
+
+CI publica en cada merge a `main`:
+
+- `bcanevaro/liga360-frontend`
+- `bcanevaro/liga360-gateway`
+- `bcanevaro/liga360-auth-svc`
+- `bcanevaro/liga360-teams-svc`
+- `bcanevaro/liga360-tournaments-svc`
+- `bcanevaro/liga360-inscriptions-svc`
+- `bcanevaro/liga360-migrator`
+
+Primera vez o rama sin CI: push manual del migrator (y del resto si falta):
+
+```bash
+docker login
+docker build -f Dockerfile.migrator -t bcanevaro/liga360-migrator:latest .
+docker push bcanevaro/liga360-migrator:latest
+```
+
+Luego **Sync** en Argo (no hace falta overlay distinto).
+
+## 4. `kubectl apply` (solo bootstrap / emergencia)
+
+Equivalente a lo que Argo aplica, pero **sin** sync waves de Argo:
 
 ```bash
 kubectl kustomize k8s/overlays/dev
-```
-
-Desplegar:
-
-```bash
 kubectl apply -k k8s/overlays/dev
 ```
 
-Esperar pods listos:
+Preferí **Argo Sync** como operación habitual para no divergir Git ↔ cluster.
+
+Migración manual de emergencia (Postgres ya arriba):
 
 ```bash
-kubectl -n liga360 get pods -w
+kubectl -n liga360 port-forward svc/postgres 55432:5432
+# En otra terminal, desde la raíz del repo:
+export DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360
+npm run migrate
 ```
 
-## 4. Acceder a la aplicación
+## 5. Acceso a la aplicación
 
-### Con Ingress (recomendado)
-
-1. Obtener IP del Ingress:
-
-   ```bash
-   kubectl -n liga360 get ingress liga360
-   ```
-
-2. Añadir a `C:\Windows\System32\drivers\etc\hosts` (o `/etc/hosts`):
-
-   ```
-   <INGRESS_IP>  liga360.local
-   ```
-
-3. Abrir `http://liga360.local`
-
-### Sin Ingress (NodePort)
+Ingress `liga360.local` (ver `k8s/overlays/dev/ingress.yaml`):
 
 ```bash
-kubectl -n liga360 expose deployment frontend --type=NodePort --port=80 --name=frontend-nodeport
-kubectl -n liga360 get svc frontend-nodeport
+kubectl -n liga360 get ingress liga360
+# Añadir <INGRESS_IP> liga360.local en hosts
 ```
 
-Abrí `http://localhost:<nodePort>` (minikube: `minikube service frontend-nodeport -n liga360 --url`).
-
-## 5. Smoke / health checks
+## 6. Smoke / health
 
 ```bash
-kubectl -n liga360 port-forward svc/gateway 4000:4000 &
+kubectl -n liga360 port-forward svc/gateway 4000:4000
 curl -s http://localhost:4000/health
-
-kubectl -n liga360 port-forward svc/auth-svc 4003:4003 &
-curl -s http://localhost:4003/health
 ```
-
-La UI debe cargar en `http://liga360.local` y las llamadas `/api/*` deben proxearse vía nginx del pod `frontend`.
-
-## Registry remoto (Bitbucket CI)
-
-Las imágenes se publican como `$DOCKER_USER/liga360-<service>:$BITBUCKET_COMMIT`. Creá un overlay (p. ej. `k8s/overlays/prod/`) que reemplace en `images:`:
-
-```yaml
-images:
-  - name: liga360/frontend
-    newName: your-user/liga360-frontend
-    newTag: <commit-sha>
-```
-
-Si el registry es privado, creá `imagePullSecrets` y referenciálos en los Deployments.
 
 ## Troubleshooting
 
-### Neo4j en CrashLoopBackOff (`PORT.7687.TCP.PORT`)
+### Job `db-migrate` ImagePullBackOff
 
-Kubernetes inyecta variables de servicio que Neo4j interpreta como config. El StatefulSet usa `enableServiceLinks: false` para evitarlo. Si recreás el pod: `kubectl -n liga360 delete pod neo4j-0`.
+La imagen no está en Hub. Push manual (sección 3) o esperar CI en `main`, luego Argo Sync.
 
-### Deployments sin imagen tras `kustomize build`
+### Neo4j CrashLoopBackOff (`PORT.7687.TCP.PORT`)
 
-No uses un strategic-merge patch genérico sobre `containers` en Deployments (puede borrar `image`). El `imagePullPolicy: IfNotPresent` está en los manifiestos base.
+El StatefulSet usa `enableServiceLinks: false`. `kubectl -n liga360 delete pod neo4j-0`.
 
-## Rollback
+### `relation "Organizer" does not exist`
 
-```bash
-kubectl delete -k k8s/overlays/dev
-# o
-kubectl delete namespace liga360
-```
+Migraciones no aplicadas. Revisar `kubectl -n liga360 logs job/db-migrate` y `\dt` en Postgres.
 
-## Variables de entorno
+## Desarrollo local sin Kubernetes
 
-Ver `.env.example` (compose) y `k8s/secrets.env.example` (K8s). La configuración no sensible está en ConfigMap `liga360-config`.
+Usar **docker-compose** en la raíz (`docker compose up`). Incluye servicio `migrate` antes de los servicios que usan Postgres. No reemplaza el flujo GitOps de Argo.
+
+## Variables
+
+`.env.example` (compose) y `k8s/secrets.env.example` (K8s). Config no sensible: ConfigMap `liga360-config`.

@@ -10,6 +10,7 @@ resources:
   - postgres/statefulset.yaml
   - neo4j/service.yaml
   - neo4j/statefulset.yaml
+  - db-migrate/job.yaml
   - auth-svc/deployment.yaml
   - auth-svc/service.yaml
   - teams-svc/deployment.yaml
@@ -24,6 +25,9 @@ resources:
   - frontend/service.yaml
 
 images:
+  - name: liga360/migrator
+    newName: liga360/migrator
+    newTag: latest
   - name: liga360/frontend
     newName: liga360/frontend
     newTag: latest

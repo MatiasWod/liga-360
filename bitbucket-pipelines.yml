@@ -1,6 +1,13 @@
 image: node:20
 
 definitions:
+  services:
+    postgres:
+      image: postgres:16-alpine
+      variables:
+        POSTGRES_USER: liga
+        POSTGRES_PASSWORD: liga
+        POSTGRES_DB: liga360
   steps:
     - step: &build
         name: Build (required)
@@ -13,11 +20,15 @@ definitions:
         name: Tests — Unit + Integration (required)
         caches:
           - node
+        services:
+          - postgres
         script:
           - npm ci
           - npm install --prefix services/inscriptions-svc
           - npm install --prefix services/tournaments-svc
           - npm run test:ci
+          - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
+          - npm run migrate
 
 pipelines:
   branches:
@@ -94,6 +105,18 @@ pipelines:
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-tournaments-svc"
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/tournaments-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
+          - step:
+              name: Deploy — DB Migrator
+              services: [docker]
+              caches: [docker]
+              script:
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - export SVC="liga360-migrator"
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.migrator .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"

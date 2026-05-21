@@ -5,6 +5,8 @@ metadata:
   labels:
     app: gateway
     app.kubernetes.io/part-of: liga360
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: 1
   selector:
