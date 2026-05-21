@@ -65,7 +65,6 @@ function normalizeStatusForForm(raw: string | null | undefined): string {
 export interface MatchEditDrawerProps {
   matchId: string;
   tournamentId: string;
-  /** Valores actuales del partido (opcionales, para pre-rellenar formularios) */
   initialData?: {
     scheduledAt?: string | null;
     venue?: string | null;
@@ -76,8 +75,11 @@ export interface MatchEditDrawerProps {
     homeDisplayName?: string;
     awayDisplayName?: string;
   };
+  /** Horarios frecuentes para sugerir en la pestaña Programación. */
+  presetTimes?: string[];
+  /** Pestaña inicial. Por defecto 'result' para partidos no finalizados. */
+  defaultTab?: 'schedule' | 'result' | 'events';
   onClose: () => void;
-  /** Llamado tras guardar — puede ser async para esperar el refresh */
   onSaved?: () => void | Promise<void>;
 }
 
@@ -88,10 +90,12 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
   matchId,
   tournamentId,
   initialData,
+  presetTimes,
+  defaultTab,
   onClose,
   onSaved,
 }) => {
-  const [activeSection, setActiveSection] = React.useState<'schedule' | 'result' | 'events'>('schedule');
+  const [activeSection, setActiveSection] = React.useState<'schedule' | 'result' | 'events'>(defaultTab ?? 'result');
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -151,7 +155,7 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto p-5">
           {activeSection === 'schedule' && (
-            <ScheduleSection matchId={matchId} initialData={initialData} onSaved={onSaved} />
+            <ScheduleSection matchId={matchId} initialData={initialData} presetTimes={presetTimes} onSaved={onSaved} />
           )}
           {activeSection === 'result' && (
             <ResultSection matchId={matchId} initialData={initialData} onSaved={onSaved} />
@@ -171,10 +175,12 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
 function ScheduleSection({
   matchId,
   initialData,
+  presetTimes,
   onSaved,
 }: {
   matchId: string;
   initialData?: MatchEditDrawerProps['initialData'];
+  presetTimes?: string[];
   onSaved?: () => void;
 }) {
   const [scheduledAt, setScheduledAt] = React.useState(
@@ -185,6 +191,12 @@ function ScheduleSection({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState(false);
+
+  function applyPresetTime(hhmm: string) {
+    const dateOnly = scheduledAt ? scheduledAt.split('T')[0] : new Date().toISOString().split('T')[0];
+    const [hh, mm] = hhmm.split(':').map((x) => x.padStart(2, '0'));
+    setScheduledAt(`${dateOnly}T${hh}:${mm}`);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -215,6 +227,20 @@ function ScheduleSection({
           onChange={(e) => setScheduledAt(e.target.value)}
           className="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
         />
+        {presetTimes && presetTimes.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {presetTimes.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => applyPresetTime(t)}
+                className="rounded-full border border-border-subtle bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted transition-colors hover:border-accent-primary hover:text-accent-primary"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="space-y-1">
         <label className="block text-xs font-medium text-text-secondary">Sede / cancha</label>

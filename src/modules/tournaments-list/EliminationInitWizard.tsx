@@ -327,7 +327,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
   }
 
   async function assignSlot(match: TournamentMatchRow, role: 'home' | 'away', rawId: string) {
-    const blocked = blockedGloballyExceptMatch(match.id);
     const nextId = rawId === '' ? null : String(rawId);
     const displayName =
       nextId == null
@@ -361,6 +360,26 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
         tournamentId,
         displayName: displayName ?? undefined,
       });
+      // En doble vuelta, auto-asignar la pierna 2 con roles invertidos
+      if (doubleRound) {
+        const leg2 = matchesInput.find(
+          (m) =>
+            (m.round ?? 1) === (match.round ?? 1) &&
+            (m.slotIndex ?? 0) === (match.slotIndex ?? 0) &&
+            (m.leg ?? 1) === 2
+        );
+        if (leg2) {
+          const reversedRole = role === 'home' ? 'away' : 'home';
+          await assignInscriptionToMatchSlot({
+            stageId: stage.id,
+            matchId: leg2.id,
+            slotRole: reversedRole,
+            inscriptionId: nextId,
+            tournamentId,
+            displayName: displayName ?? undefined,
+          });
+        }
+      }
       await onReload();
     } catch (e: any) {
       setError(e?.message || 'No se pudo asignar el slot');
@@ -386,12 +405,9 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     );
   }
 
-  const [rStr, lStr] = (currentKey || '1|1').split('|');
+  const [rStr] = (currentKey || '1|1').split('|');
   const rNum = Number(rStr) || 1;
-  const lNum = Number(lStr) || 1;
-  const stepLabel = doubleRound
-    ? `Ronda ${rNum} · Pierna ${lNum}`
-    : `Ronda ${rNum}`;
+  const stepLabel = doubleRound ? `Ronda ${rNum} · ida y vuelta` : `Ronda ${rNum}`;
   const totalSteps = steps.length;
 
   return (
@@ -403,8 +419,10 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
             {currentMatches.length === 1 ? 'partido' : 'partidos'}
           </p>
           <p className="text-[11px] text-text-muted">
-            Paso {stepIndex + 1} de {totalSteps} · Podés ubicar equipo libre, clasificados, o pendientes de llaves ya
-            creadas (ganador de una llave anterior).
+            Paso {stepIndex + 1} de {totalSteps}
+            {doubleRound
+              ? ' · Asignás local y visitante de la ida; la vuelta se configura automáticamente en reversa.'
+              : ' · Podés ubicar equipo libre, clasificados, o pendientes de llaves ya creadas (ganador de una llave anterior).'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -471,6 +489,11 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
             >
               <p className="mb-3 text-center font-mono text-sm font-semibold tracking-tight text-success-base">
                 {title}
+                {doubleRound && (
+                  <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-[10px] font-normal text-blue-700">
+                    ida y vuelta
+                  </span>
+                )}
               </p>
 
               <div className="space-y-2">

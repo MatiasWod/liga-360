@@ -18,6 +18,7 @@ export async function getTournamentConfigurationById(tournamentId: string) {
             order
             format
             isInitial
+            stageStatus
             configJson
             childrenJson
             standings {
@@ -130,10 +131,11 @@ export async function assignInscriptionToStage(payload: {
   inscriptionId: string;
   tournamentId: string;
   displayName: string;
+  force?: boolean;
 }) {
   await gqlRequest(
-    `mutation Assign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!) {
-      assignInscriptionToStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName)
+    `mutation Assign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!, $force: Boolean) {
+      assignInscriptionToStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName, force: $force)
     }`,
     payload,
     { auth: true }
@@ -180,12 +182,12 @@ export async function setMatchWinnerAdvancement(matchId: string, transitionId: s
   return data?.setMatchWinnerAdvancement ?? null;
 }
 
-export async function generateLeagueRoundRobin(stageId: string, doubleRound: boolean) {
+export async function generateLeagueRoundRobin(stageId: string, doubleRound: boolean, maxRounds?: number | null) {
   await gqlRequest(
-    `mutation GenLeague($stageId: ID!, $doubleRound: Boolean!) {
-      generateLeagueRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode }
+    `mutation GenLeague($stageId: ID!, $doubleRound: Boolean!, $maxRounds: Int) {
+      generateLeagueRoundRobin(stageId: $stageId, doubleRound: $doubleRound, maxRounds: $maxRounds) { id fixtureCode }
     }`,
-    { stageId, doubleRound },
+    { stageId, doubleRound, maxRounds: maxRounds ?? null },
     { auth: true }
   );
 }
@@ -222,12 +224,12 @@ export async function trimEliminationBracketAfterRound(payload: {
   );
 }
 
-export async function generateGroupsStageRoundRobin(stageId: string, doubleRound: boolean) {
+export async function generateGroupsStageRoundRobin(stageId: string, doubleRound: boolean, maxRounds?: number | null) {
   await gqlRequest(
-    `mutation GenGroups($stageId: ID!, $doubleRound: Boolean!) {
-      generateGroupsStageRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id fixtureCode groupId }
+    `mutation GenGroups($stageId: ID!, $doubleRound: Boolean!, $maxRounds: Int) {
+      generateGroupsStageRoundRobin(stageId: $stageId, doubleRound: $doubleRound, maxRounds: $maxRounds) { id fixtureCode groupId }
     }`,
-    { stageId, doubleRound },
+    { stageId, doubleRound, maxRounds: maxRounds ?? null },
     { auth: true }
   );
 }
@@ -302,6 +304,16 @@ export async function updateMatchResultFromViewer(payload: {
       awayScore: payload.awayScore,
       status: 'completed',
     },
+    { auth: true }
+  );
+}
+
+export async function setStageStatus(stageId: string, status: 'not_started' | 'active' | 'finished'): Promise<void> {
+  await gqlRequest(
+    `mutation SetStageStatus($stageId: ID!, $status: String!) {
+      setStageStatus(stageId: $stageId, status: $status) { id stageStatus }
+    }`,
+    { stageId, status },
     { auth: true }
   );
 }

@@ -106,9 +106,9 @@ type Mutation {
     badgeUrl: String
   ): Competitor!
   ensureEliminationBracket(stageId: ID!, totalSlots: Int!): [Match!]!
-  generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!, maxRounds: Int): [Match!]!
   generateSingleEliminationBracket(stageId: ID!, doubleRound: Boolean!): [Match!]!
-  generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!): [Match!]!
+  generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!, maxRounds: Int): [Match!]!
   # Conserva sólo hasta `lastRoundInclusive` (elimina todas las llaves de ronda mayor).
   trimEliminationBracketAfterRound(stageId: ID!, tournamentId: ID!, lastRoundInclusive: Int!): Boolean!
   assignInscriptionToMatchSlot(
@@ -135,6 +135,7 @@ type Mutation {
     inscriptionId: ID!
     tournamentId: ID!
     displayName: String!
+    force: Boolean
   ): Boolean!
   unassignInscriptionFromStage(
     stageId: ID!
@@ -159,6 +160,7 @@ type Mutation {
   ): MatchDateTimeResult!
   # Transición (emitida por la etapa del partido) asociada al ganador para avance / referencia.
   setMatchWinnerAdvancement(matchId: ID!, transitionId: ID): Match!
+  setStageStatus(stageId: ID!, status: String!): Stage!
 }
 
 type MatchResult {
@@ -202,6 +204,7 @@ type Stage {
   order: Int!
   format: StageFormat!
   isInitial: Boolean!
+  stageStatus: String!
   assignedInscriptions: [AssignedInscription!]!
   standings: [StandingsRow!]!
   configJson: String

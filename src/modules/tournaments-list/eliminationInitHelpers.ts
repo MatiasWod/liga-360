@@ -19,8 +19,8 @@ export function eliminationRoundLegSteps(matches: TournamentMatchRow[]): Elimina
   const seen = new Set<string>();
   for (const m of sorted) {
     const r = Number(m.round ?? 1);
-    const l = Number(m.leg ?? 1);
-    const k = `${r}|${l}`;
+    // Siempre usamos leg=1 como representante de la ronda; la pierna 2 se auto-asigna en reversa.
+    const k = `${r}|1`;
     if (!seen.has(k)) {
       seen.add(k);
       out.push(k);
