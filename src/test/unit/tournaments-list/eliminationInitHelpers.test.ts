@@ -34,13 +34,13 @@ describe('eliminationInitHelpers', () => {
     expect(sorted.map((x) => x.id)).toEqual(['b', 'a', 'c', 'd']);
   });
 
-  it('eliminationRoundLegSteps agrupa piernas cuando hay más de una', () => {
+  it('eliminationRoundLegSteps devuelve un paso por ronda (legs se agrupan, la pierna 2 se auto-asigna)', () => {
     const keys = eliminationRoundLegSteps([
       m({ id: '1', round: 1, leg: 2, slotIndex: 1 }),
       m({ id: '2', round: 1, leg: 1, slotIndex: 1 }),
       m({ id: '3', round: 1, leg: 2, slotIndex: 2 }),
     ]);
-    expect(keys).toEqual(['1|1', '1|2']);
+    expect(keys).toEqual(['1|1']);
   });
 
   it('matchesForRoundLeg filtra por pierna correcta', () => {

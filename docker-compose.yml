@@ -141,7 +141,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: deploy/Dockerfile.frontend
     container_name: liga360-frontend
     depends_on:
       - gateway

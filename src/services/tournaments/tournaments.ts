@@ -151,6 +151,7 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
               name
               order
               format
+              stageStatus
               standings {
                 position
                 inscriptionId

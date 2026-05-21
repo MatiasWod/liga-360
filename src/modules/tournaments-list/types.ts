@@ -70,6 +70,7 @@ export type TournamentStage = {
   order: number;
   format: TournamentStageFormat;
   isInitial?: boolean;
+  stageStatus?: string | null;
   configJson?: string | null;
   childrenJson?: string | null;
   transitions?: TournamentTransition[];

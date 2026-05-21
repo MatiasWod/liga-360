@@ -70,6 +70,27 @@ test('Match incluye winnerAdvancementTransitionId y Mutation setMatchWinnerAdvan
   assert.equal(unwrapNamedType(mw.type), 'Match');
 });
 
+test('schema incluye stageStatus en Stage y mutation setStageStatus', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+
+  const stageType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Stage'
+  );
+  assert.ok(stageType, 'Stage type no encontrado');
+  const stageFields = new Set(stageType.fields?.map((field) => field.name.value) || []);
+  assert.equal(stageFields.has('stageStatus'), true, 'Stage debe tener campo stageStatus');
+
+  const mutationType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Mutation'
+  );
+  const mut = mutationType.fields?.find((f) => f.name.value === 'setStageStatus');
+  assert.ok(mut, 'Mutation.setStageStatus no encontrado');
+  const argNames = mut.arguments?.map((a) => a.name.value).sort();
+  assert.ok(argNames.includes('stageId'), 'setStageStatus debe tener arg stageId');
+  assert.ok(argNames.includes('status'), 'setStageStatus debe tener arg status');
+});
+
 test('schema incluye StandingsRow y fields standings en Stage/Group', async () => {
   const sdl = await fs.readFile(schemaPath, 'utf8');
   const ast = parse(sdl);
