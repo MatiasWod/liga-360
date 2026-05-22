@@ -1696,6 +1696,9 @@ app.delete('/matches/:matchId/events/:eventId', requireOrganizer, async (req, re
   }
 });
 
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 export {
   app,

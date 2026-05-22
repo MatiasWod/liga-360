@@ -160,3 +160,6 @@ app.post('/login', async (req, res) => {
   return res.json({ token, user: { id: user.id, username: user.username, type: user.type, type_id: user.type_id } });
 });
 
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});

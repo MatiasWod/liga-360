@@ -618,6 +618,8 @@ app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req
   }
 });
 
-
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 
