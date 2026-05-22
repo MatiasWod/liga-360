@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { TournamentForm } from '../../modules/tournament-form';
 import { TournamentConfiguration, TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
+import { useTournamentRoute } from '../../hooks/useTournamentRoute';
 
 type Mode = 'visualizacion' | 'creacion' | 'configuracion' | 'edicion';
 
@@ -14,7 +15,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
   const [mode, setMode] = React.useState<Mode>('visualizacion');
   const [scope, setScope] = React.useState<'mios' | 'publicos'>('mios');
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [selectedTournamentId, setSelectedTournamentId] = React.useState<string | null>(null);
+  const [selectedTournamentId, setSelectedTournamentId] = useTournamentRoute('torneos');
   const [selectedTournamentName, setSelectedTournamentName] = React.useState<string>('');
   const [feedback, setFeedback] = React.useState<string>('');
 
@@ -43,41 +44,36 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
 
       {mode === 'visualizacion' && (
         <Card>
-          <div className="mb-4 space-y-3">
-            <div className="inline-flex rounded-xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedTournamentId(null);
-                  setScope('mios');
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-medium ${scope === 'mios' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
-              >
-                Mis torneos
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedTournamentId(null);
-                  setScope('publicos');
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-medium ${scope === 'publicos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
-              >
-                Públicos
-              </button>
+          {!selectedTournamentId && (
+            <div className="mb-4 space-y-3">
+              <div className="inline-flex rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedTournamentId(null); setScope('mios'); }}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium ${scope === 'mios' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+                >
+                  Mis torneos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedTournamentId(null); setScope('publicos'); }}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium ${scope === 'publicos' ? 'bg-[#2E7D32] text-white' : 'text-slate-600'}`}
+                >
+                  Públicos
+                </button>
+              </div>
+              <label className="block md:max-w-xl">
+                <span className="mb-1 block text-sm text-slate-600">Buscar torneos, organización, participantes o etapas</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Ej: Apertura, Playoffs"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
             </div>
-
-            <label className="block md:max-w-xl">
-              <span className="mb-1 block text-sm text-slate-600">Buscar torneos, organización, participantes o etapas</span>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Ej: Apertura, Playoffs"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
+          )}
 
           {!selectedTournamentId ? (
             <TournamentsList
@@ -88,26 +84,18 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
                 setSelectedTournamentId(id);
                 setSelectedTournamentName(name || '');
               }}
+              onConfig={scope === 'mios' ? (id, name) => {
+                setSelectedTournamentId(id);
+                setSelectedTournamentName(name);
+                setMode('configuracion');
+              } : undefined}
             />
           ) : (
-            <div className="space-y-3">
-              {scope === 'mios' ? (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setMode('configuracion')}
-                    className="rounded-xl bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
-                  >
-                    Configurar torneo
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  Vista pública en modo solo lectura.
-                </div>
-              )}
-              <TournamentDetail id={selectedTournamentId} onBack={() => setSelectedTournamentId(null)} />
-            </div>
+            <TournamentDetail
+              id={selectedTournamentId}
+              onBack={() => setSelectedTournamentId(null)}
+              onConfig={scope === 'mios' ? () => setMode('configuracion') : undefined}
+            />
           )}
         </Card>
       )}

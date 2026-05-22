@@ -58,10 +58,11 @@ describe('TournamentsList filters', () => {
 
     render(<TournamentsList participantTypeFilter="teams" />);
 
+    // Each flip card renders the name in both front and back faces simultaneously
     await waitFor(() => {
-      expect(screen.getByText('Torneo Equipos A')).toBeInTheDocument();
+      expect(screen.getAllByText('Torneo Equipos A').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Torneo Equipos B')).toBeInTheDocument();
+    expect(screen.getAllByText('Torneo Equipos B').length).toBeGreaterThan(0);
     expect(screen.queryByText('Torneo Participantes A')).not.toBeInTheDocument();
     expect(screen.queryByText('Torneo Participantes B')).not.toBeInTheDocument();
   });
@@ -72,9 +73,9 @@ describe('TournamentsList filters', () => {
     render(<TournamentsList participantTypeFilter="individuals" />);
 
     await waitFor(() => {
-      expect(screen.getByText('Torneo Participantes A')).toBeInTheDocument();
+      expect(screen.getAllByText('Torneo Participantes A').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Torneo Participantes B')).toBeInTheDocument();
+    expect(screen.getAllByText('Torneo Participantes B').length).toBeGreaterThan(0);
     expect(screen.queryByText('Torneo Equipos A')).not.toBeInTheDocument();
     expect(screen.queryByText('Torneo Equipos B')).not.toBeInTheDocument();
   });
@@ -90,9 +91,9 @@ describe('TournamentsList filters', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Torneo Equipos A')).toBeInTheDocument();
+      expect(screen.getAllByText('Torneo Equipos A').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Torneo Participantes A')).toBeInTheDocument();
+    expect(screen.getAllByText('Torneo Participantes A').length).toBeGreaterThan(0);
     expect(screen.queryByText('Torneo Participantes B')).not.toBeInTheDocument();
     expect(screen.queryByText('Torneo Equipos B')).not.toBeInTheDocument();
   });

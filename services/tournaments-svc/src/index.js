@@ -2176,6 +2176,28 @@ const resolvers = {
         );
         if (res.records.length === 0) throw new Error('NOT_FOUND: stage no existe');
         const s = res.records[0].get('s').properties;
+
+        // Cascade: all stages finished → mark competition finished; all competitions finished → mark tournament finished
+        if (status === 'finished') {
+          await session.run(
+            `MATCH (c:Competition)-[:HAS_STAGE]->(target:Stage {id: $stageId})
+             MATCH (c)-[:HAS_STAGE]->(allS:Stage)
+             WITH c, count(allS) AS total,
+                  sum(CASE WHEN allS.stageStatus = 'finished' THEN 1 ELSE 0 END) AS done
+             WHERE total > 0 AND total = done
+             SET c.status = 'finished'
+             WITH c
+             MATCH (t:Tournament)-[:HAS_COMPETITION]->(c)
+             WITH t
+             MATCH (t)-[:HAS_COMPETITION]->(allC:Competition)
+             WITH t, count(allC) AS totalC,
+                  sum(CASE WHEN allC.status = 'finished' THEN 1 ELSE 0 END) AS doneC
+             WHERE totalC > 0 AND totalC = doneC
+             SET t.status = 'finished'`,
+            { stageId }
+          );
+        }
+
         return {
           id: s.id,
           name: s.name,
