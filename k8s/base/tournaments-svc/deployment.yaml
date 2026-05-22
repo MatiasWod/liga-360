@@ -20,7 +20,7 @@ spec:
       containers:
         - name: tournaments-svc
           image: liga360/tournaments-svc:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 4001
           env:

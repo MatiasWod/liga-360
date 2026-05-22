@@ -20,7 +20,7 @@ spec:
       containers:
         - name: inscriptions-svc
           image: liga360/inscriptions-svc
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 4004
           env:
