@@ -104,7 +104,7 @@ app.use(optionalAuthMiddleware);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.get('/teams', requireAuthMiddleware, async (req, res) => {
+app.get('/', requireAuthMiddleware, async (req, res) => {
   const onlyMine = String(req.query.mine || '').toLowerCase() === 'true';
   const client = await pool.connect();
   try {
