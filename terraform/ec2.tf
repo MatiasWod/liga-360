@@ -116,7 +116,7 @@ kubectl wait --for=condition=Available deployment/argocd-server -n argocd --time
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort", "ports": [{"port": 443, "nodePort": 30443, "targetPort": 8080}]}}'
 
 cat << 'EOF_CSS' > /tmp/cluster-secret-store.yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: aws-secrets
@@ -128,7 +128,7 @@ spec:
 EOF_CSS
 
 cat << 'EOF_ES' > /tmp/argocd-external-secret.yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: argocd-repo-creds
