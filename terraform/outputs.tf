@@ -17,3 +17,11 @@ output "argocd_password_command" {
   description = "Command to retrieve the ArgoCD admin password (Run this inside the server!)"
   value       = "sudo kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
 }
+
+output "public_ip" {
+  value = aws_eip.k3s_eip.public_ip
+}
+
+output "app_url" {
+  value = "https://app.${var.domain_name}"
+}

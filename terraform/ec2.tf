@@ -89,6 +89,8 @@ resource "aws_instance" "k3s_node" {
     volume_type = "gp3"
   }
 
+
+
 user_data = <<-EOF
 #!/bin/bash
 set -e
@@ -102,7 +104,20 @@ curl -sfL https://get.k3s.io | sh -
 sleep 15
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/baremetal/deploy.yaml
+
+sleep 20
+kubectl patch deployment ingress-nginx-controller -n ingress-nginx -p '{"spec": {"template": {"spec": {"hostNetwork": true}}}}' || true
+
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s
+
+kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s
+
+kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=300s
+
+
 kubectl create namespace argocd
 kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
@@ -192,12 +207,30 @@ spec:
       - CreateNamespace=true
 EOF_APP
 
+cat << 'EOF_ISSUER' > /tmp/cluster-issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: mwodtke@itba.edu.ar
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+EOF_ISSUER
+
 # Bucle con "if" para evadir el corte de set -e
 for i in $(seq 1 10); do
   echo "Bootstrap attempt $i/10..."
   rm -rf ~/.kube/cache 2>/dev/null || true
   
-  if kubectl apply --server-side -f /tmp/cluster-secret-store.yaml && \
+  if kubectl apply -f /tmp/cluster-issuer.yaml && \
+      kubectl apply --server-side -f /tmp/cluster-secret-store.yaml && \
      kubectl apply --server-side -f /tmp/argocd-external-secret.yaml && \
      kubectl apply --server-side -f /tmp/argocd-application.yaml; then
     echo "Bootstrap applied successfully!"
@@ -216,4 +249,18 @@ EOF
   tags = {
     Name = "liga360-k3s-node"
   }
+}
+
+
+resource "aws_eip" "k3s_eip" {
+  domain = "vpc"
+
+  tags = {
+    Name = "liga360-eip"
+  }
+}
+
+resource "aws_eip_association" "k3s_assoc" {
+  instance_id   = aws_instance.k3s_node.id
+  allocation_id = aws_eip.k3s_eip.id
 }
