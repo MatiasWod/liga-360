@@ -24,7 +24,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const [open, setOpen] = React.useState(false);
   return (
     <header className="border-b border-border-subtle bg-surface-1 px-6">
-      <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
+      <div className="grid h-16 w-full grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
         <div className="flex items-center gap-3">
           <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
           <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>

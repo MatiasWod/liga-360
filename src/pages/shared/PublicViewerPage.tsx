@@ -1,13 +1,14 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
 import { TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
+import { useTournamentRoute } from '../../hooks/useTournamentRoute';
 
 interface PublicViewerPageProps {
   onGoToAuth: () => void;
 }
 
 export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }) => {
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedId, setSelectedId] = useTournamentRoute('torneos');
   const [participantType, setParticipantType] = React.useState<'all' | 'teams' | 'individuals'>('all');
   const [searchTerm, setSearchTerm] = React.useState('');
 
@@ -78,6 +79,7 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
               participantTypeFilter={participantType === 'all' ? undefined : participantType}
               searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
+              hideFinished
             />
           )}
         </Card>

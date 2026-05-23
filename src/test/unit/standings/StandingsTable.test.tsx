@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { StandingsTable } from '../../../components/standings';
+import type { ClassificationZone } from '../../../components/standings';
 
 const rows = [
   {
@@ -54,20 +55,26 @@ describe('StandingsTable', () => {
     expect(screen.getByText('6')).toBeInTheDocument();
   });
 
-  it('resalta filas con position <= 2 (dark por defecto, accent-soft)', () => {
-    render(<StandingsTable rows={rows} />);
+  it('aplica color de zona a las filas dentro del rango', () => {
+    const zones: ClassificationZone[] = [
+      { fromPos: 1, toPos: 2, label: '→ Final', colorIndex: 0 },
+    ];
+    render(<StandingsTable rows={rows} zones={zones} />);
     const atlasRow = screen.getByText('Atlas').closest('tr');
-    const bocaRow = screen.getByText('Boca').closest('tr');
+    const bocaRow  = screen.getByText('Boca').closest('tr');
     const colonRow = screen.getByText('Colon').closest('tr');
-    expect(atlasRow?.className).toContain('bg-accent-soft');
-    expect(bocaRow?.className).toContain('bg-accent-soft');
-    expect(colonRow?.className).not.toContain('bg-accent-soft');
+    expect(atlasRow?.className).toContain('border-l-emerald-500');
+    expect(bocaRow?.className).toContain('border-l-emerald-500');
+    expect(colonRow?.className).not.toContain('border-l-emerald-500');
+    expect(colonRow?.className).toContain('border-l-transparent');
   });
 
-  it('en theme light usa el highlight clásico bg-brand-green/10', () => {
-    render(<StandingsTable rows={rows} theme="light" />);
-    const atlasRow = screen.getByText('Atlas').closest('tr');
-    expect(atlasRow?.className).toContain('bg-brand-green/10');
+  it('muestra la leyenda de zonas debajo de la tabla', () => {
+    const zones: ClassificationZone[] = [
+      { fromPos: 1, toPos: 1, label: '→ Liguilla', colorIndex: 0 },
+    ];
+    render(<StandingsTable rows={rows} zones={zones} />);
+    expect(screen.getByText('→ Liguilla')).toBeInTheDocument();
   });
 
   it('no renderiza tabla cuando rows es vacio', () => {
@@ -77,7 +84,8 @@ describe('StandingsTable', () => {
 
   it('aplica clases de tokens dark por defecto', () => {
     const { container } = render(<StandingsTable rows={rows} />);
-    expect(container.firstElementChild?.className).toContain('bg-surface-1');
+    const tableWrapper = container.querySelector('.overflow-x-auto');
+    expect(tableWrapper?.className).toContain('bg-surface-1');
     expect(container.querySelector('table')?.className).toContain('text-text-primary');
   });
 });

@@ -54,6 +54,7 @@ export async function listTournamentsGraphql(): Promise<TournamentListItem[]> {
         organizer
         participantType
         inscriptionMode
+        status
         competitions {
           id
           name
@@ -151,6 +152,20 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
               name
               order
               format
+              stageStatus
+              assignedInscriptions { inscriptionId displayName }
+              transitions {
+                id
+                label
+                toStageId
+                selectionKind
+                topN
+                bottomN
+                rangeFrom
+                rangeTo
+                toExternalTournamentId
+                toExternalTournamentName
+              }
               standings {
                 position
                 inscriptionId
@@ -184,6 +199,8 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
                 id
                 name
                 order
+                capacity
+                assignedInscriptions { inscriptionId displayName }
                 standings {
                   position
                   inscriptionId

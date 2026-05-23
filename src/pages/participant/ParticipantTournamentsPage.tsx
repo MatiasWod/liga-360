@@ -10,6 +10,7 @@ import {
 } from '../../services/inscriptionsApi';
 import { readSessionUser } from '../../services/teamsApi';
 import { enrichInvitesWithTournamentData, listTournamentIdsByInscriptionPredicate } from '../../services/tournamentsApi';
+import { useTournamentRoute } from '../../hooks/useTournamentRoute';
 
 type InviteItem = {
   id: number;
@@ -25,7 +26,7 @@ type InviteItem = {
 
 export const ParticipantTournamentsPage: React.FC = () => {
   const [tab, setTab] = React.useState<'inscriptos' | 'disponibles' | 'publicos'>('inscriptos');
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedId, setSelectedId] = useTournamentRoute('torneos');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [myTournamentIds, setMyTournamentIds] = React.useState<Set<string>>(new Set());
   const [loadingMyTournaments, setLoadingMyTournaments] = React.useState(false);
@@ -112,6 +113,14 @@ export const ParticipantTournamentsPage: React.FC = () => {
     } finally {
       setRequestLoading(false);
     }
+  }
+
+  async function handleInscribeFromCard(tournamentId: string) {
+    await createPublicParticipantInscription({
+      tournamentId,
+      competitionId: null,
+      displayName: participantName,
+    });
   }
 
   async function handleClaimByCode(e: React.FormEvent) {
@@ -238,7 +247,9 @@ export const ParticipantTournamentsPage: React.FC = () => {
               participantTypeFilter="individuals"
               searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
+              onInscribe={handleInscribeFromCard}
               excludeIdsFilter={Array.from(myTournamentIds)}
+              hideFinished
             />
           ) : (
             <div className="space-y-3">
@@ -329,6 +340,7 @@ export const ParticipantTournamentsPage: React.FC = () => {
               inscriptionModeFilter="public"
               searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
+              hideFinished
             />
           ) : (
             <div className="space-y-3">

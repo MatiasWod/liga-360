@@ -1,26 +1,20 @@
 import React from 'react';
 import { buildScheduleFromStage, TournamentSchedule } from '../../components/tournament-schedule';
 import { MatchEditDrawer } from '../../components/match-edit/MatchEditDrawer';
-import { FixtureViewer } from '../../components/fixture-viewer';
-import type { FixtureGroup, Round } from '../../components/fixture-viewer';
 import { StandingsTable } from '../../components/standings';
+import type { ClassificationZone } from '../../components/standings';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import {
+  assignInscriptionToStage,
   generateGroupsStageRoundRobin,
   generateLeagueRoundRobin,
   generateSingleEliminationBracket,
+  getTournamentConfigurationById,
+  setStageStatus,
 } from '../../services/tournaments/configuration';
-import { buildLiga360FixtureModel, stageMatchesSignature } from './liga360FixtureAdapter';
-import {
-  persistFixtureGroupsChange,
-  persistFixtureRoundsChange,
-  persistKnockoutFixtureChange,
-} from './persistLiga360Fixture';
 import { useFixtureSchedulingPrefs } from './useFixtureSchedulingPrefs';
 import type { TournamentEntity, TournamentMatchRow } from './types';
-
-type ViewMode = 'cards' | 'calendar';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
@@ -31,7 +25,8 @@ export const FixturePlanningPanel: React.FC<{
   const [competitionId, setCompetitionId] = React.useState(tournament.competitions[0]?.id || '');
   const [stageId, setStageId] = React.useState('');
   const [matchIdDrawerOpen, setMatchIdDrawerOpen] = React.useState<string | null>(null);
-  const [viewMode, setViewMode] = React.useState<ViewMode>('cards');
+  const [maxRoundsInput, setMaxRoundsInput] = React.useState<string>('');
+  const [presetTimeInput, setPresetTimeInput] = React.useState('');
 
   const competition = tournament.competitions.find((c) => c.id === competitionId);
   const selectableStages = React.useMemo(
@@ -80,75 +75,13 @@ export const FixturePlanningPanel: React.FC<{
 
   // -- Modo calendario (FixtureViewer) --
 
-  const stageSig = React.useMemo(() => (stage ? stageMatchesSignature(stage) : ''), [stage]);
-  const builtModel = React.useMemo(
-    () => (stage ? buildLiga360FixtureModel(stage, null) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stage, stageSig]
-  );
-
-  const [draftLeague, setDraftLeague] = React.useState<Round[] | null>(null);
-  const [draftKnockout, setDraftKnockout] = React.useState<Round[] | null>(null);
-  const [draftGroups, setDraftGroups] = React.useState<FixtureGroup[] | null>(null);
-
-  React.useEffect(() => {
-    if (!builtModel) {
-      setDraftLeague(null);
-      setDraftKnockout(null);
-      setDraftGroups(null);
-      return;
-    }
-    if (builtModel.layout === 'league') {
-      setDraftLeague(builtModel.fixture);
-      setDraftKnockout(null);
-      setDraftGroups(null);
-    } else if (builtModel.layout === 'knockout') {
-      setDraftKnockout(builtModel.fixture);
-      setDraftLeague(null);
-      setDraftGroups(null);
-    } else {
-      setDraftGroups(builtModel.groups);
-      setDraftLeague(null);
-      setDraftKnockout(null);
-    }
-  }, [builtModel, stage?.id]);
-
   const schedApi = useFixtureSchedulingPrefs(tournament.id, stage?.id);
-  const schedulingAssistForScope = React.useMemo(() => {
-    if (!schedApi) return undefined;
-    return (scope: string) => ({
-      presetTimes: schedApi.presetTimes,
-      setPresetTimes: schedApi.setPresetTimes,
-      addPresetTime: schedApi.addPresetTime,
-      removePresetTime: schedApi.removePresetTime,
-      getPlayWindow: (roundId: string) => schedApi.getPlayWindow(scope, roundId),
-      setPlayWindowForRound: (roundId: string, start: string, end: string) =>
-        schedApi.setPlayWindow(scope, roundId, start, end),
-    });
-  }, [schedApi]);
 
-  async function handleSaveCalendar() {
-    if (!stage) return;
-    setSaving(true);
-    setError('');
-    try {
-      if ((stage.format === 'league') && draftLeague) {
-        await persistFixtureRoundsChange(draftLeague, stage, tournament.id);
-      } else if (stage.format === 'elimination' && draftKnockout) {
-        await persistKnockoutFixtureChange(draftKnockout, stage, tournament.id);
-      } else if (stage.format === 'groups' && draftGroups) {
-        await persistFixtureGroupsChange(
-          draftGroups.map((g) => ({ id: g.id, rounds: g.rounds })),
-          stage,
-          tournament.id
-        );
-      }
-      await onRefresh();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al guardar el calendario');
-    } finally {
-      setSaving(false);
-    }
+  function handleAddPresetTime() {
+    const t = presetTimeInput.trim();
+    if (!/^\d{1,2}:\d{2}$/.test(t)) return;
+    schedApi?.addPresetTime(t);
+    setPresetTimeInput('');
   }
 
   const hasAnyMatch =
@@ -157,12 +90,15 @@ export const FixturePlanningPanel: React.FC<{
       ? (stage.groups || []).some((g) => (g.matches || []).length > 0)
       : (stage.matches || []).length > 0);
 
+  const parsedMaxRounds = maxRoundsInput.trim() !== '' ? parseInt(maxRoundsInput, 10) : null;
+  const validMaxRounds = parsedMaxRounds != null && parsedMaxRounds > 0 ? parsedMaxRounds : null;
+
   async function handleGenerateLeague(doubleRound: boolean) {
     if (!stage || stage.format !== 'league') return;
     setSaving(true);
     setError('');
     try {
-      await generateLeagueRoundRobin(stage.id, doubleRound);
+      await generateLeagueRoundRobin(stage.id, doubleRound, validMaxRounds);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar liga');
@@ -190,7 +126,7 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await generateGroupsStageRoundRobin(stage.id, doubleRound);
+      await generateGroupsStageRoundRobin(stage.id, doubleRound, validMaxRounds);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar grupos');
@@ -199,53 +135,361 @@ export const FixturePlanningPanel: React.FC<{
     }
   }
 
+  const [isAdvancing, setIsAdvancing] = React.useState(false);
+
+  const stageStatus = stage?.stageStatus ?? 'active';
+  const isBlocked = stageStatus === 'not_started';
+  const isFinished = stageStatus === 'finished';
+
+  const allMatches: Array<{ id: string; status?: string | null }> = React.useMemo(() => {
+    if (!stage) return [];
+    const direct = stage.matches ?? [];
+    const fromGroups = (stage.groups ?? []).flatMap((g) => g.matches ?? []);
+    return [...direct, ...fromGroups];
+  }, [stage]);
+
+  const pendingMatches = allMatches.filter((m) => {
+    const s = String(m.status ?? '').toLowerCase();
+    return s !== 'finished' && s !== 'completed' && s !== 'suspended';
+  });
+  const canFinalize = stageStatus === 'active' && pendingMatches.length === 0 && allMatches.length > 0;
+
+  async function handleFinalizeStage() {
+    if (!stage) return;
+    setIsAdvancing(true);
+    try {
+      await setStageStatus(stage.id, 'finished');
+
+      const freshTournament = await getTournamentConfigurationById(tournament.id);
+      if (!freshTournament) throw new Error('No se pudieron obtener datos actualizados del torneo');
+
+      const freshStage = freshTournament.competitions
+        .flatMap((c: any) => c.stages)
+        .find((s: any) => s.id === stage.id);
+      if (!freshStage) throw new Error('No se encontró la etapa en datos actualizados');
+
+      const outgoing = (stage.transitions || []).filter((tr) => tr.toStageId);
+      for (const tr of outgoing) {
+        const destStageId = tr.toStageId!;
+        const destStage = freshTournament.competitions
+          .flatMap((c: any) => c.stages)
+          .find((s: any) => s.id === destStageId);
+        if (!destStage) continue;
+
+        const eligibles = computeAutoAdvance(freshStage, tr);
+        for (const eligible of eligibles) {
+          await assignInscriptionToStage({
+            stageId: destStageId,
+            inscriptionId: eligible.inscriptionId,
+            tournamentId: tournament.id,
+            displayName: eligible.displayName,
+            force: true,
+          });
+        }
+
+        const allSourcesFinished = freshTournament.competitions
+          .flatMap((c: any) => c.stages)
+          .filter((s: any) => (s.transitions || []).some((t: any) => t.toStageId === destStageId))
+          .every((s: any) => s.id === stage.id || s.stageStatus === 'finished');
+
+        if (allSourcesFinished) {
+          await setStageStatus(destStageId, 'active');
+        }
+      }
+
+      await onRefresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al finalizar la etapa');
+    } finally {
+      setIsAdvancing(false);
+    }
+  }
+
+  function computeAutoAdvance(
+    sourceStage: any,
+    tr: any
+  ): Array<{ inscriptionId: string; displayName: string }> {
+    const kind = String(tr.selectionKind || 'top').toLowerCase();
+    const fmt = String(sourceStage.format || '').toLowerCase();
+
+    function pickFromStandings(standings: any[]): Array<{ inscriptionId: string; displayName: string }> {
+      const sorted = [...standings].sort((a, b) => Number(a.position) - Number(b.position));
+      if (kind === 'top') {
+        const n = Number(tr.topN) || 0;
+        return sorted.filter(r => Number(r.position) >= 1 && Number(r.position) <= n)
+          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
+      }
+      if (kind === 'range') {
+        const from = Number(tr.rangeFrom) || 0;
+        const to = Number(tr.rangeTo) || 0;
+        if (from <= 0 || to < from) return [];
+        return sorted.filter(r => Number(r.position) >= from && Number(r.position) <= to)
+          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
+      }
+      if (kind === 'bottom') {
+        const b = Number(tr.bottomN) || 0;
+        return sorted.slice(-b)
+          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
+      }
+      return [];
+    }
+
+    if (fmt === 'league') {
+      return pickFromStandings(sourceStage.standings || []);
+    }
+
+    if (fmt === 'groups') {
+      const seen = new Set<string>();
+      const result: Array<{ inscriptionId: string; displayName: string }> = [];
+      for (const group of (sourceStage.groups || [])) {
+        for (const row of pickFromStandings(group.standings || [])) {
+          if (!seen.has(row.inscriptionId)) {
+            seen.add(row.inscriptionId);
+            result.push(row);
+          }
+        }
+      }
+      return result;
+    }
+
+    if (fmt === 'elimination') {
+      // Clasificar equipos por la ronda más alta que ganaron
+      const maxRoundWon: Record<string, { round: number; displayName: string }> = {};
+      for (const m of (sourceStage.matches || [])) {
+        const status = String(m.status ?? '').toLowerCase();
+        if (status !== 'finished' && status !== 'completed') continue;
+        const hs = Number(m.homeScore ?? 0);
+        const as_ = Number(m.awayScore ?? 0);
+        if (hs === as_) continue;
+        const round = Number(m.round ?? 1);
+        const isHomeWinner = hs > as_;
+        const winnerId = isHomeWinner
+          ? m.homeAssignedInscription?.inscriptionId
+          : m.awayAssignedInscription?.inscriptionId;
+        const winnerDisplay = isHomeWinner
+          ? (m.homeAssignedInscription?.displayName ?? '')
+          : (m.awayAssignedInscription?.displayName ?? '');
+        if (!winnerId || winnerId.startsWith('liga360-slot:') || winnerId.startsWith('pos:')) continue;
+        if (!maxRoundWon[winnerId] || maxRoundWon[winnerId].round < round) {
+          maxRoundWon[winnerId] = { round, displayName: winnerDisplay };
+        }
+      }
+      const sorted = Object.entries(maxRoundWon)
+        .sort((a, b) => b[1].round - a[1].round)
+        .map(([inscriptionId, info]) => ({ inscriptionId, displayName: info.displayName }));
+
+      if (kind === 'top') {
+        const n = Number(tr.topN) || 0;
+        return sorted.slice(0, n);
+      }
+      if (kind === 'range') {
+        const from = Number(tr.rangeFrom) || 0;
+        const to = Number(tr.rangeTo) || 0;
+        if (from <= 0 || to < from) return [];
+        return sorted.slice(from - 1, to);
+      }
+      if (kind === 'bottom') {
+        const b = Number(tr.bottomN) || 0;
+        return sorted.slice(-b);
+      }
+      return [];
+    }
+
+    return [];
+  }
+
+  // Zonas de clasificación derivadas de las transiciones de la etapa
+  const classificationZones = React.useMemo((): ClassificationZone[] => {
+    if (!stage) return [];
+    const outgoing = (stage.transitions || []).filter((tr) => tr.toStageId);
+    if (outgoing.length === 0) return [];
+    const totalRows =
+      stage.format === 'groups'
+        ? Math.max(...(stage.groups || []).map((g) => (g.standings || []).length), 0)
+        : (stage.standings || []).length;
+
+    const zones: ClassificationZone[] = [];
+    for (const tr of outgoing) {
+      const destName =
+        tournament.competitions
+          .flatMap((c) => c.stages)
+          .find((s) => s.id === tr.toStageId)?.name ?? tr.toStageId ?? '?';
+      const kind = String(tr.selectionKind || 'top').toLowerCase();
+      let fromPos = 0;
+      let toPos = 0;
+      if (kind === 'top' && tr.topN) {
+        fromPos = 1;
+        toPos = Number(tr.topN);
+      } else if (kind === 'range' && tr.rangeFrom && tr.rangeTo) {
+        fromPos = Number(tr.rangeFrom);
+        toPos = Number(tr.rangeTo);
+      } else if (kind === 'bottom' && tr.bottomN && totalRows > 0) {
+        fromPos = totalRows - Number(tr.bottomN) + 1;
+        toPos = totalRows;
+      }
+      if (fromPos > 0 && toPos >= fromPos) {
+        zones.push({ fromPos, toPos, label: `→ ${destName}`, colorIndex: zones.length });
+      }
+    }
+    // Ordenar por posición inicial para asignar colores lógicamente
+    zones.sort((a, b) => a.fromPos - b.fromPos);
+    return zones.map((z, i) => ({ ...z, colorIndex: i }));
+  }, [stage, tournament]);
+
+  type SummarySection = { label: string; teams: string[]; isChampion?: boolean; colorIndex?: number };
+
+  const stageSummary = React.useMemo((): SummarySection[] | null => {
+    if (!stage || !isFinished) return null;
+    const sections: SummarySection[] = [];
+    const hasOutgoing = classificationZones.length > 0;
+
+    if (hasOutgoing) {
+      if (stage.format === 'league') {
+        for (const zone of classificationZones) {
+          const teams = (stage.standings ?? [])
+            .filter((r) => r.position >= zone.fromPos && r.position <= zone.toPos)
+            .map((r) => r.displayName);
+          if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
+        }
+      } else if (stage.format === 'groups') {
+        for (const zone of classificationZones) {
+          const teams: string[] = [];
+          for (const g of (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+            (g.standings ?? [])
+              .filter((r) => r.position >= zone.fromPos && r.position <= zone.toPos)
+              .forEach((r) => teams.push(r.displayName));
+          }
+          if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
+        }
+      } else if (stage.format === 'elimination') {
+        const maxRoundWon: Record<string, { round: number; displayName: string }> = {};
+        for (const m of (stage.matches ?? [])) {
+          const s = String(m.status ?? '').toLowerCase();
+          if (s !== 'finished' && s !== 'completed') continue;
+          const hs = Number(m.homeScore ?? 0);
+          const as_ = Number(m.awayScore ?? 0);
+          if (hs === as_) continue;
+          const round = Number(m.round ?? 1);
+          const homeWins = hs > as_;
+          const wId = homeWins ? m.homeAssignedInscription?.inscriptionId : m.awayAssignedInscription?.inscriptionId;
+          const wName = homeWins ? (m.homeAssignedInscription?.displayName ?? '') : (m.awayAssignedInscription?.displayName ?? '');
+          if (!wId || wId.startsWith('liga360-slot:') || wId.startsWith('pos:')) continue;
+          if (!maxRoundWon[wId] || maxRoundWon[wId].round < round) maxRoundWon[wId] = { round, displayName: wName };
+        }
+        const sorted = Object.values(maxRoundWon).sort((a, b) => b.round - a.round);
+        for (const zone of classificationZones) {
+          const teams = sorted.slice(zone.fromPos - 1, zone.toPos).map((t) => t.displayName);
+          if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
+        }
+      }
+    } else {
+      // Etapa final — mostrar campeón/es
+      if (stage.format === 'league') {
+        const champ = (stage.standings ?? []).find((r) => r.position === 1);
+        if (champ) sections.push({ label: 'Campeón', teams: [champ.displayName], isChampion: true });
+      } else if (stage.format === 'groups') {
+        for (const g of (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+          const champ = (g.standings ?? []).find((r) => r.position === 1);
+          if (champ) sections.push({ label: `Campeón · ${g.name}`, teams: [champ.displayName], isChampion: true });
+        }
+      } else if (stage.format === 'elimination') {
+        const matches = stage.matches ?? [];
+        const lastRound = matches.reduce((max, m) => Math.max(max, m.round ?? 1), 0);
+        const finalMatch = matches.find((m) => (m.round ?? 1) === lastRound && (m.slotIndex ?? 1) === 1);
+        if (finalMatch) {
+          const s = String(finalMatch.status ?? '').toLowerCase();
+          if (s === 'finished' || s === 'completed') {
+            const hs = Number(finalMatch.homeScore ?? 0);
+            const as_ = Number(finalMatch.awayScore ?? 0);
+            if (hs !== as_) {
+              const winner = hs > as_ ? finalMatch.homeAssignedInscription : finalMatch.awayAssignedInscription;
+              if (winner) sections.push({ label: 'Campeón', teams: [winner.displayName], isChampion: true });
+            }
+          }
+        }
+      }
+    }
+
+    return sections.length > 0 ? sections : null;
+  }, [stage, isFinished, classificationZones]);
+
+  const ZONE_DOT_CLASSES = [
+    'bg-emerald-500', 'bg-sky-500', 'bg-amber-500', 'bg-orange-500', 'bg-red-500',
+  ];
+
   return (
     <div className="space-y-4">
       <Card>
-        <h3 className="mb-2 text-sm font-semibold text-slate-800">Fixture · competencia y fase</h3>
-        <p className="mb-3 text-xs text-slate-600">
-          Generá el calendario automático. Con equipos ya asignados, verás cada cruce por fecha, grupo o llave según la
-          etapa. Al regenerar se reemplazan los partidos de esa fase.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col text-xs text-slate-600">
-            Competencia
-            <select
-              className="mt-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
-              value={competitionId}
-              onChange={(e) => {
-                setCompetitionId(e.target.value);
-                setStageId('');
-              }}
-            >
-              {tournament.competitions
-                .slice()
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="flex flex-col text-xs text-slate-600">
-            Fase
-            <select
-              className="mt-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
-              value={stageId}
-              onChange={(e) => setStageId(e.target.value)}
-            >
-              {selectableStages.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.order}. {s.name} ({s.format})
-                </option>
+        {/* Tabs de competencia — igual que en inicialización */}
+        {tournament.competitions.length > 1 && (
+          <div className="mb-3 inline-flex flex-wrap rounded-xl bg-surface-0 p-1">
+            {tournament.competitions
+              .slice()
+              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+              .map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { setCompetitionId(c.id); setStageId(''); }}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    competitionId === c.id
+                      ? 'bg-surface-3 text-text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  {c.name}
+                </button>
               ))}
-            </select>
-          </label>
-        </div>
+          </div>
+        )}
 
-        {stage?.format === 'league' ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+        {/* Pills de fase */}
+        {selectableStages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectableStages.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setStageId(s.id)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  stageId === s.id
+                    ? 'border-accent-primary bg-accent-soft text-success-base'
+                    : 'border-border-subtle bg-surface-2 text-text-muted hover:border-border-strong hover:text-text-primary'
+                }`}
+              >
+                {s.order}. {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!stage && (
+          <p className="mt-3 text-xs text-amber-700">No hay fases de liga, grupos o eliminación en esta competencia.</p>
+        )}
+
+        {!isFinished && (stage?.format === 'league' || stage?.format === 'groups') ? (
+          <div className="mt-4">
+            <label className="flex flex-col text-xs text-slate-600 w-48">
+              Fechas máximas (opcional)
+              <input
+                type="number"
+                min={1}
+                placeholder={`Máx: ${stage.format === 'groups' ? 'fechas por grupo' : 'fechas totales'}`}
+                value={maxRoundsInput}
+                onChange={(e) => setMaxRoundsInput(e.target.value)}
+                className="mt-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
+              />
+              {validMaxRounds && (
+                <span className="mt-1 text-[11px] text-slate-500">
+                  Cada equipo jugará {validMaxRounds} {validMaxRounds === 1 ? 'partido' : 'partidos'}
+                </span>
+              )}
+            </label>
+          </div>
+        ) : null}
+
+        {!isFinished && stage?.format === 'league' ? (
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" onClick={() => handleGenerateLeague(false)}>
               Generar liga (ida)
             </Button>
@@ -255,7 +499,7 @@ export const FixturePlanningPanel: React.FC<{
           </div>
         ) : null}
 
-        {stage?.format === 'elimination' ? (
+        {!isFinished && stage?.format === 'elimination' ? (
           <div className="mt-4 flex flex-wrap gap-2">
             <Button type="button" onClick={() => handleGenerateElimination(false)}>
               Generar llave (ida)
@@ -266,8 +510,8 @@ export const FixturePlanningPanel: React.FC<{
           </div>
         ) : null}
 
-        {stage?.format === 'groups' ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+        {!isFinished && stage?.format === 'groups' ? (
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" onClick={() => handleGenerateGroups(false)}>
               Generar grupos (ida)
             </Button>
@@ -277,50 +521,92 @@ export const FixturePlanningPanel: React.FC<{
           </div>
         ) : null}
 
-        {!stage ? (
-          <p className="mt-3 text-xs text-amber-700">No hay fases de liga, grupos o eliminación en esta competencia.</p>
-        ) : null}
       </Card>
+
+      {/* Panel de horarios frecuentes — solo si la etapa no está finalizada */}
+      {schedApi && !isFinished && (
+        <Card>
+          <h3 className="mb-2 text-sm font-semibold text-text-primary">Horarios frecuentes</h3>
+          <p className="mb-3 text-xs text-text-muted">
+            Los horarios guardados aparecen como acceso rápido al programar cada partido.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {schedApi.presetTimes.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2 px-2.5 py-1 text-xs text-text-primary"
+              >
+                {t}
+                <button
+                  type="button"
+                  onClick={() => schedApi.removePresetTime(t)}
+                  className="ml-0.5 text-text-muted transition-colors hover:text-red-400"
+                  aria-label={`Quitar ${t}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={presetTimeInput}
+              onChange={(e) => setPresetTimeInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddPresetTime()}
+              placeholder="HH:MM"
+              maxLength={5}
+              className="w-24 rounded-lg border border-border-subtle bg-surface-2 px-2 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+            />
+            <Button type="button" variant="secondary" onClick={handleAddPresetTime}>
+              Agregar
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {stage && hasAnyMatch ? (
         <Card>
-          {/* Toggle de vista */}
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-800">
-              Vista del fixture
+          <div className="mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-text-primary">
+              Partidos
               {stage.format === 'league' ? ' · Liga' : stage.format === 'groups' ? ' · Grupos' : ' · Eliminación'}
             </h3>
-            <div className="flex rounded-lg border border-slate-200 text-xs">
-              {(['cards', 'calendar'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1.5 font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                    viewMode === mode
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                  }`}
-                >
-                  {mode === 'cards' ? 'Partidos' : 'Calendario'}
-                </button>
-              ))}
-            </div>
+            {isBlocked && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                Esperando etapa anterior
+              </span>
+            )}
+            {stageStatus === 'active' && !isBlocked && (
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                En curso
+              </span>
+            )}
+            {isFinished && (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                Finalizada
+              </span>
+            )}
           </div>
 
-          {/* Vista "Partidos" — comportamiento actual */}
-          {viewMode === 'cards' && scheduleView ? (
+          {isBlocked && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Esta etapa no puede recibir resultados hasta que finalice la etapa anterior.
+            </div>
+          )}
+
+          {scheduleView ? (
             <>
               <TournamentSchedule
                 type={scheduleView.type}
                 data={scheduleView.data}
                 theme="dark"
-                onEdit={(matchId) => setMatchIdDrawerOpen(matchId)}
+                onEdit={isBlocked || isFinished ? undefined : (matchId) => setMatchIdDrawerOpen(matchId)}
               />
               {stage.format === 'league' ? (
                 <div className="mt-4 space-y-2">
-                  <h3 className="text-sm font-semibold text-slate-800">Tabla de posiciones</h3>
-                  <StandingsTable rows={stage.standings ?? []} />
+                  <h3 className="text-sm font-semibold text-text-primary">Tabla de posiciones</h3>
+                  <StandingsTable rows={stage.standings ?? []} zones={classificationZones} />
                 </div>
               ) : null}
               {stage.format === 'groups'
@@ -329,88 +615,109 @@ export const FixturePlanningPanel: React.FC<{
                     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                     .map((group) => (
                       <div key={`standings-${group.id}`} className="mt-4 space-y-2">
-                        <h3 className="text-sm font-semibold text-slate-800">
+                        <h3 className="text-sm font-semibold text-text-primary">
                           Tabla de posiciones · {group.name}
                         </h3>
-                        <StandingsTable rows={group.standings ?? []} />
+                        <StandingsTable rows={group.standings ?? []} zones={classificationZones} />
                       </div>
                     ))
                 : null}
-            </>
-          ) : null}
+              {stage.format === 'elimination' && classificationZones.length > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
+                  {classificationZones.map((z) => (
+                    <span key={z.label} className="text-xs text-text-muted">
+                      <span className="font-medium text-text-primary">
+                        Mejor{z.toPos > z.fromPos ? `es ${z.fromPos}–${z.toPos}` : `${z.fromPos}`}
+                      </span>{' '}
+                      {z.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
-          {/* Vista "Calendario" — FixtureViewer con drag & drop */}
-          {viewMode === 'calendar' ? (
-            <div className="space-y-3">
-              {stage.format === 'league' && draftLeague ? (
-                <FixtureViewer
-                  mode="edit"
-                  layout="league"
-                  fixture={draftLeague}
-                  teams={builtModel?.teams ?? []}
-                  onChange={setDraftLeague}
-                  theme="light"
-                  schedulingAssistForScope={schedulingAssistForScope}
-                />
-              ) : null}
-              {stage.format === 'elimination' && draftKnockout ? (
-                <FixtureViewer
-                  mode="edit"
-                  layout="knockout"
-                  fixture={draftKnockout}
-                  teams={builtModel?.teams ?? []}
-                  onChange={setDraftKnockout}
-                  theme="light"
-                  disableDragDrop={false}
-                  schedulingAssistForScope={schedulingAssistForScope}
-                />
-              ) : null}
-              {stage.format === 'groups' && draftGroups ? (
-                <FixtureViewer
-                  mode="edit"
-                  layout="groups"
-                  groups={draftGroups}
-                  teams={builtModel?.teams ?? []}
-                  onChange={setDraftGroups}
-                  theme="light"
-                  schedulingAssistForScope={schedulingAssistForScope}
-                />
-              ) : null}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    if (builtModel?.layout === 'league') setDraftLeague(builtModel.fixture);
-                    else if (builtModel?.layout === 'knockout') setDraftKnockout(builtModel.fixture);
-                    else if (builtModel?.layout === 'groups') setDraftGroups(builtModel.groups);
-                  }}
-                >
-                  Descartar cambios
-                </Button>
-                <Button type="button" onClick={handleSaveCalendar}>
-                  Guardar calendario
-                </Button>
-              </div>
-            </div>
+              {stageStatus === 'active' && (
+                <div className="mt-4 space-y-2">
+                  {pendingMatches.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Faltan {pendingMatches.length} {pendingMatches.length === 1 ? 'partido' : 'partidos'} por finalizar o suspender antes de cerrar la etapa.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleFinalizeStage}
+                      disabled={isAdvancing || !canFinalize}
+                    >
+                      {isAdvancing ? 'Avanzando clasificados...' : 'Finalizar etapa'}
+                    </Button>
+                    {canFinalize && (
+                      <span className="text-xs text-text-muted">
+                        Todos los partidos jugados. Se pasarán los clasificados automáticamente.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           ) : null}
         </Card>
       ) : null}
 
+      {isFinished && stageSummary && (
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-text-primary">Resumen de la etapa</h3>
+          <div className="space-y-4">
+            {stageSummary.map((section, i) => (
+              <div key={i}>
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-text-muted">
+                  {section.isChampion ? (
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-amber-500" fill="currentColor">
+                      <path d="M5 3h14v2H5V3zm0 4h14l-2 8H7L5 7zm7 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                    </svg>
+                  ) : (
+                    <span className={`inline-block h-2 w-2 rounded-sm ${ZONE_DOT_CLASSES[Math.min(section.colorIndex ?? 0, ZONE_DOT_CLASSES.length - 1)]}`} />
+                  )}
+                  {section.label}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {section.teams.map((name) => (
+                    <span
+                      key={name}
+                      className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                        section.isChampion
+                          ? 'border-amber-300 bg-amber-50 text-amber-900'
+                          : 'border-border-subtle bg-surface-2 text-text-primary'
+                      }`}
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {stage && !hasAnyMatch ? (
         <Card>
-          <p className="text-xs text-slate-500">
-            Generá el fixture para ver el calendario con el formato de esta etapa (fechas, grupos o llave).
+          <p className="text-xs text-text-muted">
+            Generá el fixture para ver los partidos de esta etapa.
           </p>
         </Card>
       ) : null}
 
       {matchIdDrawerOpen ? (() => {
         const matchRow = matchById.get(matchIdDrawerOpen);
+        const isMatchFinished = ['finished', 'completed', 'suspended'].includes(
+          String(matchRow?.status ?? '').toLowerCase()
+        );
         return (
           <MatchEditDrawer
             matchId={matchIdDrawerOpen}
             tournamentId={tournament.id}
+            defaultTab={isMatchFinished ? 'schedule' : 'result'}
+            presetTimes={schedApi?.presetTimes}
             initialData={{
               scheduledAt: matchRow?.scheduledAt,
               venue: matchRow?.venue,

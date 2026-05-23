@@ -35,7 +35,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         onLogout={onLogout}
         onOpenProfile={() => onNavigate('perfil')}
       />
-      <main className="mx-auto w-full max-w-6xl px-6 py-6">{children}</main>
+      <main className="w-full px-6 py-6">{children}</main>
     </div>
   );
 };

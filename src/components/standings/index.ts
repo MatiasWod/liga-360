@@ -1,2 +1,2 @@
 export { StandingsTable } from './StandingsTable';
-export type { StandingsRow } from './types';
+export type { StandingsRow, ClassificationZone } from './types';

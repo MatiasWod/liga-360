@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
 import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../../services/inscriptionsApi';
 import { listTournamentIdsByInscriptionPredicate } from '../../services/tournamentsApi';
+import { useTournamentRoute } from '../../hooks/useTournamentRoute';
 
 interface TeamTournamentsPageProps {
   activeTeamId?: string | null;
@@ -11,7 +12,7 @@ interface TeamTournamentsPageProps {
 
 export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ activeTeamId, activeTeamName }) => {
   const [tab, setTab] = React.useState<'inscriptos' | 'disponibles' | 'publicos'>('inscriptos');
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedId, setSelectedId] = useTournamentRoute('torneos');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [myTournamentIds, setMyTournamentIds] = React.useState<Set<string>>(new Set());
   const [loadingMyTournaments, setLoadingMyTournaments] = React.useState(false);
@@ -44,6 +45,16 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
     } finally {
       setRequestLoading(false);
     }
+  }
+
+  async function handleInscribeFromCard(tournamentId: string) {
+    if (!activeTeamId || !activeTeamName) throw new Error('No hay equipo activo para inscribir.');
+    await createPublicTeamInscription({
+      tournamentId,
+      competitionId: null,
+      teamId: Number(activeTeamId),
+      teamName: activeTeamName,
+    });
   }
 
   async function handleClaimByCode(e: React.FormEvent) {
@@ -193,7 +204,9 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
               participantTypeFilter="teams"
               searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
+              onInscribe={handleInscribeFromCard}
               excludeIdsFilter={Array.from(myTournamentIds)}
+              hideFinished
             />
           ) : (
             <div className="space-y-3">
@@ -223,6 +236,7 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
               inscriptionModeFilter="public"
               searchTerm={searchTerm}
               onOpen={(id) => setSelectedId(id)}
+              hideFinished
             />
           ) : (
             <div className="space-y-3">

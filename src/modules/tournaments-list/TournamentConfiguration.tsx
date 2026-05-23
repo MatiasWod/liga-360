@@ -49,6 +49,7 @@ function buildStageRosterEntries(
 ): StageRosterEntry[] {
   const out: StageRosterEntry[] = [];
   for (const assigned of assignedList || []) {
+    if (String(assigned.inscriptionId).startsWith('liga360-slot:')) continue;
     const item = byId.get(String(assigned.inscriptionId));
     if (item && ['PENDIENTE', 'ACEPTADO'].includes(String(item.status))) {
       out.push({ kind: 'inscription', item });
@@ -351,6 +352,12 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     [tournament, initializationCompetitionId]
   );
 
+  const initializationSelectedStage = React.useMemo(() => {
+    if (!initializationCompetition) return null;
+    const sorted = [...(initializationCompetition.stages || [])].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    return sorted.find((s) => s.id === initializationStageId) ?? sorted[0] ?? null;
+  }, [initializationCompetition, initializationStageId]);
+
   const relationFilterOptions = React.useMemo(() => {
     const options: Array<{ id: string; label: string; fromStageId: string; toStageId: string }> = [];
     for (const competition of tournament?.competitions || []) {
@@ -494,6 +501,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       for (const stage of competition.stages || []) {
         for (const assigned of stage.assignedInscriptions || []) {
           const id = String(assigned.inscriptionId);
+          if (id.startsWith('liga360-slot:')) continue;
           if (rows.has(id)) continue;
           if (inscriptionById.has(id)) continue;
           const displayName = (assigned.displayName || '').trim() || id;
@@ -1383,7 +1391,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                               tournamentId={tournamentId}
                               tournament={tournament}
                               stage={stage}
-                              participantPoolItems={eliminationBracketParticipantPool}
+                              participantPoolItems={(() => {
+                                const hasIncoming = collectIncomingTransitions(tournament, stage.id).length > 0;
+                                if (!hasIncoming) return eliminationBracketParticipantPool;
+                                if (stage.stageStatus === 'not_started') return [];
+                                return (stage.assignedInscriptions || [])
+                                  .filter(a => !String(a.inscriptionId).startsWith('liga360-slot'))
+                                  .map(a => ({ id: a.inscriptionId, display_name: a.displayName }));
+                              })()}
                               inscriptionById={inscriptionById}
                               onReload={async () => {
                                 await loadTournament();
@@ -1449,6 +1464,17 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
             {/* Panel lateral de participantes */}
             <Card className="sticky top-4 h-fit w-[360px] shrink-0">
               <h3 className="mb-2 text-sm font-semibold text-text-primary">Panel de {entityPlural} (A-Z)</h3>
+              {initializationSelectedStage &&
+               collectIncomingTransitions(tournament, initializationSelectedStage.id).length > 0 &&
+               initializationSelectedStage.stageStatus === 'not_started' ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-4 text-center">
+                  <p className="text-sm font-medium text-amber-800">Esperando etapas anteriores</p>
+                  <p className="mt-1 text-xs text-amber-700">
+                    El panel de {entityPlural} estará disponible cuando todas las etapas previas estén finalizadas.
+                  </p>
+                </div>
+              ) : (
+              <>
               <p className="mb-3 text-xs text-text-muted">12 por página · arrastrar a fases</p>
               <CompetitionPhaseFilter
                 className="mb-3"
@@ -1528,6 +1554,8 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   </div>
                 </div>
               ) : null}
+              </>
+              )}
             </Card>
           </div>
         </div>

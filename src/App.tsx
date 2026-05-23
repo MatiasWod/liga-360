@@ -34,7 +34,28 @@ export const App: React.FC = () => {
     if (mode === 'general_with_account' || mode === 'team_claim') return mode;
     return null;
   });
-  const [activeNav, setActiveNav] = React.useState<NavItemId>('inicio');
+  const NAV_IDS: NavItemId[] = ['inicio', 'torneos', 'equipos', 'participantes', 'perfil'];
+  const [activeNav, setActiveNav] = React.useState<NavItemId>(() => {
+    const seg = window.location.pathname.replace(/^\//, '').split('/')[0] as NavItemId;
+    return NAV_IDS.includes(seg) ? seg : 'inicio';
+  });
+
+  function navigate(id: NavItemId) {
+    setActiveNav(id);
+    const path = id === 'inicio' ? '/' : `/${id}`;
+    if (window.location.pathname !== path) {
+      window.history.pushState({ nav: id }, '', path);
+    }
+  }
+
+  React.useEffect(() => {
+    function onPop(e: PopStateEvent) {
+      const id = (e.state?.nav as NavItemId) || 'inicio';
+      setActiveNav(NAV_IDS.includes(id) ? id : 'inicio');
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [teams, setTeams] = React.useState<TeamInfo[]>([]);
   const [activeTeamId, setActiveTeamId] = React.useState<string | null>(null);
   const [teamParticipants, setTeamParticipants] = React.useState<TeamParticipant[]>([]);
@@ -111,7 +132,7 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     if (!navItems.some((item) => item.id === activeNav)) {
-      setActiveNav(navItems[0]?.id || 'inicio');
+      navigate(navItems[0]?.id || 'inicio');
     }
   }, [activeNav, navItems]);
 
@@ -494,7 +515,7 @@ export const App: React.FC = () => {
       showActiveTeam={currentRole === 'team' ? Boolean(activeTeam?.name) : true}
       activeNav={activeNav}
       navItems={navItems}
-      onNavigate={setActiveNav}
+      onNavigate={navigate}
       onLogout={handleLogout}
     >
       {renderPage()}
