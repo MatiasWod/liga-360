@@ -234,7 +234,7 @@ function ScoreDisplay({
       ) : null}
       {quickEditHint ? (
         <span className={`mt-0.5 text-[10px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>
-          {match.status === 'live' ? 'Click para editar' : 'Click para cargar'}
+          Click para cargar
         </span>
       ) : null}
     </div>

@@ -115,6 +115,8 @@ describe('eliminationInitHelpers', () => {
             {
               id: 'rep',
               name: 'Repechaje',
+              order: 1,
+              format: 'elimination' as const,
               matches: [{ id: 'm1', round: 1, slotIndex: 3, leg: 1 }],
             },
           ],
