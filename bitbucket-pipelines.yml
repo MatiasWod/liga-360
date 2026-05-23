@@ -206,7 +206,7 @@ pipelines:
             - export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
             - export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
             - git add k8s/overlays/dev/kustomization.yaml
-            - git commit -m "ci: update k8s image tags [skip ci]" || exit 0
+            - 'git commit -m "ci: update k8s image tags [skip ci]" || exit 0'
             - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
             - git push origin HEAD:main
 
