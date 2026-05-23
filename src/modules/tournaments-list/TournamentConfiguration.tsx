@@ -112,6 +112,14 @@ function stageCapacity(stage: Stage): number | null {
   return null;
 }
 
+/** Cupo ocupado por equipos reales; refs pos:/liga360-slot: son solo configuración de llaves. */
+function physicalAssignedCount(stage: Stage): number {
+  return (stage.assignedInscriptions || []).filter((item) => {
+    const id = String(item.inscriptionId ?? '');
+    return id && !id.startsWith('liga360-slot:') && !id.startsWith('pos:');
+  }).length;
+}
+
 function teamsPerGroup(stage: Stage): number | null {
   if (stage.format !== 'groups') return null;
   const cfg = parseJsonSafe(stage.configJson || null) || {};
@@ -724,7 +732,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     if (targetStage) {
       const cap = stageCapacity(targetStage);
       if (cap && cap > 0) {
-        const currentCount = (targetStage.assignedInscriptions || []).length;
+        const currentCount = physicalAssignedCount(targetStage);
         if (currentCount >= cap) {
           setError(`La fase "${targetStage.name}" alcanzó su cupo máximo (${cap}).`);
           return;
@@ -786,7 +794,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     }
     const stageCap = stageCapacity(stage);
     if (stageCap && stageCap > 0) {
-      const stageCount = (stage.assignedInscriptions || []).length;
+      const stageCount = physicalAssignedCount(stage);
       const alreadyInStage = (stage.assignedInscriptions || []).some((item) => String(item.inscriptionId) === String(inscription.id));
       if (!alreadyInStage && stageCount >= stageCap) {
         setError(`La fase "${stage.name}" alcanzó su cupo máximo (${stageCap}).`);

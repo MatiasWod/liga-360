@@ -1,4 +1,5 @@
 import React from 'react';
+import { bothMatchTeamsResolved } from './matchParticipantUtils';
 import type { MatchRecord, MatchStatus, TeamRef } from './types';
 
 // ---------------------------------------------------------------------------
@@ -10,10 +11,17 @@ export interface GoalRecord {
   minute?: number | null;
 }
 
+export type MatchQuickAction =
+  | { type: 'save_score'; homeScore: number; awayScore: number }
+  | { type: 'start' }
+  | { type: 'finish'; homeScore: number; awayScore: number };
+
 interface MatchCardProps {
   match: MatchRecord;
   theme?: 'light' | 'dark';
   onEdit?: (matchId: string) => void;
+  /** Acciones rápidas: guardar marcador (en vivo), iniciar o finalizar partido. */
+  onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goals?: GoalRecord[];
 }
 
@@ -50,15 +58,119 @@ function statusShell(status: MatchStatus, isDark: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: ScoreDisplay — marcador central
+// Helper: InlineScoreEditor — inputs rápidos al hacer click en el marcador
+// ---------------------------------------------------------------------------
+
+function InlineScoreEditor({
+  homeInput,
+  awayInput,
+  isDark,
+  saving,
+  error,
+  onHomeChange,
+  onAwayChange,
+  onCommit,
+  onCancel,
+}: {
+  homeInput: string;
+  awayInput: string;
+  isDark: boolean;
+  saving: boolean;
+  error: string;
+  onHomeChange: (v: string) => void;
+  onAwayChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const inputCls = `w-10 rounded-md border px-1 py-0.5 text-center text-xl font-bold tabular-nums focus:outline-none focus:ring-2 ${
+    isDark
+      ? 'border-white/25 bg-white/10 text-white focus:ring-accent-primary/50'
+      : 'border-slate-300 bg-white text-slate-900 focus:ring-accent-primary/40'
+  }`;
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onCommit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center px-1" onKeyDown={handleKeyDown}>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          autoFocus
+          disabled={saving}
+          aria-label="Goles local"
+          className={inputCls}
+          value={homeInput}
+          onChange={(e) => onHomeChange(e.target.value)}
+        />
+        <span className={`text-lg font-light ${isDark ? 'text-white/40' : 'text-slate-400'}`}>–</span>
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          disabled={saving}
+          aria-label="Goles visitante"
+          className={inputCls}
+          value={awayInput}
+          onChange={(e) => onAwayChange(e.target.value)}
+        />
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onCommit}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+            isDark
+              ? 'bg-accent-primary text-white hover:bg-accent-hover disabled:opacity-50'
+              : 'bg-brand-green text-white hover:bg-brand-greenDark disabled:opacity-50'
+          }`}
+        >
+          {saving ? 'Guardando…' : 'Confirmar'}
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onCancel}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            isDark
+              ? 'text-white/60 hover:bg-white/10'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          Cancelar
+        </button>
+      </div>
+      {error ? (
+        <span className={`mt-1 max-w-[160px] text-center text-[10px] ${isDark ? 'text-red-300' : 'text-red-600'}`}>
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: ScoreDisplay — marcador central (solo lectura)
 // ---------------------------------------------------------------------------
 
 function ScoreDisplay({
   match,
   isDark,
+  quickEditHint,
 }: {
   match: MatchRecord;
   isDark: boolean;
+  quickEditHint?: boolean;
 }) {
   const textBase = isDark ? 'text-white' : 'text-slate-900';
   const textMuted = isDark ? 'text-white/40' : 'text-slate-400';
@@ -84,7 +196,7 @@ function ScoreDisplay({
           {as_}
         </span>
         <span className={`mt-1 text-[10px] font-medium uppercase tracking-wide ${isDark ? 'text-emerald-400/70' : 'text-emerald-600/80'}`}>
-          Final
+          Finalizado
         </span>
       </div>
     );
@@ -120,6 +232,11 @@ function ScoreDisplay({
           {formatTime(match.scheduledAt)}
         </span>
       ) : null}
+      {quickEditHint ? (
+        <span className={`mt-0.5 text-[10px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>
+          {match.status === 'live' ? 'Click para editar' : 'Click para cargar'}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -128,9 +245,112 @@ function ScoreDisplay({
 // Componente principal
 // ---------------------------------------------------------------------------
 
-export const MatchCard: React.FC<MatchCardProps> = ({ match, theme = 'light', onEdit, goals }) => {
+export const MatchCard: React.FC<MatchCardProps> = ({
+  match,
+  theme = 'light',
+  onEdit,
+  onQuickMatchAction,
+  goals,
+}) => {
   const isDark = theme === 'dark';
   const [expanded, setExpanded] = React.useState(false);
+  const [scoreEditing, setScoreEditing] = React.useState(false);
+  const [homeInput, setHomeInput] = React.useState('');
+  const [awayInput, setAwayInput] = React.useState('');
+  const [scoreSaving, setScoreSaving] = React.useState(false);
+  const [scoreError, setScoreError] = React.useState('');
+  const [lifecycleError, setLifecycleError] = React.useState('');
+  const [lifecycleLoading, setLifecycleLoading] = React.useState<'start' | 'finish' | null>(null);
+
+  const teamsResolved = bothMatchTeamsResolved(match);
+  const canQuickManage = Boolean(onQuickMatchAction) && match.status !== 'postponed' && match.status !== 'completed';
+  const canEditScore =
+    canQuickManage && teamsResolved && (match.status === 'scheduled' || match.status === 'live');
+  const canStartMatch = canQuickManage && match.status === 'scheduled' && teamsResolved;
+  const canEditMatch = Boolean(onEdit) && teamsResolved;
+  const showLifecycleBar =
+    canQuickManage && !scoreEditing && teamsResolved && (canStartMatch || match.status === 'live');
+
+  React.useEffect(() => {
+    setScoreEditing(false);
+    setScoreError('');
+    setLifecycleError('');
+  }, [match.id, match.homeScore, match.awayScore, match.status]);
+
+  function parseScores(): { homeScore: number; awayScore: number } | null {
+    const h = Number.parseInt(homeInput, 10);
+    const a = Number.parseInt(awayInput, 10);
+    if (!Number.isFinite(h) || h < 0 || !Number.isFinite(a) || a < 0) return null;
+    return { homeScore: h, awayScore: a };
+  }
+
+  function startScoreEdit() {
+    if (!canEditScore || scoreSaving || lifecycleLoading) return;
+    setHomeInput(match.homeScore != null ? String(match.homeScore) : '0');
+    setAwayInput(match.awayScore != null ? String(match.awayScore) : '0');
+    setScoreError('');
+    setLifecycleError('');
+    setScoreEditing(true);
+  }
+
+  async function commitScoreEdit() {
+    if (!onQuickMatchAction) return;
+    const parsed = parseScores();
+    if (!parsed) {
+      setScoreError('Marcadores enteros ≥ 0');
+      return;
+    }
+    setScoreSaving(true);
+    setScoreError('');
+    setLifecycleError('');
+    try {
+      await onQuickMatchAction(match.id, {
+        type: 'save_score',
+        homeScore: parsed.homeScore,
+        awayScore: parsed.awayScore,
+      });
+      setScoreEditing(false);
+    } catch (e) {
+      setScoreError(e instanceof Error ? e.message : 'Error al guardar');
+    } finally {
+      setScoreSaving(false);
+    }
+  }
+
+  async function handleStartMatch() {
+    if (!onQuickMatchAction || lifecycleLoading || scoreSaving) return;
+    setLifecycleLoading('start');
+    setLifecycleError('');
+    try {
+      await onQuickMatchAction(match.id, { type: 'start' });
+    } catch (e) {
+      setLifecycleError(e instanceof Error ? e.message : 'Error al iniciar');
+    } finally {
+      setLifecycleLoading(null);
+    }
+  }
+
+  async function handleFinishMatch() {
+    if (!onQuickMatchAction || lifecycleLoading || scoreSaving) return;
+    const h = match.homeScore;
+    const a = match.awayScore;
+    if (h == null || a == null) {
+      setLifecycleError('Cargá el marcador antes de finalizar');
+      startScoreEdit();
+      return;
+    }
+    setLifecycleLoading('finish');
+    setLifecycleError('');
+    try {
+      await onQuickMatchAction(match.id, { type: 'finish', homeScore: h, awayScore: a });
+    } catch (e) {
+      setLifecycleError(e instanceof Error ? e.message : 'Error al finalizar');
+    } finally {
+      setLifecycleLoading(null);
+    }
+  }
+
+  const busy = scoreSaving || lifecycleLoading != null;
 
   const hasDetail = !!(match.venue || match.referee || (goals && goals.length > 0));
 
@@ -145,10 +365,10 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, theme = 'light', on
   return (
     <div className={`relative p-3 ${statusShell(match.status, isDark)}`}>
       {/* Botón de edición — esquina superior derecha, siempre visible */}
-      {onEdit ? (
+      {canEditMatch ? (
         <button
           type="button"
-          onClick={() => onEdit(match.id)}
+          onClick={() => onEdit!(match.id)}
           aria-label="Editar partido"
           className={`absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-md opacity-50 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${
             isDark ? 'text-white/70 hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'
@@ -161,6 +381,17 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, theme = 'light', on
         </button>
       ) : null}
 
+      {match.matchCode ? (
+        <div className={`mb-2 text-center ${isDark ? 'text-white/55' : 'text-slate-500'}`}>
+          <span className="font-mono text-xs font-semibold tracking-tight text-success-base">{match.matchCode}</span>
+          {match.matchSubtitle ? (
+            <span className={`mt-0.5 block text-[10px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+              {match.matchSubtitle}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Layout scorecard: local | marcador | visitante */}
       <div className="grid items-center gap-2" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
         {/* Equipo local */}
@@ -170,12 +401,47 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, theme = 'light', on
             side="home"
             winner={homeWins}
             isDark={isDark}
-            hasEditButton={!!onEdit}
+            hasEditButton={canEditMatch}
           />
         </div>
 
-        {/* Marcador central */}
-        <ScoreDisplay match={match} isDark={isDark} />
+        {/* Marcador central — click abre edición rápida si está habilitada */}
+        {scoreEditing ? (
+          <InlineScoreEditor
+            homeInput={homeInput}
+            awayInput={awayInput}
+            isDark={isDark}
+            saving={scoreSaving}
+            error={scoreError}
+            onHomeChange={setHomeInput}
+            onAwayChange={setAwayInput}
+            onCommit={commitScoreEdit}
+            onCancel={() => {
+              setScoreEditing(false);
+              setScoreError('');
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled={!canEditScore || busy}
+            onClick={canEditScore ? startScoreEdit : undefined}
+            className={`rounded-lg px-1 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/50 ${
+              canEditScore
+                ? isDark
+                  ? 'cursor-pointer hover:bg-white/10'
+                  : 'cursor-pointer hover:bg-slate-100'
+                : 'cursor-default'
+            }`}
+            aria-label={canEditScore ? 'Editar marcador' : undefined}
+          >
+            <ScoreDisplay
+              match={match}
+              isDark={isDark}
+              quickEditHint={canEditScore && !scoreEditing}
+            />
+          </button>
+        )}
 
         {/* Equipo visitante */}
         <div className="flex min-w-0 flex-col items-start gap-1 pl-1">
@@ -188,6 +454,54 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, theme = 'light', on
           />
         </div>
       </div>
+
+      {/* Acciones de ciclo de vida del partido */}
+      {showLifecycleBar ? (
+        <div
+          className={`mt-2.5 flex flex-wrap items-center justify-center gap-2 border-t pt-2 ${
+            isDark ? 'border-white/10' : 'border-slate-100'
+          }`}
+        >
+          {canStartMatch ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleStartMatch}
+              className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                isDark
+                  ? 'bg-red-600/80 text-white hover:bg-red-600'
+                  : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+            >
+              {lifecycleLoading === 'start' ? 'Iniciando…' : '▶ Iniciar partido'}
+            </button>
+          ) : null}
+          {match.status === 'live' ? (
+            <>
+              <span className={`text-[10px] ${isDark ? 'text-white/45' : 'text-slate-400'}`}>
+                Click en el marcador para actualizar
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleFinishMatch}
+                className={`rounded-md px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-emerald-600/80 text-white hover:bg-emerald-600'
+                    : 'bg-brand-green text-white hover:bg-brand-greenDark'
+                }`}
+              >
+                {lifecycleLoading === 'finish' ? 'Finalizando…' : 'Finalizar partido'}
+              </button>
+            </>
+          ) : null}
+          {lifecycleError ? (
+            <span className={`w-full text-center text-[10px] ${isDark ? 'text-red-300' : 'text-red-600'}`}>
+              {lifecycleError}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Footer: fecha (scheduled) y toggle de detalle */}
       {(match.status === 'scheduled' && match.scheduledAt) || hasDetail ? (

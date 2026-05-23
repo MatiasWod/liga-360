@@ -5,10 +5,11 @@ export const StageSummary: React.FC<{
 	stage: StageDraft;
 	allStages: StageDraft[];
 	lookupStages?: StageDraft[];
-}> = ({ stage, allStages, lookupStages }) => {
+	onRemoveRelation?: (relationId: string) => void;
+}> = ({ stage, allStages, lookupStages, onRemoveRelation }) => {
 	const pool = lookupStages ?? allStages;
-	if (stage.kind === 'league') return <LeagueSummary stage={stage} allStages={allStages} legendStages={pool} />;
-	if (stage.kind === 'groups') return <GroupsSummary stage={stage} allStages={allStages} legendStages={pool} />;
+	if (stage.kind === 'league') return <LeagueSummary stage={stage} allStages={allStages} legendStages={pool} onRemoveRelation={onRemoveRelation} />;
+	if (stage.kind === 'groups') return <GroupsSummary stage={stage} allStages={allStages} legendStages={pool} onRemoveRelation={onRemoveRelation} />;
 	if (stage.kind === 'knockout') return <KnockoutSummary stage={stage} />;
 	return null;
 };
@@ -19,10 +20,12 @@ function LeagueSummary({
 	stage,
 	allStages,
 	legendStages,
+	onRemoveRelation,
 }: {
 	stage: StageDraft;
 	allStages: StageDraft[];
 	legendStages: StageDraft[];
+	onRemoveRelation?: (relationId: string) => void;
 }) {
 	const cfg = (stage.config || {}) as any;
 	const n = Number(cfg.numParticipants) > 0 ? Number(cfg.numParticipants) : 10;
@@ -68,7 +71,7 @@ function LeagueSummary({
 						</tbody>
 					</table>
 				</div>
-				<Legend relations={relations} allStages={legendStages} />
+				<Legend relations={relations} allStages={legendStages} onRemoveRelation={onRemoveRelation} />
 			</div>
 		</div>
 	);
@@ -78,10 +81,12 @@ function GroupsSummary({
 	stage,
 	allStages,
 	legendStages,
+	onRemoveRelation,
 }: {
 	stage: StageDraft;
 	allStages: StageDraft[];
 	legendStages: StageDraft[];
+	onRemoveRelation?: (relationId: string) => void;
 }) {
 	const cfg = (stage.config || {}) as any;
 	const g = Number(cfg.numGroups) > 0 ? Number(cfg.numGroups) : 4;
@@ -116,7 +121,7 @@ function GroupsSummary({
 				))}
 			</div>
 			<div className="mt-3">
-				<Legend relations={relations} allStages={legendStages} />
+				<Legend relations={relations} allStages={legendStages} onRemoveRelation={onRemoveRelation} />
 			</div>
 		</div>
 	);
@@ -249,10 +254,16 @@ function KnockoutSummary({ stage }: { stage: StageDraft; }) {
 function appliesToPosition(sel: Selection, pos: number, total: number) {
 	if (sel.kind === 'top') return pos <= sel.count;
 	if (sel.kind === 'bottom') return pos > total - sel.count;
-	return pos >= sel.from && pos <= sel.to;
+	if (sel.kind === 'bestN') return pos === sel.fromPosition;
+	if (sel.kind === 'range') return pos >= sel.from && pos <= sel.to;
+	return false;
 }
 
-const Legend: React.FC<{ relations: NonNullable<StageDraft['relations']>; allStages: StageDraft[]; }> = ({ relations, allStages }) => {
+const Legend: React.FC<{
+	relations: NonNullable<StageDraft['relations']>;
+	allStages: StageDraft[];
+	onRemoveRelation?: (relationId: string) => void;
+}> = ({ relations, allStages, onRemoveRelation }) => {
 	if (!relations || relations.length === 0) return null;
 	return (
 		<div className="text-xs">
@@ -276,6 +287,16 @@ const Legend: React.FC<{ relations: NonNullable<StageDraft['relations']>; allSta
 							<span>{r.label}</span>
 							<span className="opacity-70">→ {dest}</span>
 							{r.carryOver && <span className="opacity-70"> · CO:{r.carryOver.mode}</span>}
+							{onRemoveRelation && (
+								<button
+									type="button"
+									onClick={() => onRemoveRelation(r.id)}
+									className="ml-auto text-[10px] opacity-60 hover:opacity-100 hover:text-red-400 transition-colors"
+									aria-label={`Eliminar relación ${r.label}`}
+								>
+									✕
+								</button>
+							)}
 						</li>
 					);
 				})}

@@ -1,3 +1,8 @@
+import {
+  bracketDisplayCode,
+  eliminationMatchSubtitle,
+} from '../../modules/tournaments-list/eliminationInitHelpers';
+import type { TournamentMatchRow } from '../../modules/tournaments-list/types';
 import type {
   GroupsScheduleData,
   KnockoutScheduleData,
@@ -13,6 +18,8 @@ export type FixtureMatchInput = {
   round?: number | null;
   leg?: number | null;
   slotIndex?: number | null;
+  fixtureCode?: string | null;
+  matchKind?: string | null;
   groupId?: string | null;
   scheduledAt?: string | null;
   venue?: string | null;
@@ -74,6 +81,15 @@ export function matchInputToRecord(m: FixtureMatchInput): MatchRecord {
   if (m.referee) rec.referee = m.referee;
   if (m.homeScore != null) rec.homeScore = Number(m.homeScore);
   if (m.awayScore != null) rec.awayScore = Number(m.awayScore);
+  if (m.leg != null) rec.leg = Number(m.leg);
+  if (m.slotIndex != null) rec.slotIndex = Number(m.slotIndex);
+  return rec;
+}
+
+function eliminationMatchInputToRecord(m: FixtureMatchInput): MatchRecord {
+  const rec = matchInputToRecord(m);
+  rec.matchCode = bracketDisplayCode(m as TournamentMatchRow);
+  rec.matchSubtitle = eliminationMatchSubtitle(m as TournamentMatchRow);
   return rec;
 }
 
@@ -165,7 +181,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
     const rounds = roundNums.map((rn) => ({
       id: `ko-r${rn}`,
       label: eliminationRoundTitle(rn),
-      matches: (byRound.get(rn) || []).map(matchInputToRecord),
+      matches: (byRound.get(rn) || []).map(eliminationMatchInputToRecord),
     }));
     return { type: 'knockout', data: { rounds } };
   }

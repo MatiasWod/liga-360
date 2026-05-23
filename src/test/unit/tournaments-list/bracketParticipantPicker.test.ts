@@ -26,9 +26,19 @@ describe('BracketParticipantPicker helpers', () => {
     expect(s.subline).toBe('T · C · Fase grupos · A9');
   });
 
+  it('summarizeParticipantOptionLabel reconoce ganador de repechaje con etapa', () => {
+    const s = summarizeParticipantOptionLabel('T · C · Repechaje · Ganador Partido 1 - Repechaje');
+    expect(s.headline).toBe('Ganador Partido 1 - Repechaje');
+  });
+
+  it('summarizeParticipantOptionLabel reconoce ganador legacy con ronda', () => {
+    const s = summarizeParticipantOptionLabel('T · C · Repechaje · Ganador · Partido 1 · Ronda 1');
+    expect(s.headline).toBe('Ganador · Partido 1 · Ronda 1');
+  });
+
   it('summarizeParticipantOptionLabel convierte tabla general P… a posición en liga única', () => {
     const s = summarizeParticipantOptionLabel('T · C · Liga · tabla general P12 · Riv');
-    expect(s.headline).toBe('Posición 12 · Tabla única');
+    expect(s.headline).toBe('Posición 12 · Liga');
     expect(s.subline).toBe('T · C · Liga · Riv');
   });
 

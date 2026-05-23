@@ -22,6 +22,7 @@ import {
     updateStage,
     updateTournamentDraft,
 } from '../services/tournamentStructureApi';
+import { trimEliminationBracketAfterRound } from '../../../services/tournaments/configuration';
 
 interface TournamentFormProps {
     organizerName: string;
@@ -29,9 +30,10 @@ interface TournamentFormProps {
     onUpdated?: (payload: { id: string; name: string }) => void;
     mode?: 'create' | 'edit';
     tournamentId?: string | null;
+    initialCompetitions?: CompetitionMeta[];
 }
 
-export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, onCreated, onUpdated, mode = 'create', tournamentId }) => {
+export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, onCreated, onUpdated, mode = 'create', tournamentId, initialCompetitions }) => {
     type ParticipantType = 'teams' | 'individuals';
     type InscriptionMode = 'public' | 'invitation';
 
@@ -57,9 +59,9 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         participantType: 'teams',
         inscriptionMode: 'public',
     });
-    const [competitions, setCompetitions] = React.useState<CompetitionMeta[]>([
-        { id: crypto.randomUUID(), name: 'Competición 1', stages: [] }
-    ]);
+    const [competitions, setCompetitions] = React.useState<CompetitionMeta[]>(
+        initialCompetitions ?? [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }]
+    );
     const [errors, setErrors] = React.useState<FormErrors>({});
     const [submitState, setSubmitState] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [submitMsg, setSubmitMsg] = React.useState<string>('');
@@ -70,6 +72,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
 
     React.useEffect(() => {
         if (mode !== 'create') return;
+        if (initialCompetitions) return;
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return;
@@ -215,6 +218,17 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                             if (Number.isInteger(numParticipants) && numParticipants >= 2) {
                                 const doubleRound = cfg.matchesPerTie === 'double';
                                 await generateEliminationBracket(createdStage.id, doubleRound);
+                                const numAdvancing = Number(cfg.numAdvancing);
+                                if (Number.isInteger(numAdvancing) && numAdvancing > 1 && numParticipants > numAdvancing) {
+                                    const lastRound = Math.round(Math.log2(numParticipants / numAdvancing));
+                                    if (lastRound >= 1) {
+                                        await trimEliminationBracketAfterRound({
+                                            stageId: createdStage.id,
+                                            tournamentId: workingTournament.id,
+                                            lastRoundInclusive: lastRound,
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
