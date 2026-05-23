@@ -6,6 +6,7 @@ import {
   generatePublicInviteCode,
   generateTargetedInviteToken,
   normalizeTournamentParticipantType,
+  closePool,
 } from './index.js';
 
 test('ensureInviteUsable acepta invite activa y vigente', () => {
@@ -59,4 +60,10 @@ test('assertRoleMatchesParticipantType valida compatibilidad rol-tipo', () => {
     () => assertRoleMatchesParticipantType('participant', 'teams'),
     /FORBIDDEN_PARTICIPANT_TYPE_MISMATCH/
   );
+});
+
+test.after(async () => {
+  if (typeof closePool === 'function') {
+    await closePool();
+  }
 });
