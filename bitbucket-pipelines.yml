@@ -72,6 +72,7 @@ definitions:
           - postgres
         script:
           - npm ci --cache .npm --prefer-offline
+          - export POSTGRES_URL=postgresql://liga:liga@localhost:5432/liga360
           - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
           - npm run migrate
           - npm install --prefix services/inscriptions-svc
