@@ -1,6 +1,13 @@
-import { formatCompactEliminationSlot, matchDisplayCode, sortEliminationInitMatches } from './eliminationInitHelpers';
+import {
+  bracketDisplayCode,
+  buildSameStageWinnerSlotId,
+  computeEliminationFeedingRound,
+  dedupeEliminationSeriesMatches,
+  formatCompactEliminationSlot,
+  formatWinnerSlotLabel,
+  sortEliminationInitMatches,
+} from './eliminationInitHelpers';
 import type {
-  AssignedInscription,
   StandingsRow,
   TournamentEntity,
   TournamentStage,
@@ -22,6 +29,12 @@ export type EligibleInscription = {
   eliminationMatchLabel?: string;
   /** Origen grupo + posición (fase grupos): nombre de grupo y puesto esperado */
   groupsOrigin?: { groupName: string; position: number };
+  /**
+   * ID real de inscripción resuelto desde la tabla de posiciones (ej: "42").
+   * Cuando el backend resuelve el ref sintético pos:l: al devolver los partidos,
+   * el frontend puede usarlo para deduplicar y mostrar la etiqueta de posición correcta.
+   */
+  resolvedRealId?: string;
 };
 
 type StageTrans = TournamentTransition;
@@ -131,15 +144,22 @@ function leagueStandingsSelection(fromStage: TournamentStage, tr: StageTrans): S
   return sorted.slice(0, Math.min(topN, sorted.length));
 }
 
-function parseStageConfig(stage: TournamentStage): { teamsPerGroup?: number; numParticipants?: number } {
+function parseStageConfig(stage: TournamentStage): {
+  teamsPerGroup?: number;
+  numParticipants?: number;
+  numAdvancing?: number;
+} {
   try {
     const cfg = JSON.parse(String(stage.configJson || '{}'));
     const teamsPerGroup = Number(cfg?.teamsPerGroup);
     const numParticipants = Number(cfg?.numParticipants);
+    const numAdvancing = Number(cfg?.numAdvancing);
     return {
       teamsPerGroup: Number.isFinite(teamsPerGroup) && teamsPerGroup > 0 ? teamsPerGroup : undefined,
       numParticipants:
         Number.isFinite(numParticipants) && numParticipants > 0 ? numParticipants : undefined,
+      numAdvancing:
+        Number.isFinite(numAdvancing) && numAdvancing > 0 ? numAdvancing : undefined,
     };
   } catch {
     return {};
@@ -229,15 +249,6 @@ function buildSyntheticLeagueSlotId(fromStageId: string, trId: string, position:
   return `liga360-slot:lg:${fromStageId}:${trId}:${position}`;
 }
 
-function buildSyntheticEliminationSlotId(
-  fromStageId: string,
-  trId: string,
-  matchId: string,
-  slotRole: 'home' | 'away'
-): string {
-  return `liga360-slot:el:${fromStageId}:${trId}:${matchId}:${slotRole}`;
-}
-
 function isSyntheticEligibleId(raw: string): boolean {
   return String(raw || '').startsWith('liga360-slot:');
 }
@@ -253,24 +264,6 @@ function onlyHighestEliminationRound(matches: TournamentMatchRow[]): TournamentM
   if (!matches?.length) return [];
   const maxR = Math.max(...matches.map((m) => Number(m.round ?? 1)));
   return matches.filter((m) => Number(m.round ?? 1) === maxR);
-}
-
-/** Etiqueta hueco eliminatoria: usa `matchLabel` (fixture o código de partido) + Local/Visitante. */
-function eliminationSyntheticLabelFromStructural(
-  stageLabel: string,
-  structural: string,
-  matchLabelHint?: string | null
-): { displayName: string; shortLabel: string } {
-  const st = String(stageLabel || '').trim() || 'Etapa';
-  const s = String(structural || '').trim() || '?';
-  const mm = /^(.+)-([LV])$/i.exec(s);
-  const sideTxt = mm ? (mm[2].toUpperCase() === 'L' ? 'Local' : 'Visitante') : '—';
-  const hint = String(matchLabelHint || '').trim();
-  const code = hint || (mm ? mm[1] : s);
-  return {
-    shortLabel: s,
-    displayName: `${st} · ${code} · ${sideTxt}`,
-  };
 }
 
 /**
@@ -305,14 +298,18 @@ function finalizeEligibleRowsForQuota(rows: EligibleInscription[], quota: number
     const structural = String(r.shortLabel || '').trim() || '?';
 
     if (r.source === 'elimination') {
-      const hint = r.eliminationMatchLabel;
-      const { displayName, shortLabel } = eliminationSyntheticLabelFromStructural(placeholderStageLabel, structural, hint);
+      const hint = String(r.eliminationMatchLabel || '').trim();
+      const code = hint || structural;
+      const displayName =
+        String(r.displayName || '').trim() || `${placeholderStageLabel} · ${code} · Ganador`;
       out.push({
         ...r,
         displayName,
-        shortLabel,
-        eliminationMatchLabel: hint,
-        optionLabel: `${lineageForSynthOption} · ${displayName} · sin asignar`,
+        shortLabel: structural,
+        eliminationMatchLabel: hint || code,
+        optionLabel:
+          String(r.optionLabel || '').trim() ||
+          `${lineageForSynthOption} · ${code} · Ganador · sin asignar`,
       });
       continue;
     }
@@ -342,20 +339,32 @@ function finalizeEligibleRowsForQuota(rows: EligibleInscription[], quota: number
   return out;
 }
 
-/** Partidos de eliminatoria que alimentan `tr` (solo última ronda si falta vínculo explícito por partido). */
+/** Partidos de eliminatoria que alimentan `tr` (ronda exportadora según numAdvancing o última ronda). */
 function eliminationMatchesForIncomingTransition(fromStage: TournamentStage, tr: StageTrans): TournamentMatchRow[] {
   const tid = String(tr.id || '').trim();
   const poolSorted = sortEliminationInitMatches(fromStage.matches || []);
 
   const strict = poolSorted.filter((m) => tid && String(m.winnerAdvancementTransitionId || '') === tid);
-  if (strict.length > 0) return strict;
+  if (strict.length > 0) return dedupeEliminationSeriesMatches(strict);
 
   const loose = poolSorted.filter((m) => {
     const wid = String(m.winnerAdvancementTransitionId || '').trim();
     return !wid || wid === tid;
   });
 
-  return onlyHighestEliminationRound(loose);
+  const stageCfg = parseStageConfig(fromStage);
+  const feedingRound =
+    stageCfg.numParticipants != null && stageCfg.numAdvancing != null
+      ? computeEliminationFeedingRound(stageCfg.numParticipants, stageCfg.numAdvancing)
+      : null;
+
+  if (feedingRound != null && feedingRound >= 1) {
+    return dedupeEliminationSeriesMatches(
+      loose.filter((m) => Number(m.round ?? 1) === feedingRound)
+    );
+  }
+
+  return dedupeEliminationSeriesMatches(onlyHighestEliminationRound(loose));
 }
 
 /**
@@ -384,6 +393,7 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
         sectionTitle: payload.sectionTitle,
         source: payload.source,
         optionLabel: lbl,
+        ...(payload.resolvedRealId ? { resolvedRealId: payload.resolvedRealId } : {}),
         ...(payload.eliminationMatchLabel != null && payload.eliminationMatchLabel !== ''
           ? { eliminationMatchLabel: payload.eliminationMatchLabel }
           : {}),
@@ -405,6 +415,37 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
         (a, b) => Number(a.order || 0) - Number(b.order || 0)
       );
       const pendingLabel = 'Clasificación pendiente';
+
+      if (String(tr.selectionKind || '').toLowerCase() === 'bestn') {
+        const count = Number(tr.topN) || 0;       // N (ej: 8)
+        const fromPos = Number(tr.rangeFrom) || 0; // M (ej: 3)
+        if (count > 0 && fromPos > 0) {
+          // Recolectar el equipo en posición M de cada grupo y rankearlos globalmente
+          const candidates: Array<{ inscriptionId: string; displayName: string; points: number; goalDifference: number; goalsFor: number }> = [];
+          for (const g of groups) {
+            const byPos = standingsByDistinctPosition(g.standings || []);
+            const row = byPos.get(fromPos);
+            if (row) {
+              const id = String(row.inscriptionId ?? '').trim();
+              if (id) candidates.push({ inscriptionId: id, displayName: String(row.displayName || id).trim(), points: Number(row.points ?? 0), goalDifference: Number(row.goalDifference ?? 0), goalsFor: Number(row.goalsFor ?? 0) });
+            }
+          }
+          // Mismo criterio de ordenamiento que el backend: pts → dif goles → goles a favor
+          candidates.sort((a, b) => b.points !== a.points ? b.points - a.points : b.goalDifference !== a.goalDifference ? b.goalDifference - a.goalDifference : b.goalsFor - a.goalsFor);
+
+          for (let rank = 1; rank <= count; rank++) {
+            const candidate = candidates[rank - 1];
+            const rankLabel = `${rank}° mejor ${fromPos}° entre grupos`;
+            if (candidate) {
+              upsertEligible({ inscriptionId: candidate.inscriptionId, displayName: candidate.displayName, sectionTitle, shortLabel: `BN${rank}`, source: 'groups', optionLabel: `${lineage} · ${rankLabel} · ${candidate.displayName}` });
+            } else {
+              upsertEligible({ inscriptionId: `pos:bestN:${fromStage.id}:${fromPos}:${count}:${rank}`, displayName: rankLabel, sectionTitle, shortLabel: `BN${rank}`, source: 'groups', optionLabel: `${lineage} · ${rankLabel} · ${pendingLabel}` });
+            }
+          }
+        }
+        continue;
+      }
+
       const bucket: EligibleInscription[] = [];
 
       for (let gi = 0; gi < groups.length; gi++) {
@@ -418,33 +459,25 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
         if (positions.length > 0) {
           for (const pos of positions) {
             const row = byPos.get(pos);
-            const idFromRow = String(row?.inscriptionId ?? '').trim();
+            const resolvedName = row ? (String(row?.displayName || '').trim() || '') : '';
+            const resolvedId = row ? (String(row?.inscriptionId || '').trim() || '') : '';
             const posTxt = String(pos);
             const shortLabel = `P${posTxt}G${gIdx}`;
             const posNum = Math.trunc(Number(pos)) || Number(posTxt) || 0;
             const go = { groupName: groupHumanName, position: posNum };
-            if (idFromRow) {
-              const dn = String(row?.displayName || '').trim() || idFromRow;
-              bucket.push({
-                inscriptionId: idFromRow,
-                displayName: dn,
-                sectionTitle,
-                shortLabel,
-                source: 'groups',
-                groupsOrigin: go,
-                optionLabel: `${lineage} · ${shortLabel} · ${dn}`,
-              });
-            } else {
-              bucket.push({
-                inscriptionId: buildSyntheticGroupSlotId(fromStage.id, tr.id, g.id, pos),
-                displayName: pendingLabel,
-                sectionTitle,
-                shortLabel,
-                source: 'groups',
-                groupsOrigin: go,
-                optionLabel: `${lineage} · ${shortLabel} · ${pendingLabel}`,
-              });
-            }
+            // Siempre emitir referencia de posición (pos:sg:); el nombre resuelto va solo en displayName
+            bucket.push({
+              inscriptionId: `pos:sg:${fromStage.id}:${g.id}:${pos}`,
+              ...(resolvedId ? { resolvedRealId: resolvedId } : {}),
+              displayName: resolvedName || pendingLabel,
+              sectionTitle,
+              shortLabel,
+              source: 'groups',
+              groupsOrigin: go,
+              optionLabel: resolvedName
+                ? `${lineage} · ${shortLabel} · ${resolvedName}`
+                : `${lineage} · ${shortLabel} · ${pendingLabel}`,
+            });
           }
         } else {
           for (const row of pickFromGroupStandingsBySelection(g.standings || [], tr)) {
@@ -485,45 +518,21 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
       if (positions.length > 0) {
         for (const pos of positions) {
           const row = byPos.get(pos);
-          const idFromRow = String(row?.inscriptionId ?? '').trim();
+          const resolvedName = row ? (String(row?.displayName || '').trim() || '') : '';
+          const resolvedId = row ? (String(row?.inscriptionId || '').trim() || '') : '';
           const posTxt = String(pos);
           const shortLabel = `P${posTxt}`;
-          if (idFromRow) {
-            const dn = String(row?.displayName || '').trim() || idFromRow;
-            bucket.push({
-              inscriptionId: idFromRow,
-              displayName: dn,
-              sectionTitle,
-              shortLabel,
-              source: 'league',
-              optionLabel: `${lineage} · tabla general ${shortLabel} · ${dn}`,
-            });
-          } else {
-            bucket.push({
-              inscriptionId: buildSyntheticLeagueSlotId(fromStage.id, tr.id, pos),
-              displayName: pendingLabel,
-              sectionTitle,
-              shortLabel,
-              source: 'league',
-              optionLabel: `${lineage} · tabla general ${shortLabel} · ${pendingLabel}`,
-            });
-          }
-        }
-      } else {
-        for (const row of leagueStandingsSelection(fromStage, tr)) {
-          const id = String(row.inscriptionId ?? '').trim();
-          if (!id) continue;
-          const pos = Number(row.position ?? 0);
-          const dn = String(row.displayName || '').trim() || id;
-          const posTxt = Number.isFinite(pos) && pos > 0 ? String(Math.trunc(pos)) : '?';
-          const shortLabel = `P${posTxt}`;
+          // Siempre emitir referencia de posición (pos:l:); el nombre resuelto va solo en displayName
           bucket.push({
-            inscriptionId: id,
-            displayName: dn,
+            inscriptionId: `pos:l:${fromStage.id}:${pos}`,
+            ...(resolvedId ? { resolvedRealId: resolvedId } : {}),
+            displayName: resolvedName || pendingLabel,
             sectionTitle,
             shortLabel,
             source: 'league',
-            optionLabel: `${lineage} · tabla general ${shortLabel} · ${dn}`,
+            optionLabel: resolvedName
+              ? `${lineage} · tabla general ${shortLabel} · ${resolvedName}`
+              : `${lineage} · tabla general ${shortLabel} · ${pendingLabel}`,
           });
         }
       }
@@ -541,41 +550,21 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
         'desde eliminatoria'
       );
       const matches = eliminationMatchesForIncomingTransition(fromStage, tr);
-      const pendingElim = 'Participante pendiente';
       const bucket: EligibleInscription[] = [];
       for (const m of matches) {
-        const slotCode = formatCompactEliminationSlot(m);
-        const matchHumanLabel = String(m.fixtureCode || '').trim() || matchDisplayCode(m);
-        const sides: Array<[role: 'home' | 'away', asg: AssignedInscription | null | undefined]> = [
-          ['home', m.homeAssignedInscription],
-          ['away', m.awayAssignedInscription],
-        ];
-        for (const [role, asg] of sides) {
-          const id = String(asg?.inscriptionId ?? '').trim();
-          const sideTxt = role === 'home' ? 'Local' : 'Visitante';
-          if (id) {
-            const dn = String(asg?.displayName ?? '').trim() || id;
-            bucket.push({
-              inscriptionId: id,
-              displayName: dn,
-              sectionTitle,
-              shortLabel: slotCode,
-              source: 'elimination',
-              optionLabel: `${lineage} · eliminatoria llave ${slotCode} · ${dn}`,
-            });
-          } else {
-            const shortSx = `${slotCode}-${role === 'home' ? 'L' : 'V'}`;
-            bucket.push({
-              inscriptionId: buildSyntheticEliminationSlotId(fromStage.id, tr.id, m.id, role),
-              displayName: pendingElim,
-              sectionTitle,
-              shortLabel: shortSx,
-              source: 'elimination',
-              eliminationMatchLabel: matchHumanLabel,
-              optionLabel: `${lineage} · eliminatoria llave ${slotCode} · ${sideTxt} · ${pendingElim}`,
-            });
-          }
-        }
+        const code = bracketDisplayCode(m);
+        const slotCode = formatCompactEliminationSlot({ ...m, leg: 1 });
+        const slotId = buildSameStageWinnerSlotId(fromStage.id, m.id);
+        const winnerLbl = formatWinnerSlotLabel(m, stageLabel);
+        bucket.push({
+          inscriptionId: slotId,
+          displayName: `${winnerLbl} — pendiente`,
+          sectionTitle,
+          shortLabel: slotCode,
+          source: 'elimination',
+          eliminationMatchLabel: code,
+          optionLabel: `${lineage} · ${winnerLbl}`,
+        });
       }
       for (const row of finalizeEligibleRowsForQuota(bucket, quota, stageLabel, lineage)) {
         upsertEligible(row);

@@ -114,3 +114,27 @@ test('schema incluye StandingsRow y fields standings en Stage/Group', async () =
   const groupFields = new Set(groupType.fields?.map((field) => field.name.value) || []);
   assert.equal(groupFields.has('standings'), true);
 });
+
+test('TournamentStatus incluye finished (cascada al finalizar competiciones)', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+  const enumDef = ast.definitions.find(
+    (definition) => definition.kind === 'EnumTypeDefinition' && definition.name.value === 'TournamentStatus'
+  );
+  assert.ok(enumDef, 'TournamentStatus enum no encontrado');
+  const values = new Set(enumDef.values?.map((v) => v.name.value) || []);
+  assert.equal(values.has('draft'), true);
+  assert.equal(values.has('published'), true);
+  assert.equal(values.has('finished'), true);
+});
+
+test('Match incluye matchKind para tercer puesto y variantes de llave', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+  const matchType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Match'
+  );
+  assert.ok(matchType, 'Match type no encontrado');
+  const matchFields = new Set(matchType.fields?.map((field) => field.name.value) || []);
+  assert.equal(matchFields.has('matchKind'), true);
+});

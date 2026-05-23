@@ -25,7 +25,13 @@ function mapGraphqlTransitionsToRelations(
   return transitions.map((tr) => {
     const kind = String(tr.selectionKind || 'top').toLowerCase();
     let selection: Selection;
-    if (kind === 'range') {
+    if (kind === 'bestn') {
+      selection = {
+        kind: 'bestN',
+        count: Number(tr.topN) || 0,
+        fromPosition: Number(tr.rangeFrom) || 0,
+      };
+    } else if (kind === 'range') {
       selection = {
         kind: 'range',
         from: Number(tr.rangeFrom) || 0,
@@ -205,6 +211,15 @@ export function selectionToVariables(selection: any): {
 } {
   if (selection?.kind === 'top') {
     return { topN: Number(selection.count) || 0, rangeFrom: null, rangeTo: null, bottomN: null };
+  }
+  if (selection?.kind === 'bestN') {
+    // bestN reuses topN for count and rangeFrom for position; rangeTo intentionally null
+    return {
+      topN: Number(selection.count) || 0,
+      rangeFrom: Number(selection.fromPosition) || 0,
+      rangeTo: null,
+      bottomN: null,
+    };
   }
   if (selection?.kind === 'range') {
     return {

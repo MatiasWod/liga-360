@@ -72,20 +72,20 @@ describe('incomingTransitionEligibility', () => {
     const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
     expect(out).toHaveLength(16);
 
-    const a9 = out.find((o) => o.inscriptionId === 'a9');
+    const a9 = out.find((o) => o.resolvedRealId === 'a9' || o.inscriptionId === 'pos:sg:g-stage:g-a:9');
     expect(a9?.shortLabel).toBe('P9G1');
     expect(a9?.source).toBe('groups');
     expect(a9?.sectionTitle).toBe('T · C · Fase grupos · desde grupos');
     expect(a9?.optionLabel).toBe('T · C · Fase grupos · Grupo A · posición 9 · A9');
-    const b9 = out.find((o) => o.inscriptionId === 'b9');
+    const b9 = out.find((o) => o.resolvedRealId === 'b9' || o.inscriptionId === 'pos:sg:g-stage:g-b:9');
     expect(b9?.shortLabel).toBe('P9G2');
     expect(b9?.optionLabel).toBe('T · C · Fase grupos · Grupo B · posición 9 · B9');
 
-    const g1Synth = out.find((o) => o.inscriptionId === 'liga360-slot:sg:g-stage:tr-1:g-a:10');
-    expect(g1Synth?.inscriptionId).toMatch(/^liga360-slot:sg:/);
-    expect(g1Synth?.displayName).toBe('Grupo A · posición 10');
+    const g1Synth = out.find((o) => o.inscriptionId === 'pos:sg:g-stage:g-a:10');
+    expect(g1Synth?.inscriptionId).toMatch(/^pos:sg:/);
+    expect(g1Synth?.displayName).toBe('Clasificación pendiente');
     expect(g1Synth?.shortLabel).toBe('P10G1');
-    expect(g1Synth?.optionLabel).toBe('T · C · Fase grupos · Grupo A · posición 10 · sin asignar');
+    expect(g1Synth?.optionLabel).toBe('T · C · Fase grupos · Grupo A · posición 10 · Clasificación pendiente');
 
     const rows = collectIncomingTransitionRows(tournament, toStageId);
     expect(rows).toHaveLength(1);
@@ -121,12 +121,12 @@ describe('incomingTransitionEligibility', () => {
     };
 
     const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
-    expect(out.map((x) => x.inscriptionId).sort()).toEqual(['p10', 'p11']);
+    expect(out.map((x) => x.inscriptionId).sort()).toEqual(['pos:l:league-s:10', 'pos:l:league-s:11']);
 
-    expect(out.find((x) => x.inscriptionId === 'p10')?.optionLabel).toBe('T · C · Liga · tabla general P10 · Diez');
-    expect(out.find((x) => x.inscriptionId === 'p10')?.shortLabel).toBe('P10');
-    expect(out.find((x) => x.inscriptionId === 'p10')?.sectionTitle).toBe('T · C · Liga · desde liga');
-    expect(out.find((x) => x.inscriptionId === 'p11')?.optionLabel).toBe('T · C · Liga · tabla general P11 · Once');
+    expect(out.find((x) => x.resolvedRealId === 'p10')?.optionLabel).toBe('T · C · Liga · tabla general P10 · Diez');
+    expect(out.find((x) => x.resolvedRealId === 'p10')?.shortLabel).toBe('P10');
+    expect(out.find((x) => x.resolvedRealId === 'p10')?.sectionTitle).toBe('T · C · Liga · desde liga');
+    expect(out.find((x) => x.resolvedRealId === 'p11')?.optionLabel).toBe('T · C · Liga · tabla general P11 · Once');
   });
 
   it('elimination: sin partidos con transición vinculada no aporta filas', () => {
@@ -148,7 +148,7 @@ describe('incomingTransitionEligibility', () => {
     expect(deriveEligibleInscriptionsFromIncomingTransitions(tournament, toId)).toEqual([]);
   });
 
-  it('elimination: lista local/visitante de partidos con destino de ganador = transición hacia etapa', () => {
+  it('elimination: lista ganadores de partidos con destino de ganador = transición hacia etapa', () => {
     const trToNext = 'trans-to-rep';
     const fromId = 'elim-from';
     const toId = 'rep';
@@ -193,19 +193,14 @@ describe('incomingTransitionEligibility', () => {
     };
     const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toId);
     expect(out.map((x) => x.inscriptionId).sort()).toEqual(
-      ['aw1', 'h1', 'h2', 'liga360-slot:el:elim-from:trans-to-rep:m2:away'].sort()
+      [`liga360-slot:ew:${fromId}:m1`, `liga360-slot:ew:${fromId}:m2`].sort()
     );
-    const h1 = out.find((x) => x.inscriptionId === 'h1');
-    expect(h1?.shortLabel).toBe('E3M1');
-    expect(h1?.source).toBe('elimination');
-    expect(h1?.sectionTitle).toContain('Tv');
-    expect(h1?.sectionTitle).toContain('Copa');
-    expect(h1?.sectionTitle).toContain('desde eliminatoria');
-    expect(h1?.optionLabel).toBe('Tv · Copa · Cuartos · eliminatoria llave E3M1 · H1');
-    const awaySlot = out.find((x) => x.inscriptionId === 'liga360-slot:el:elim-from:trans-to-rep:m2:away');
-    expect(awaySlot?.optionLabel).toBe('Tv · Copa · Cuartos · Cuartos · E3-M2 · Visitante · sin asignar');
-    expect(awaySlot?.shortLabel).toBe('E3M2-V');
-    expect(awaySlot?.displayName).toBe('Cuartos · E3-M2 · Visitante');
+    const w1 = out.find((x) => x.inscriptionId === `liga360-slot:ew:${fromId}:m1`);
+    expect(w1?.shortLabel).toBe('P1R3');
+    expect(w1?.source).toBe('elimination');
+    expect(w1?.displayName).toBe('Ganador Partido 1 - Cuartos — pendiente');
+    expect(w1?.sectionTitle).toContain('desde eliminatoria');
+    expect(w1?.optionLabel).toBe('Tv · Copa · Cuartos · Ganador Partido 1 - Cuartos');
   });
 
   it('elimination: sin winnerAdvancement por partido aún muestra llaves cuando no hay otros vínculos', () => {
@@ -251,8 +246,69 @@ describe('incomingTransitionEligibility', () => {
       competitions: [{ id: 'c', name: 'Cup', order: 1, stages: [elimFrom as TournamentStage, target as TournamentStage] }],
     };
     const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toId);
-    expect(out.some((x) => x.inscriptionId === 'a1' && x.source === 'elimination')).toBe(true);
-    expect(out.some((x) => x.inscriptionId === 'liga360-slot:el:elim-from:trans-to-liguilla:m2:away')).toBe(true);
+    expect(out.some((x) => x.inscriptionId === `liga360-slot:ew:${fromId}:m1` && x.source === 'elimination')).toBe(true);
+    expect(out.some((x) => x.inscriptionId === `liga360-slot:ew:${fromId}:m2`)).toBe(true);
+  });
+
+  it('elimination: repechaje Champions 16→8 expone 8 ganadores de ronda 1 aunque existan rondas posteriores', () => {
+    const trToElim = 'trans-to-elim';
+    const repechajeId = 'rep-stage';
+    const elimId = 'elim-stage';
+
+    const round1Matches = Array.from({ length: 8 }, (_, i) => {
+      const slot = i + 1;
+      return [
+        { id: `r1s${slot}l1`, round: 1, leg: 1, slotIndex: slot },
+        { id: `r1s${slot}l2`, round: 1, leg: 2, slotIndex: slot },
+      ];
+    }).flat();
+
+    const repechaje: Partial<TournamentStage> = {
+      id: repechajeId,
+      name: 'Repechaje',
+      order: 2,
+      format: 'elimination',
+      configJson: JSON.stringify({ numParticipants: 16, numAdvancing: 8, matchesPerTie: 'double' }),
+      matches: [
+        ...round1Matches,
+        { id: 'r2s1', round: 2, leg: 1, slotIndex: 1 },
+        { id: 'r2s2', round: 2, leg: 1, slotIndex: 2 },
+        { id: 'r3s1', round: 3, leg: 1, slotIndex: 1 },
+        { id: 'r3s2', round: 3, leg: 1, slotIndex: 2 },
+      ],
+      transitions: [{ id: trToElim, toStageId: elimId, selectionKind: 'top', topN: 8 }],
+    };
+
+    const eliminatorias: Partial<TournamentStage> = {
+      id: elimId,
+      name: 'Eliminatorias',
+      order: 3,
+      format: 'elimination',
+      transitions: [],
+    };
+
+    const tournament: TournamentEntity = {
+      id: 'ucl',
+      name: 'Champions',
+      competitions: [
+        {
+          id: 'c1',
+          name: 'Principal',
+          order: 1,
+          stages: [repechaje as TournamentStage, eliminatorias as TournamentStage],
+        },
+      ],
+    };
+
+    const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, elimId);
+    expect(out).toHaveLength(8);
+    expect(out.every((x) => x.source === 'elimination')).toBe(true);
+    expect(out.map((x) => x.shortLabel).sort()).toEqual(
+      ['P1R1', 'P2R1', 'P3R1', 'P4R1', 'P5R1', 'P6R1', 'P7R1', 'P8R1'].sort()
+    );
+    expect(out[0]?.displayName).toBe('Ganador Partido 1 - Repechaje — pendiente');
+    expect(out[0]?.inscriptionId).toBe(`liga360-slot:ew:${repechajeId}:r1s1l1`);
+    expect(out.find((x) => x.shortLabel === 'P1R3')).toBeUndefined();
   });
 
   it('liga: sin filas en tabla pero con rango y numParticipants ofrece plazas sintéticas', () => {
@@ -280,9 +336,9 @@ describe('incomingTransitionEligibility', () => {
     };
     const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
     expect(out).toHaveLength(2);
-    const p10 = out.find((o) => o.inscriptionId === 'liga360-slot:lg:ls:tr:10');
-    expect(p10?.displayName).toMatch(/^Liga ×\d+$/);
-    expect(p10?.shortLabel).toMatch(/^×\d+$/);
-    expect(p10?.optionLabel).toBe('T · C · Liga · P10 · Liga ×1 · sin asignar');
+    const p10 = out.find((o) => o.inscriptionId === 'pos:l:ls:10');
+    expect(p10?.displayName).toBe('Clasificación pendiente');
+    expect(p10?.shortLabel).toBe('P10');
+    expect(p10?.optionLabel).toBe('T · C · Liga · tabla general P10 · Clasificación pendiente');
   });
 });
