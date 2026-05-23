@@ -72,8 +72,7 @@ definitions:
           - postgres
         script:
           - npm ci --cache .npm --prefer-offline
-          - export POSTGRES_URL=postgresql://liga:liga@localhost:5432/liga360
-          - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
+          - export DATABASE_URL=postgresql://liga:liga@127.0.0.1:5432/liga360
           - npm run migrate
           - npm install --prefix services/inscriptions-svc
           - npm install --prefix services/tournaments-svc
@@ -115,7 +114,7 @@ pipelines:
                 - export BUILD_CONTEXT="."
                 - export DOCKERFILE_ARG="-f Dockerfile.frontend"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/Dockerfile.frontend .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"

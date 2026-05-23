@@ -34,10 +34,7 @@ const PORT = process.env.PORT || 4002;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
 const { Pool } = pkg;
-const pool = new Pool({
-  connectionString: POSTGRES_URL,
-  allowExitOnIdle: process.env.NODE_ENV === 'test',
-});
+const pool = new Pool({ connectionString: POSTGRES_URL });
 
 function optionalAuthMiddleware(req, _res, next) {
   const authHeader = req.headers.authorization || '';
@@ -621,16 +618,8 @@ app.get('/teams/resolve-by-invite-code/:code', requireAuthMiddleware, async (req
   }
 });
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}
-
-async function closePool() {
-  await pool.end();
-}
-
-export { app, closePool };
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 
