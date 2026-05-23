@@ -1,4 +1,7 @@
-image: node:20
+image: alpine:3.20
+
+options:
+  docker: true
 
 definitions:
   services:
@@ -8,115 +11,205 @@ definitions:
         POSTGRES_USER: liga
         POSTGRES_PASSWORD: liga
         POSTGRES_DB: liga360
+    docker:
+      memory: 4096
+
+  caches:
+    npm: .npm
+    docker: /var/lib/docker
+
   steps:
-    - step: &build
-        name: Build (required)
-        caches:
-          - node
+    - step: &terraform-validate
+        name: Terraform Validate
+        image: hashicorp/terraform:1.8.5
         script:
-          - npm ci
-          - npm run build
-    - step: &test
-        name: Tests — Unit + Integration (required)
+          - cd terraform
+          - terraform version
+          - terraform fmt -check
+          - terraform init
+          - terraform validate
+
+    - step: &terraform-plan
+        name: Terraform Plan
+        image: hashicorp/terraform:1.8.5
+        script:
+          - cd terraform
+          - terraform init
+          - terraform plan -out=tfplan
+        artifacts:
+          - terraform/tfplan
+
+    - step: &terraform-apply
+        name: Terraform Apply
+        image: hashicorp/terraform:1.8.5
+        trigger: manual
+        script:
+          - cd terraform
+          - terraform init
+          - terraform apply -auto-approve tfplan
+
+    - step: &terraform-destroy
+        name: Terraform Destroy
+        image: hashicorp/terraform:1.8.5
+        trigger: manual
+        script:
+          - cd terraform
+          - terraform init
+          - terraform destroy -auto-approve
+
+    - step: &build
+        name: Build
+        image: node:20-alpine
         caches:
-          - node
+          - npm
+        script:
+          - npm ci --cache .npm --prefer-offline
+          - npm run build
+
+    - step: &test
+        name: Unit + Integration Tests
+        image: node:20-alpine
+        caches:
+          - npm
         services:
           - postgres
         script:
-          - npm ci
+          - npm ci --cache .npm --prefer-offline
+          - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
+          - npm run migrate
           - npm install --prefix services/inscriptions-svc
           - npm install --prefix services/tournaments-svc
           - npm run test:ci
-          - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
-          - npm run migrate
+
+    - step: &docker-build-push
+        services:
+          - docker
+        caches:
+          - docker
+        script:
+          - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+          - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" $BUILD_CONTEXT $DOCKERFILE_ARG
+          - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+          - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+          - docker push "$DOCKER_USER/$SVC:latest"
+
 
 pipelines:
-  branches:
-    main:
+  pull-requests:
+    "**":
       - step: *build
       - step: *test
 
+  branches:
+    main:
+      - step: *terraform-validate
+      - step: *build
+      - step: *test
+      - step: *terraform-plan
+      - step: *terraform-apply
+
       - parallel:
           - step:
-              name: Deploy — Frontend
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Frontend
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-frontend"
+                - export BUILD_CONTEXT="."
+                - export DOCKERFILE_ARG="-f Dockerfile.frontend"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — Auth Svc
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Auth Svc
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-auth-svc"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — Gateway
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Gateway
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-gateway"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/gateway
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — Inscriptions Svc
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Inscriptions Svc
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-inscriptions-svc"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/inscriptions-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — Teams Svc
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Teams Svc
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-teams-svc"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — Tournaments Svc
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push Tournaments Svc
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-tournaments-svc"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/tournaments-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
 
           - step:
-              name: Deploy — DB Migrator
-              services: [docker]
-              caches: [docker]
+              <<: *docker-build-push
+              name: Build + Push DB Migrator
               script:
-                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - export SVC="liga360-migrator"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.migrator .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
+
+      - step:
+          name: Notify GitOps
+          image: alpine:3.20
+          script:
+            - echo "Images pushed. ArgoCD will sync from k8s/overlays/dev." 
+
+      - step:
+          name: Update GitOps Tags
+          image: alpine:3.20
+          script:
+            - apk add --no-cache git python3
+            - "python3 -c \"import os;from pathlib import Path;path=Path('k8s/overlays/dev/kustomization.yaml');content=path.read_text(encoding='utf-8');commit=os.environ.get('BITBUCKET_COMMIT','latest');lines=[(line[:len(line)-len(line.lstrip(' '))]+'newTag: '+commit) if line.strip().startswith('newTag:') else line for line in content.splitlines()];updated='\\n'.join(lines)+'\\n';path.write_text(updated,encoding='utf-8') if updated!=content else None\""
+            - git status --porcelain
+            - export GIT_AUTHOR_NAME="bitbucket-pipelines"
+            - export GIT_AUTHOR_EMAIL="pipelines@bitbucket"
+            - export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+            - export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+            - git add k8s/overlays/dev/kustomization.yaml
+            - git commit -m "ci: update k8s image tags [skip ci]" || exit 0
+            - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
+            - git push origin HEAD:main
+
+  custom:
+    terraform-destroy:
+      - step: *terraform-destroy
