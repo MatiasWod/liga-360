@@ -12,7 +12,7 @@ definitions:
         POSTGRES_PASSWORD: liga
         POSTGRES_DB: liga360
     docker:
-      memory: 4096
+      memory: 3072
 
   caches:
     npm: .npm
