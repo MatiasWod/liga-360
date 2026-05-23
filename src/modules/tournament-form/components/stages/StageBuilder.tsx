@@ -17,8 +17,7 @@ export interface StageDraft {
 export type Selection =
 	| { kind: 'top'; count: number }
 	| { kind: 'range'; from: number; to: number }
-	| { kind: 'bottom'; count: number }
-	| { kind: 'bestN'; count: number; fromPosition: number };
+	| { kind: 'bottom'; count: number };
 
 export type CarryOverMode = 'none' | 'all' | 'percent' | 'headToHead' | 'seriesAdvantage';
 
@@ -124,12 +123,12 @@ export const StageBuilder: React.FC<StageBuilderProps> = ({
 
 	return (
 		<div id="stage-builder-root" className="relative">
-			{stages.length === 0 && (
-				<div className="rounded-lg border border-dashed border-white/20 p-6 text-sm opacity-80">
-					No hay etapas. Agrega una desde la paleta.
-				</div>
-			)}
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+			<div className="space-y-3">
+				{stages.length === 0 && (
+					<div className="rounded-lg border border-dashed border-white/20 p-6 text-sm opacity-80">
+						No hay etapas. Agrega una desde la paleta.
+					</div>
+				)}
 				{stages.map((stage) => (
 					<StageCard
 						key={stage.id}
@@ -141,10 +140,8 @@ export const StageBuilder: React.FC<StageBuilderProps> = ({
 						onRemove={removeStage}
 					/>
 				))}
-			</div>
-			{stages.length > 0 && (
 				<GlobalRelationsSummary stages={relationScanStages} lookupStages={lookupPool} onRemoveRelation={removeRelation} />
-			)}
+			</div>
 			<StagePalette onAdd={handleAdd} />
 		</div>
 	);
@@ -179,18 +176,16 @@ function computeInbound(stageId: string, allStages: StageDraft[]): Array<{ from:
 }
 
 function countFromSelection(sel: Selection, fromStage: StageDraft): number {
-	if (sel.kind === 'bestN') return sel.count;
 	if (fromStage.kind === 'groups') {
 		const cfg = (fromStage.config || {}) as any;
 		const numGroups = Number(cfg.numGroups) || 0;
 		const teamsPerGroup = Number(cfg.teamsPerGroup) || 0;
 		if (numGroups <= 0) return 0;
-		const perGroup = sel.kind === 'top' ? sel.count : sel.kind === 'bottom' ? Math.min(sel.count, teamsPerGroup || sel.count) : sel.kind === 'range' ? Math.max(0, sel.to - sel.from + 1) : 0;
+		const perGroup = sel.kind === 'top' ? sel.count : sel.kind === 'bottom' ? Math.min(sel.count, teamsPerGroup || sel.count) : Math.max(0, sel.to - sel.from + 1);
 		return perGroup * numGroups;
 	}
 	// league / knockout: posiciones globales
 	if (sel.kind === 'top') return sel.count;
 	if (sel.kind === 'bottom') return sel.count;
-	if (sel.kind === 'range') return Math.max(0, sel.to - sel.from + 1);
-	return 0;
+	return Math.max(0, sel.to - sel.from + 1);
 } 

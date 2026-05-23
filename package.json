@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "bash scripts/run_dev.sh",
-    "dev:backend": "bash scripts/run_dev.sh --backend",
+    "dev:all": "bash ./run_dev.sh",
+    "dev:backend": "bash ./run_dev.sh --backend",
     "run:project": "bash ./run_project.sh",
     "run:project:win": "powershell -ExecutionPolicy Bypass -File ./run_project.ps1",
     "build": "tsc -b && vite build",

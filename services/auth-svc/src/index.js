@@ -165,6 +165,6 @@ app.post('/login', async (req, res) => {
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    logger.info({ port: PORT }, 'running');
+    console.log(`Server is running on port ${PORT}`);
   });
 }

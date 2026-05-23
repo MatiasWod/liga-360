@@ -4,8 +4,6 @@ import { Card } from '../../components/ui/Card';
 import { TournamentForm } from '../../modules/tournament-form';
 import { TournamentConfiguration, TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
 import { useTournamentRoute } from '../../hooks/useTournamentRoute';
-import { QuickSetupModal } from '../../modules/tournament-form/components/QuickSetupModal';
-import type { CompetitionMeta } from '../../modules/tournament-form/components/CompetitionsBuilder';
 
 type Mode = 'visualizacion' | 'creacion' | 'configuracion' | 'edicion';
 
@@ -20,29 +18,17 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
   const [selectedTournamentId, setSelectedTournamentId] = useTournamentRoute('torneos');
   const [selectedTournamentName, setSelectedTournamentName] = React.useState<string>('');
   const [feedback, setFeedback] = React.useState<string>('');
-  const [quickSetupOpen, setQuickSetupOpen] = React.useState(false);
-  const [templateCompetitions, setTemplateCompetitions] = React.useState<CompetitionMeta[] | null>(null);
-  const [formKey, setFormKey] = React.useState(0);
 
   const isViewing = mode === 'visualizacion';
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-3">
-        {mode === 'creacion' && (
-          <Button
-            variant="secondary"
-            onClick={() => setQuickSetupOpen(true)}
-          >
-            ⚡ Creación rápida
-          </Button>
-        )}
+      <div className="flex items-center justify-end">
         <Button
           onClick={() => {
             setSelectedTournamentId(null);
             setSelectedTournamentName('');
             setFeedback('');
-            if (mode !== 'visualizacion') setTemplateCompetitions(null);
             setMode((prev) => (prev === 'visualizacion' ? 'creacion' : 'visualizacion'));
           }}
         >
@@ -117,12 +103,9 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
       {mode === 'creacion' && (
         <Card>
           <TournamentForm
-            key={formKey}
             mode="create"
             organizerName={organizerName}
-            initialCompetitions={templateCompetitions ?? undefined}
             onCreated={({ id, name }) => {
-              setTemplateCompetitions(null);
               setSelectedTournamentId(id);
               setSelectedTournamentName(name);
               setFeedback(`Torneo "${name}" creado con su estructura inicial. Ahora podés terminar de configurarlo.`);
@@ -131,17 +114,6 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
           />
         </Card>
       )}
-
-      <QuickSetupModal
-        open={quickSetupOpen}
-        onClose={() => setQuickSetupOpen(false)}
-        draftStorageKey="liga360:tournamentDraft:v1"
-        onApply={(competitions) => {
-          setTemplateCompetitions(competitions);
-          setFormKey((k) => k + 1);
-          setQuickSetupOpen(false);
-        }}
-      />
 
       {mode === 'configuracion' && (
         <Card>

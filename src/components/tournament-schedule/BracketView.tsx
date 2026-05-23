@@ -1,7 +1,7 @@
 import React from 'react';
 import type { MatchRecord } from './types';
 import { MatchRoundList } from './MatchRoundList';
-import type { GoalRecord, MatchQuickAction } from './MatchCard';
+import type { GoalRecord } from './MatchCard';
 
 interface BracketColumn {
   id: string;
@@ -13,17 +13,10 @@ interface BracketViewProps {
   columns: BracketColumn[];
   theme?: 'light' | 'dark';
   onEdit?: (matchId: string) => void;
-  onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goalsByMatchId?: Record<string, GoalRecord[]>;
 }
 
-export const BracketView: React.FC<BracketViewProps> = ({
-  columns,
-  theme = 'light',
-  onEdit,
-  onQuickMatchAction,
-  goalsByMatchId,
-}) => {
+export const BracketView: React.FC<BracketViewProps> = ({ columns, theme = 'light', onEdit, goalsByMatchId }) => {
   const isDark = theme === 'dark';
   const labelCls = isDark ? 'text-white/60' : 'text-slate-500';
 
@@ -35,13 +28,7 @@ export const BracketView: React.FC<BracketViewProps> = ({
             <div className={`mb-3 text-center text-xs font-bold uppercase tracking-wider ${labelCls}`}>
               {col.label}
             </div>
-            <MatchRoundList
-              matches={col.matches}
-              theme={theme}
-              onEdit={onEdit}
-              onQuickMatchAction={onQuickMatchAction}
-              goalsByMatchId={goalsByMatchId}
-            />
+            <MatchRoundList matches={col.matches} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
           </div>
         ))}
       </div>

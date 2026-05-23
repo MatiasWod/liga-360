@@ -13,9 +13,6 @@ import {
   getTournamentConfigurationById,
   setStageStatus,
 } from '../../services/tournaments/configuration';
-import { updateMatchResult } from '../../services/tournaments/matchResult';
-import type { MatchQuickAction } from '../../components/tournament-schedule/MatchCard';
-import { bothTeamsResolvedFromSlots } from '../../components/tournament-schedule/matchParticipantUtils';
 import { useFixtureSchedulingPrefs } from './useFixtureSchedulingPrefs';
 import type { TournamentEntity, TournamentMatchRow } from './types';
 
@@ -96,33 +93,12 @@ export const FixturePlanningPanel: React.FC<{
   const parsedMaxRounds = maxRoundsInput.trim() !== '' ? parseInt(maxRoundsInput, 10) : null;
   const validMaxRounds = parsedMaxRounds != null && parsedMaxRounds > 0 ? parsedMaxRounds : null;
 
-  const maxRoundsFromConfig = React.useMemo((): number | null => {
-    if (!stage || (stage.format !== 'league' && stage.format !== 'groups')) return null;
-    try {
-      const cfg = JSON.parse(stage.configJson || '{}') as Record<string, unknown>;
-      const v = Number(cfg.maxRounds);
-      return Number.isInteger(v) && v > 0 ? v : null;
-    } catch {}
-    return null;
-  }, [stage]);
-
-  const doubleRoundFromConfig = React.useMemo((): boolean => {
-    if (!stage) return false;
-    try {
-      const cfg = JSON.parse(stage.configJson || '{}') as Record<string, unknown>;
-      if (stage.format === 'league') return cfg.rounds === 'double';
-      if (stage.format === 'groups') return cfg.groupRoundType === 'double';
-      if (stage.format === 'elimination') return cfg.matchesPerTie === 'double';
-    } catch {}
-    return false;
-  }, [stage]);
-
   async function handleGenerateLeague(doubleRound: boolean) {
     if (!stage || stage.format !== 'league') return;
     setSaving(true);
     setError('');
     try {
-      await generateLeagueRoundRobin(stage.id, doubleRound, maxRoundsFromConfig);
+      await generateLeagueRoundRobin(stage.id, doubleRound, validMaxRounds);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar liga');
@@ -150,7 +126,7 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
-      await generateGroupsStageRoundRobin(stage.id, doubleRound, maxRoundsFromConfig);
+      await generateGroupsStageRoundRobin(stage.id, doubleRound, validMaxRounds);
       await onRefresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar grupos');
@@ -164,40 +140,6 @@ export const FixturePlanningPanel: React.FC<{
   const stageStatus = stage?.stageStatus ?? 'active';
   const isBlocked = stageStatus === 'not_started';
   const isFinished = stageStatus === 'finished';
-  const canManageMatches = !isBlocked && !isFinished;
-
-  const handleQuickMatchAction = React.useCallback(
-    async (matchId: string, action: MatchQuickAction) => {
-      const row = matchById.get(matchId);
-      if (
-        !row ||
-        !bothTeamsResolvedFromSlots(row.homeAssignedInscription, row.awayAssignedInscription)
-      ) {
-        const msg = 'Asigná local y visitante antes de gestionar el partido';
-        setError(msg);
-        throw new Error(msg);
-      }
-      setSaving(true);
-      setError('');
-      try {
-        if (action.type === 'start') {
-          await updateMatchResult(matchId, 0, 0, 'live');
-        } else if (action.type === 'save_score') {
-          await updateMatchResult(matchId, action.homeScore, action.awayScore, 'live');
-        } else if (action.type === 'finish') {
-          await updateMatchResult(matchId, action.homeScore, action.awayScore, 'completed');
-        }
-        await onRefresh();
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Error al guardar resultado';
-        setError(msg);
-        throw e;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [matchById, onRefresh, setError, setSaving]
-  );
 
   const allMatches: Array<{ id: string; status?: string | null }> = React.useMemo(() => {
     if (!stage) return [];
@@ -375,7 +317,6 @@ export const FixturePlanningPanel: React.FC<{
       const kind = String(tr.selectionKind || 'top').toLowerCase();
       let fromPos = 0;
       let toPos = 0;
-      let bestNCount: number | undefined;
       if (kind === 'top' && tr.topN) {
         fromPos = 1;
         toPos = Number(tr.topN);
@@ -385,13 +326,9 @@ export const FixturePlanningPanel: React.FC<{
       } else if (kind === 'bottom' && tr.bottomN && totalRows > 0) {
         fromPos = totalRows - Number(tr.bottomN) + 1;
         toPos = totalRows;
-      } else if (kind === 'bestn' && tr.topN && tr.rangeFrom) {
-        fromPos = Number(tr.rangeFrom);
-        toPos = Number(tr.rangeFrom);
-        bestNCount = Number(tr.topN);
       }
       if (fromPos > 0 && toPos >= fromPos) {
-        zones.push({ fromPos, toPos, label: `→ ${destName}`, colorIndex: zones.length, ...(bestNCount ? { bestNCount } : {}) });
+        zones.push({ fromPos, toPos, label: `→ ${destName}`, colorIndex: zones.length });
       }
     }
     // Ordenar por posición inicial para asignar colores lógicamente
@@ -415,26 +352,12 @@ export const FixturePlanningPanel: React.FC<{
           if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
         }
       } else if (stage.format === 'groups') {
-        const sortedGroups = (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         for (const zone of classificationZones) {
           const teams: string[] = [];
-          if (zone.bestNCount) {
-            // bestN: recolectar todos los equipos en esa posición, rankear globalmente, tomar los N mejores
-            const candidates = sortedGroups.flatMap((g) =>
-              (g.standings ?? []).filter((r) => r.position === zone.fromPos)
-            );
-            candidates.sort((a, b) =>
-              b.points !== a.points ? b.points - a.points :
-              b.goalDifference !== a.goalDifference ? b.goalDifference - a.goalDifference :
-              b.goalsFor - a.goalsFor
-            );
-            candidates.slice(0, zone.bestNCount).forEach((r) => teams.push(r.displayName));
-          } else {
-            for (const g of sortedGroups) {
-              (g.standings ?? [])
-                .filter((r) => r.position >= zone.fromPos && r.position <= zone.toPos)
-                .forEach((r) => teams.push(r.displayName));
-            }
+          for (const g of (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+            (g.standings ?? [])
+              .filter((r) => r.position >= zone.fromPos && r.position <= zone.toPos)
+              .forEach((r) => teams.push(r.displayName));
           }
           if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
         }
@@ -544,43 +467,57 @@ export const FixturePlanningPanel: React.FC<{
           <p className="mt-3 text-xs text-amber-700">No hay fases de liga, grupos o eliminación en esta competencia.</p>
         )}
 
-        {!isFinished && (stage?.format === 'league' || stage?.format === 'groups') && maxRoundsFromConfig ? (
-          <div className="mt-4 text-xs text-text-muted">
-            Fechas a generar: <span className="font-medium text-text-primary">{maxRoundsFromConfig}</span>
-            <span className="ml-1">(según config · {maxRoundsFromConfig === 1 ? '1 partido' : `${maxRoundsFromConfig} partidos`} por equipo)</span>
+        {!isFinished && (stage?.format === 'league' || stage?.format === 'groups') ? (
+          <div className="mt-4">
+            <label className="flex flex-col text-xs text-slate-600 w-48">
+              Fechas máximas (opcional)
+              <input
+                type="number"
+                min={1}
+                placeholder={`Máx: ${stage.format === 'groups' ? 'fechas por grupo' : 'fechas totales'}`}
+                value={maxRoundsInput}
+                onChange={(e) => setMaxRoundsInput(e.target.value)}
+                className="mt-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800"
+              />
+              {validMaxRounds && (
+                <span className="mt-1 text-[11px] text-slate-500">
+                  Cada equipo jugará {validMaxRounds} {validMaxRounds === 1 ? 'partido' : 'partidos'}
+                </span>
+              )}
+            </label>
           </div>
         ) : null}
 
         {!isFinished && stage?.format === 'league' ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => handleGenerateLeague(doubleRoundFromConfig)}>
-              Generar fixture
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => handleGenerateLeague(false)}>
+              Generar liga (ida)
             </Button>
-            <span className="text-xs text-text-muted">
-              {doubleRoundFromConfig ? 'Ida y vuelta (según config)' : 'Solo ida (según config)'}
-            </span>
+            <Button type="button" variant="secondary" onClick={() => handleGenerateLeague(true)}>
+              Generar liga ida y vuelta
+            </Button>
           </div>
         ) : null}
 
         {!isFinished && stage?.format === 'elimination' ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => handleGenerateElimination(doubleRoundFromConfig)}>
-              Generar fixture
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => handleGenerateElimination(false)}>
+              Generar llave (ida)
             </Button>
-            <span className="text-xs text-text-muted">
-              {doubleRoundFromConfig ? 'Ida y vuelta (según config)' : 'Partido único (según config)'}
-            </span>
+            <Button type="button" variant="secondary" onClick={() => handleGenerateElimination(true)}>
+              Generar llave ida y vuelta
+            </Button>
           </div>
         ) : null}
 
         {!isFinished && stage?.format === 'groups' ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => handleGenerateGroups(doubleRoundFromConfig)}>
-              Generar fixture
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => handleGenerateGroups(false)}>
+              Generar grupos (ida)
             </Button>
-            <span className="text-xs text-text-muted">
-              {doubleRoundFromConfig ? 'Ida y vuelta (según config)' : 'Solo ida (según config)'}
-            </span>
+            <Button type="button" variant="secondary" onClick={() => handleGenerateGroups(true)}>
+              Generar grupos ida y vuelta
+            </Button>
           </div>
         ) : null}
 
@@ -664,24 +601,7 @@ export const FixturePlanningPanel: React.FC<{
                 type={scheduleView.type}
                 data={scheduleView.data}
                 theme="dark"
-                onEdit={
-                  canManageMatches
-                    ? (matchId) => {
-                        const row = matchById.get(matchId);
-                        if (
-                          !row ||
-                          !bothTeamsResolvedFromSlots(
-                            row.homeAssignedInscription,
-                            row.awayAssignedInscription
-                          )
-                        ) {
-                          return;
-                        }
-                        setMatchIdDrawerOpen(matchId);
-                      }
-                    : undefined
-                }
-                onQuickMatchAction={canManageMatches ? handleQuickMatchAction : undefined}
+                onEdit={isBlocked || isFinished ? undefined : (matchId) => setMatchIdDrawerOpen(matchId)}
               />
               {stage.format === 'league' ? (
                 <div className="mt-4 space-y-2">
@@ -789,12 +709,6 @@ export const FixturePlanningPanel: React.FC<{
 
       {matchIdDrawerOpen ? (() => {
         const matchRow = matchById.get(matchIdDrawerOpen);
-        const teamsResolved = matchRow
-          ? bothTeamsResolvedFromSlots(
-              matchRow.homeAssignedInscription,
-              matchRow.awayAssignedInscription
-            )
-          : false;
         const isMatchFinished = ['finished', 'completed', 'suspended'].includes(
           String(matchRow?.status ?? '').toLowerCase()
         );
@@ -802,8 +716,7 @@ export const FixturePlanningPanel: React.FC<{
           <MatchEditDrawer
             matchId={matchIdDrawerOpen}
             tournamentId={tournament.id}
-            teamsResolved={teamsResolved}
-            defaultTab={teamsResolved ? (isMatchFinished ? 'schedule' : 'result') : 'schedule'}
+            defaultTab={isMatchFinished ? 'schedule' : 'result'}
             presetTimes={schedApi?.presetTimes}
             initialData={{
               scheduledAt: matchRow?.scheduledAt,

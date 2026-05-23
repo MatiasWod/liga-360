@@ -79,8 +79,6 @@ export interface MatchEditDrawerProps {
   presetTimes?: string[];
   /** Pestaña inicial. Por defecto 'result' para partidos no finalizados. */
   defaultTab?: 'schedule' | 'result' | 'events';
-  /** Si false, solo programación (fecha/cancha); resultado y eventos requieren equipos. */
-  teamsResolved?: boolean;
   onClose: () => void;
   onSaved?: () => void | Promise<void>;
 }
@@ -94,18 +92,10 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
   initialData,
   presetTimes,
   defaultTab,
-  teamsResolved = true,
   onClose,
   onSaved,
 }) => {
-  const drawerSections = teamsResolved
-    ? (['schedule', 'result', 'events'] as const)
-    : (['schedule'] as const);
-  const initialSection = defaultTab ?? 'result';
-  const [activeSection, setActiveSection] = React.useState<'schedule' | 'result' | 'events'>(() => {
-    if (!teamsResolved) return 'schedule';
-    return initialSection;
-  });
+  const [activeSection, setActiveSection] = React.useState<'schedule' | 'result' | 'events'>(defaultTab ?? 'result');
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -143,7 +133,7 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
 
         {/* Pestañas */}
         <div className="flex border-b border-border-subtle">
-          {drawerSections.map((section) => {
+          {(['schedule', 'result', 'events'] as const).map((section) => {
             const labels = { schedule: 'Programación', result: 'Resultado', events: 'Eventos' };
             return (
               <button
@@ -164,11 +154,6 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
 
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto p-5">
-          {!teamsResolved ? (
-            <p className="mb-4 rounded-lg border border-dashed border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-muted">
-              Asigná local y visitante para cargar resultado o eventos. Podés programar fecha y cancha.
-            </p>
-          ) : null}
           {activeSection === 'schedule' && (
             <ScheduleSection matchId={matchId} initialData={initialData} presetTimes={presetTimes} onSaved={onSaved} />
           )}

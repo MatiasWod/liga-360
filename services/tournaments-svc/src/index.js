@@ -9,21 +9,7 @@ import { buildSubgraphSchema } from '@apollo/subgraph';
 import { expressMiddleware } from '@apollo/server/express4';
 import neo4j from 'neo4j-driver';
 import { requireOrganizerFromAuthHeader } from './auth.js';
-import {
-  eliminationFirstRoundBracketPositions,
-  eliminationFixtureCode,
-  eliminationMatchSlots,
-  eliminationMaxRound,
-  aggregateEliminationSeriesScores,
-  formatEliminationMatchCodeFromProps,
-  isThirdPlaceMatchProps,
-  legsForEliminationSlot,
-  nextPowerOf2,
-  pickSeriesWinnerFromScoreMap,
-  resolveEliminationBracketConfig,
-  shouldCreateThirdPlaceMatch,
-  THIRD_PLACE_SLOT_INDEX,
-} from './bracketElimination.js';
+import { eliminationFirstRoundBracketPositions, eliminationMatchSlots, nextPowerOf2 } from './bracketElimination.js';
 import { httpLogger, logger } from './logger.js';
 import {
   doubleRoundRobinFromSingle,
@@ -31,11 +17,6 @@ import {
   validateSingleRoundRobin,
 } from './roundRobin.js';
 import { computeStandings } from './standings.js';
-import {
-  isPhysicalInscriptionId,
-  isPlaceholderParticipantLabel,
-  pickPhysicalStandingsRow,
-} from './participantLabels.js';
 
 const PORT = process.env.PORT || 4001;
 const NEO4J_URI = process.env.NEO4J_URI || 'bolt://localhost:7687';
@@ -73,22 +54,9 @@ function normalizeInscriptionId(raw) {
   return String(raw);
 }
 
-/** Slots pendientes desde UI (`liga360-slot:*`, `pos:*`); no ocupan cupo físico de equipos reales en la etapa. */
+/** Slots pendientes desde UI (`liga360-slot:*`); no ocupan cupo físico de equipos reales en la etapa. */
 function isSyntheticSlotInscriptionId(raw) {
-  const s = normalizeInscriptionId(raw);
-  return s.startsWith('liga360-slot:') || s.startsWith('pos:');
-}
-
-async function countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId = null) {
-  const r = await session.run(
-    `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-     WHERE NOT toString(i.inscriptionId) STARTS WITH 'liga360-slot:'
-       AND NOT toString(i.inscriptionId) STARTS WITH 'pos:'
-       AND ($tid IS NULL OR i.tournamentId = $tid)
-     RETURN count(DISTINCT toString(i.inscriptionId)) AS c`,
-    { stageId, tid: tournamentId }
-  );
-  return Number(r.records[0]?.get('c') || 0);
+  return normalizeInscriptionId(raw).startsWith('liga360-slot:');
 }
 
 function deriveCompetitionCapacityFromStage(stageProps) {
@@ -132,7 +100,12 @@ function deriveStageCapacity(stageProps) {
 }
 
 async function countAssignedInscriptionsOnStage(session, stageId) {
-  return countPhysicalAssignedInscriptionsOnStage(session, stageId);
+  const r = await session.run(
+    `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
+     RETURN count(DISTINCT i.inscriptionId) AS c`,
+    { stageId }
+  );
+  return Number(r.records[0]?.get('c') || 0);
 }
 
 async function countAssignedInscriptionsOnGroup(session, groupId) {
@@ -264,7 +237,6 @@ function matchFromNeoProps(m) {
     winnerAdvancementTransitionId: m.winnerAdvancementTransitionId
       ? String(m.winnerAdvancementTransitionId)
       : null,
-    matchKind: m.matchKind ?? null,
   };
 }
 
@@ -442,34 +414,6 @@ async function hydrateEliminationFirstRoundFromBracket(session, stageId) {
 }
 
 /**
- * Refs de ganador de llave (`liga360-slot:ew:` / `pos:ew:`): conservar el ref en inscriptionId
- * y solo actualizar displayName, para no confundir con posiciones de liga/grupos al resolver.
- */
-function isWinnerSlotRef(raw) {
-  const s = String(raw || '');
-  return s.startsWith('liga360-slot:ew:') || s.startsWith('pos:ew:');
-}
-
-/** Parsea `liga360-slot:ew:{stageId}:{matchId}` (matchId puede contener guiones, no `:`). */
-function parseWinnerSlotRef(str) {
-  const s = String(str || '');
-  if (s.startsWith('pos:ew:')) {
-    const matchId = s.slice('pos:ew:'.length).trim();
-    return matchId ? { stageId: null, matchId } : null;
-  }
-  if (s.startsWith('liga360-slot:ew:')) {
-    const rest = s.slice('liga360-slot:ew:'.length);
-    const idx = rest.indexOf(':');
-    if (idx <= 0) return null;
-    const stageId = rest.slice(0, idx).trim();
-    const matchId = rest.slice(idx + 1).trim();
-    if (!stageId || !matchId) return null;
-    return { stageId, matchId };
-  }
-  return null;
-}
-
-/**
  * Resuelve los position refs (liga360-slot:/pos:) en los slots de un partido.
  * Muta el objeto match y lo devuelve.
  */
@@ -478,31 +422,17 @@ async function resolveMatchRefs(match, driver) {
   const aid = String(match.awayInscriptionId || '');
   try {
     if (hid && (hid.startsWith('liga360-slot:') || hid.startsWith('pos:'))) {
-      let r = await resolvePositionRef(driver, hid);
-      if (r?.displayName && isPlaceholderParticipantLabel(r.displayName)) {
-        const deeper = await resolveInscriptionToTeamDisplay(driver, hid);
-        if (deeper?.displayName) r = deeper;
-      }
-      if (r) applyResolvedSlot(match, 'home', r, isWinnerSlotRef(hid));
-    } else if (hid && isPhysicalInscriptionId(hid)) {
-      const dn = String(match.homeDisplayName || '').trim();
-      if (isPlaceholderParticipantLabel(dn)) {
-        const looked = await lookupInscriptionDisplayName(driver, hid);
-        if (looked) match.homeDisplayName = looked;
+      const r = await resolvePositionRef(driver, hid);
+      if (r) {
+        match.homeInscriptionId = r.inscriptionId;
+        match.homeDisplayName = r.displayName;
       }
     }
     if (aid && (aid.startsWith('liga360-slot:') || aid.startsWith('pos:'))) {
-      let r = await resolvePositionRef(driver, aid);
-      if (r?.displayName && isPlaceholderParticipantLabel(r.displayName)) {
-        const deeper = await resolveInscriptionToTeamDisplay(driver, aid);
-        if (deeper?.displayName) r = deeper;
-      }
-      if (r) applyResolvedSlot(match, 'away', r, isWinnerSlotRef(aid));
-    } else if (aid && isPhysicalInscriptionId(aid)) {
-      const dn = String(match.awayDisplayName || '').trim();
-      if (isPlaceholderParticipantLabel(dn)) {
-        const looked = await lookupInscriptionDisplayName(driver, aid);
-        if (looked) match.awayDisplayName = looked;
+      const r = await resolvePositionRef(driver, aid);
+      if (r) {
+        match.awayInscriptionId = r.inscriptionId;
+        match.awayDisplayName = r.displayName;
       }
     }
   } catch (e) {
@@ -511,280 +441,15 @@ async function resolveMatchRefs(match, driver) {
   return match;
 }
 
-async function lookupInscriptionDisplayName(driver, inscriptionId) {
-  const id = String(inscriptionId || '').trim();
-  if (!id || !isPhysicalInscriptionId(id)) return null;
-  const session = driver.session();
-  try {
-    const byRef = await session.run(
-      `MATCH (i:InscriptionRef {inscriptionId: $iid})
-       RETURN i.displayName AS dn LIMIT 1`,
-      { iid: id }
-    );
-    let dn = byRef.records[0]?.get('dn');
-    if (dn && String(dn).trim() && !isPlaceholderParticipantLabel(dn)) {
-      return String(dn).trim();
-    }
-    const byStage = await session.run(
-      `MATCH (:Stage)-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {inscriptionId: $iid})
-       RETURN i.displayName AS dn LIMIT 1`,
-      { iid: id }
-    );
-    dn = byStage.records[0]?.get('dn');
-    if (dn && String(dn).trim() && !isPlaceholderParticipantLabel(dn)) {
-      return String(dn).trim();
-    }
-    const fromMatch = await session.run(
-      `MATCH (m:Match)
-       WHERE toString(m.homeInscriptionId) = $iid OR toString(m.awayInscriptionId) = $iid
-       RETURN m.homeInscriptionId AS hid, m.homeDisplayName AS hd,
-              m.awayInscriptionId AS aid, m.awayDisplayName AS ad
-       LIMIT 10`,
-      { iid: id }
-    );
-    for (const rec of fromMatch.records) {
-      const useHome = String(rec.get('hid') ?? '') === id;
-      const dnMatch = String(useHome ? rec.get('hd') : rec.get('ad') ?? '').trim();
-      if (dnMatch && !isPlaceholderParticipantLabel(dnMatch)) return dnMatch;
-    }
-  } finally {
-    await session.close();
-  }
-  return null;
-}
-
-/**
- * Resuelve cualquier inscriptionId/ref hasta nombre de equipo real (con límite anti-ciclos).
- */
-async function resolveInscriptionToTeamDisplay(driver, inscriptionId, resolving = new Set()) {
-  const id = String(inscriptionId || '').trim();
-  if (!id || resolving.has(id)) return null;
-  resolving.add(id);
-
-  try {
-    if (isPhysicalInscriptionId(id)) {
-      const dn = await lookupInscriptionDisplayName(driver, id);
-      if (dn) return { inscriptionId: id, displayName: dn };
-      return null;
-    }
-
-    if (id.startsWith('liga360-slot:') || id.startsWith('pos:')) {
-      const r = await resolvePositionRef(driver, id);
-      if (!r) return null;
-      const dn = String(r.displayName ?? '').trim();
-      const resolvedId = String(r.inscriptionId ?? '').trim();
-      if (dn && !isPlaceholderParticipantLabel(dn) && isPhysicalInscriptionId(resolvedId)) {
-        return { inscriptionId: resolvedId, displayName: dn };
-      }
-      if (dn && !isPlaceholderParticipantLabel(dn)) {
-        return { inscriptionId: resolvedId || id, displayName: dn };
-      }
-      if (resolvedId && resolvedId !== id && !resolving.has(resolvedId)) {
-        return resolveInscriptionToTeamDisplay(driver, resolvedId, resolving);
-      }
-    }
-    return null;
-  } finally {
-    resolving.delete(id);
-  }
-}
-
-/**
- * Ganador de una pierna ya resuelta (refs expandidos, scores reales).
- */
-async function resolveFinishedMatchWinnerFromResolvedLeg(driver, leg) {
-  const hs = leg.homeScore != null ? Number(leg.homeScore) : null;
-  const as_ = leg.awayScore != null ? Number(leg.awayScore) : null;
-  if (hs == null || as_ == null || !Number.isFinite(hs) || !Number.isFinite(as_) || hs === as_) {
-    return null;
-  }
-
-  const winnerId = String(hs > as_ ? leg.homeInscriptionId : leg.awayInscriptionId || '').trim();
-  if (!winnerId) return null;
-
-  const winnerDisplay = String(hs > as_ ? leg.homeDisplayName : leg.awayDisplayName || '').trim();
-  if (winnerDisplay && !isPlaceholderParticipantLabel(winnerDisplay) && isPhysicalInscriptionId(winnerId)) {
-    return { inscriptionId: winnerId, displayName: winnerDisplay };
-  }
-
-  return resolveInscriptionToTeamDisplay(driver, winnerId);
-}
-
-function resolveFinishedMatchLoserFromResolvedLeg(leg) {
-  const hs = leg.homeScore != null ? Number(leg.homeScore) : null;
-  const as_ = leg.awayScore != null ? Number(leg.awayScore) : null;
-  if (hs == null || as_ == null || !Number.isFinite(hs) || !Number.isFinite(as_) || hs === as_) {
-    return null;
-  }
-  const loserId = String(hs > as_ ? leg.awayInscriptionId : leg.homeInscriptionId || '').trim();
-  if (!loserId) return null;
-  const loserDisplay = String(hs > as_ ? leg.awayDisplayName : leg.homeDisplayName || '').trim();
-  return { inscriptionId: loserId, displayName: loserDisplay || loserId };
-}
-
-function isMatchFinishedStatus(raw) {
-  const st = String(raw || '').toLowerCase();
-  return st === 'finished' || st === 'completed';
-}
-
-/** Mapea ganador agregado (puede ser dn:*) al id físico persistible en Neo4j. */
-function findPersistableWinnerFromLegs(picked, legs) {
-  if (!picked) return null;
-  const pickId = String(picked.inscriptionId ?? '');
-  const pickName = String(picked.displayName ?? '').trim().toLowerCase();
-  if (isPhysicalInscriptionId(pickId)) {
-    let tournamentId = null;
-    for (const leg of legs) {
-      if (String(leg.homeInscriptionId ?? '') === pickId) tournamentId = leg.homeTournamentId ?? null;
-      if (String(leg.awayInscriptionId ?? '') === pickId) tournamentId = leg.awayTournamentId ?? null;
-    }
-    return {
-      inscriptionId: pickId,
-      displayName: picked.displayName,
-      tournamentId,
-    };
-  }
-  for (const leg of legs) {
-    for (const side of [
-      { id: leg.homeInscriptionId, dn: leg.homeDisplayName, tid: leg.homeTournamentId },
-      { id: leg.awayInscriptionId, dn: leg.awayDisplayName, tid: leg.awayTournamentId },
-    ]) {
-      const sideId = String(side.id ?? '');
-      const sideName = String(side.dn ?? '').trim().toLowerCase();
-      if (pickName && sideName === pickName && isPhysicalInscriptionId(sideId)) {
-        return { inscriptionId: sideId, displayName: side.dn, tournamentId: side.tid ?? null };
-      }
-    }
-  }
-  return {
-    inscriptionId: pickId,
-    displayName: picked.displayName,
-    tournamentId: null,
-  };
-}
-
-async function finalizeSeriesWinnerPick(driver, picked, legs) {
-  const persistable = findPersistableWinnerFromLegs(picked, legs);
-  if (!persistable?.displayName || isPlaceholderParticipantLabel(persistable.displayName)) return null;
-  if (isPhysicalInscriptionId(persistable.inscriptionId)) {
-    return { inscriptionId: persistable.inscriptionId, displayName: persistable.displayName, tournamentId: persistable.tournamentId };
-  }
-  const deeper = await resolveInscriptionToTeamDisplay(driver, persistable.inscriptionId);
-  if (deeper?.displayName && !isPlaceholderParticipantLabel(deeper.displayName)) {
-    const id = isPhysicalInscriptionId(deeper.inscriptionId) ? deeper.inscriptionId : persistable.inscriptionId;
-    return { inscriptionId: id, displayName: deeper.displayName, tournamentId: persistable.tournamentId };
-  }
-  return persistable;
-}
-
-/** Ganador de serie eliminatoria a partir de piernas ya resueltas (resolveMatchRefs aplicado). */
-async function resolveEliminationSeriesWinnerFromResolvedLegs(driver, resolvedLegs) {
-  if (!resolvedLegs?.length) return null;
-  if (resolvedLegs.length === 1) {
-    return resolveFinishedMatchWinnerFromResolvedLeg(driver, resolvedLegs[0]);
-  }
-  const scoreMap = aggregateEliminationSeriesScores(resolvedLegs);
-  const picked = pickSeriesWinnerFromScoreMap(scoreMap);
-  return finalizeSeriesWinnerPick(driver, picked, resolvedLegs);
-}
-
-async function resolveEliminationSeriesLoserFromResolvedLegs(driver, resolvedLegs) {
-  if (!resolvedLegs?.length) return null;
-  if (resolvedLegs.length === 1) {
-    return resolveFinishedMatchLoserFromResolvedLeg(resolvedLegs[0]);
-  }
-  const scoreMap = aggregateEliminationSeriesScores(resolvedLegs);
-  const entries = [...scoreMap.entries()].sort((a, b) => b[1].score - a[1].score);
-  if (entries.length < 2) return null;
-  if (entries[0][1].score === entries[1][1].score) return null;
-  const picked = {
-    inscriptionId: entries[1][0],
-    displayName: entries[1][1].displayName,
-  };
-  return finalizeSeriesWinnerPick(driver, picked, resolvedLegs);
-}
-
-/**
- * Ganador de serie eliminatoria (ida/vuelta o pierna única): resuelve refs y agrega goles.
- */
-async function resolveEliminationSeriesWinnerFromMatch(driver, mProps, stageIdHint = null) {
-  const session = driver.session();
-  try {
-    const seed = matchFromNeoProps(mProps);
-    const matchId = seed.id;
-    if (!matchId) return null;
-
-    let stageId = stageIdHint;
-    if (!stageId) {
-      const sR = await session.run(
-        `MATCH (s:Stage)-[:HAS_MATCH]->(:Match {id:$id}) RETURN s.id AS sid LIMIT 1`,
-        { id: matchId }
-      );
-      stageId = sR.records[0]?.get('sid');
-    }
-    if (!stageId) return null;
-
-    const round = Number(seed.round ?? 1);
-    const slotIndex = Number(seed.slotIndex ?? 1);
-
-    const allLegsR = await session.run(
-      `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(leg:Match)
-       WHERE leg.round = $round AND leg.slotIndex = $slotIndex
-       RETURN leg
-       ORDER BY COALESCE(leg.leg, 1), leg.id`,
-      { stageId, round, slotIndex }
-    );
-    if (allLegsR.records.length === 0) return null;
-
-    const legs = [];
-    for (const rec of allLegsR.records) {
-      const leg = matchFromNeoProps(rec.get('leg').properties);
-      await resolveMatchRefs(leg, driver);
-      legs.push(leg);
-    }
-
-    const allFinished = legs.every((l) => isMatchFinishedStatus(l.status));
-    if (!allFinished) return null;
-
-    return resolveEliminationSeriesWinnerFromResolvedLegs(driver, legs);
-  } finally {
-    await session.close();
-  }
-}
-
-/**
- * Resuelve el ganador de un partido eliminatorio ya finalizado: siempre prioriza nombre de equipo real.
- */
-async function resolveFinishedMatchWinner(driver, m) {
-  const leg = matchFromNeoProps(m);
-  await resolveMatchRefs(leg, driver);
-  return resolveFinishedMatchWinnerFromResolvedLeg(driver, leg);
-}
-
-function applyResolvedSlot(match, role, resolved, keepWinnerRef) {
-  if (!resolved?.displayName) return;
-  const idKey = role === 'home' ? 'homeInscriptionId' : 'awayInscriptionId';
-  const dnKey = role === 'home' ? 'homeDisplayName' : 'awayDisplayName';
-  if (keepWinnerRef) {
-    match[dnKey] = resolved.displayName;
-  } else if (isPhysicalInscriptionId(resolved.inscriptionId)) {
-    match[idKey] = resolved.inscriptionId;
-    match[dnKey] = resolved.displayName;
-  } else {
-    match[dnKey] = resolved.displayName;
-  }
-}
-
 /**
  * Resuelve dinámicamente un ID de referencia de posición al equipo real (o label pendiente).
  *
  * Formatos soportados:
- *   pos:sg:{stageId}:{groupId}:{n}                   → posición N del grupo en etapa de grupos
- *   pos:bestN:{stageId}:{position}:{n}:{rank}        → rank-th mejor equipo en posición {position} entre todos los grupos
- *   pos:l:{stageId}:{n}                              → posición N de una etapa liga
- *   pos:ew:{matchId}                                 → ganador del partido (eliminación)
- *   liga360-slot:sg:{sid}:{tid}:{gid}:{n}            → formato legado de grupos
- *   liga360-slot:ew:{sid}:{matchId}                  → formato legado de ganador
+ *   pos:sg:{stageId}:{groupId}:{n}          → posición N del grupo en etapa de grupos
+ *   pos:l:{stageId}:{n}                     → posición N de una etapa liga
+ *   pos:ew:{matchId}                        → ganador del partido (eliminación)
+ *   liga360-slot:sg:{sid}:{tid}:{gid}:{n}   → formato legado de grupos
+ *   liga360-slot:ew:{sid}:{matchId}         → formato legado de ganador
  */
 async function resolvePositionRef(driver, posRef) {
   const str = String(posRef || '');
@@ -797,86 +462,22 @@ async function resolvePositionRef(driver, posRef) {
   let matchId = null;
   let position = 0;
 
-  // pos:bestN:{stageId}:{fromPosition}:{n}:{rank}
-  // Selects the rank-th best team that finished at fromPosition across all groups in the stage
-  let bestNStageId = null; let bestNPosition = 0; let bestNTotal = 0; let bestNRank = 0;
-  if (str.startsWith('pos:bestN:') && parts.length >= 6) {
-    bestNStageId = parts[2]; bestNPosition = parseInt(parts[3], 10); bestNTotal = parseInt(parts[4], 10); bestNRank = parseInt(parts[5], 10);
-    type = 'bestN';
-  }
-
   if (str.startsWith('pos:sg:') && parts.length >= 5) {
     type = 'sg'; stageId = parts[2]; groupId = parts[3]; position = parseInt(parts[4], 10);
   } else if (str.startsWith('liga360-slot:sg:') && parts.length >= 6) {
     type = 'sg'; stageId = parts[2]; groupId = parts[4]; position = parseInt(parts[5], 10);
   } else if (str.startsWith('pos:l:') && parts.length >= 4) {
     type = 'l'; stageId = parts[2]; position = parseInt(parts[3], 10);
-  } else {
-    const winnerRef = parseWinnerSlotRef(str);
-    if (winnerRef) {
-      type = 'ew';
-      stageId = winnerRef.stageId;
-      matchId = winnerRef.matchId;
-    }
+  } else if (str.startsWith('pos:ew:') && parts.length >= 3) {
+    type = 'ew'; matchId = parts[2];
+  } else if (str.startsWith('liga360-slot:ew:') && parts.length >= 4) {
+    type = 'ew'; matchId = parts[3];
   }
 
   if (!type) return null;
 
   const session = driver.session();
   try {
-    if (type === 'bestN' && bestNStageId && bestNPosition > 0 && bestNRank > 0) {
-      const label = `${bestNRank}° mejor ${bestNPosition}° entre grupos`;
-
-      // Load all groups in the stage
-      const groupsR = await session.run(
-        `MATCH (s:Stage {id:$sid})-[:HAS_GROUP]->(g:Group) RETURN g.id AS gid ORDER BY g.order`,
-        { sid: bestNStageId }
-      );
-      if (groupsR.records.length === 0) return { inscriptionId: posRef, displayName: label };
-
-      // For each group compute standings and extract the team at bestNPosition
-      const candidates = [];
-      for (const gr of groupsR.records) {
-        const gid = gr.get('gid');
-        const inscR = await session.run(
-          `MATCH (g:Group {id:$gid})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-           RETURN i.inscriptionId AS iid, i.displayName AS dn`,
-          { gid }
-        );
-        const inscriptions = inscR.records.map((r) => ({ inscriptionId: r.get('iid'), displayName: r.get('dn') }));
-        if (inscriptions.length === 0) continue;
-        const mR = await session.run(
-          `MATCH (g:Group {id:$gid})-[:HAS_MATCH]->(m:Match)
-           RETURN m.homeInscriptionId AS h, m.awayInscriptionId AS a,
-                  m.homeDisplayName AS hd, m.awayDisplayName AS ad,
-                  m.homeScore AS hs, m.awayScore AS as_,
-                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
-          { gid }
-        );
-        const matches = mR.records.map((r) => ({
-          homeInscriptionId: r.get('h'), awayInscriptionId: r.get('a'),
-          homeDisplayName: r.get('hd'), awayDisplayName: r.get('ad'),
-          homeScore: r.get('hs'), awayScore: r.get('as_'), matchStatus: r.get('matchStatus'),
-        }));
-        const standings = computeStandings(matches, inscriptions);
-        const row = standings.find((r) => r.position === bestNPosition);
-        if (row) candidates.push(row);
-      }
-
-      if (candidates.length === 0) return { inscriptionId: posRef, displayName: label };
-
-      // Sort by pts desc → goalDifference desc → goalsFor desc
-      candidates.sort((a, b) =>
-        b.points !== a.points ? b.points - a.points :
-        b.goalDifference !== a.goalDifference ? b.goalDifference - a.goalDifference :
-        b.goalsFor - a.goalsFor
-      );
-
-      const team = candidates[bestNRank - 1];
-      if (!team) return { inscriptionId: posRef, displayName: label };
-      return { inscriptionId: team.inscriptionId, displayName: team.displayName };
-    }
-
     if (type === 'sg' && groupId && position > 0) {
       const gR = await session.run(`MATCH (g:Group {id:$id}) RETURN g.name AS name`, { id: groupId });
       const groupName = gR.records[0]?.get('name') || 'Grupo';
@@ -940,18 +541,9 @@ async function resolvePositionRef(driver, posRef) {
         homeScore: r.get('hs'), awayScore: r.get('as_'), matchStatus: r.get('matchStatus'),
       }));
       const standings = computeStandings(matches, inscriptions);
-      const physicalRow = pickPhysicalStandingsRow(standings, position);
-      if (physicalRow) {
-        return { inscriptionId: physicalRow.inscriptionId, displayName: physicalRow.displayName };
-      }
       const row = standings.find((r) => r.position === position);
-      if (row && isPhysicalInscriptionId(String(row.inscriptionId ?? ''))) {
-        const dn = String(row.displayName ?? '').trim();
-        if (dn && !isPlaceholderParticipantLabel(dn)) {
-          return { inscriptionId: row.inscriptionId, displayName: dn };
-        }
-      }
-      return { inscriptionId: posRef, displayName: label };
+      if (!row) return { inscriptionId: posRef, displayName: label };
+      return { inscriptionId: row.inscriptionId, displayName: row.displayName };
     }
 
     if (type === 'ew' && matchId) {
@@ -959,32 +551,15 @@ async function resolvePositionRef(driver, posRef) {
       if (mR.records.length === 0) return { inscriptionId: posRef, displayName: 'Gan. pendiente' };
       const m = mR.records[0].get('m').properties;
       const status = String(m.status || m.matchStatus || '').toLowerCase();
+      const code = m.fixtureCode || matchId.slice(-6);
       if (status !== 'finished' && status !== 'completed') {
-        const si = m.slotIndex != null ? Number(m.slotIndex) : 0;
-        let stageName = 'Etapa';
-        if (stageId) {
-          const sR = await session.run(`MATCH (s:Stage {id:$id}) RETURN s.name AS name`, { id: stageId });
-          stageName = sR.records[0]?.get('name') || stageName;
-        } else {
-          const sR = await session.run(
-            `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$id}) RETURN s.name AS name LIMIT 1`,
-            { id: matchId }
-          );
-          stageName = sR.records[0]?.get('name') || stageName;
-        }
-        return { inscriptionId: posRef, displayName: `Ganador Partido ${si} - ${stageName}` };
+        return { inscriptionId: posRef, displayName: `Gan. ${code}` };
       }
-      const winner = await resolveEliminationSeriesWinnerFromMatch(driver, m, stageId);
-      if (winner?.displayName) {
-        return { inscriptionId: posRef, displayName: winner.displayName };
-      }
-      const si = m.slotIndex != null ? Number(m.slotIndex) : 0;
-      let stageName = 'Etapa';
-      if (stageId) {
-        const sR = await session.run(`MATCH (s:Stage {id:$id}) RETURN s.name AS name`, { id: stageId });
-        stageName = sR.records[0]?.get('name') || stageName;
-      }
-      return { inscriptionId: posRef, displayName: `Ganador Partido ${si} - ${stageName}` };
+      const hs = Number(m.homeScore ?? -1);
+      const as_ = Number(m.awayScore ?? -1);
+      if (hs > as_) return { inscriptionId: m.homeInscriptionId || posRef, displayName: m.homeDisplayName || `Gan. ${code}` };
+      if (as_ > hs) return { inscriptionId: m.awayInscriptionId || posRef, displayName: m.awayDisplayName || `Gan. ${code}` };
+      return { inscriptionId: posRef, displayName: `Gan. ${code}` };
     }
 
     return null;
@@ -1705,7 +1280,12 @@ const resolvers = {
 
         const stageCap = deriveStageCapacity(stageProps);
         if (stageCap && stageCap > 0) {
-          const stageCount = await countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId);
+          const stageCountR = await session.run(
+            `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid})
+             RETURN COUNT(DISTINCT toString(i.inscriptionId)) AS count`,
+            { stageId, tid: tournamentId }
+          );
+          const stageCount = Number(stageCountR.records[0]?.get('count') || 0);
           const existsInStageR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
              RETURN i LIMIT 1`,
@@ -1830,12 +1410,7 @@ const resolvers = {
                awayTournamentId:null
              })
              CREATE (s)-[:HAS_MATCH]->(m)`,
-            {
-              stageId,
-              id: genId('m'),
-              slotIndex: i + 1,
-              fixtureCode: eliminationFixtureCode(i + 1, 1),
-            }
+            { stageId, id: genId('m'), slotIndex: i + 1, fixtureCode: `E1-M${i + 1}` }
           );
         }
 
@@ -1958,28 +1533,15 @@ const resolvers = {
           );
         }
         const P = nextPowerOf2(n);
-        const allSlots = eliminationMatchSlots(P);
-
-        // Recortar rondas según numAdvancing del configJson.
-        // Si numAdvancing > 1, solo se necesitan log2(P / numAdvancing) rondas.
-        const stageCfg = parseJsonSafe(stageProps?.configJson) || {};
-        const bracketCfg = resolveEliminationBracketConfig(stageCfg, Boolean(doubleRound));
-        const numAdvancing = bracketCfg.numAdvancing;
-        let slots = allSlots;
-        if (numAdvancing > 1) {
-          const maxRounds = Math.round(Math.log2(P / numAdvancing));
-          if (maxRounds >= 1) slots = allSlots.filter(s => s.round <= maxRounds);
-        }
-        const maxRound = eliminationMaxRound(slots);
+        const slots = eliminationMatchSlots(P);
 
         await deleteMatchesForStage(session, stageId);
 
         for (const slot of slots) {
-          const slotLegs = legsForEliminationSlot(slot.round, maxRound, bracketCfg);
-          for (const leg of slotLegs) {
+          const legs = doubleRound ? [1, 2] : [1];
+          for (const leg of legs) {
             const id = genId('m');
-            const slotDouble = slotLegs.length > 1;
-            const code = eliminationFixtureCode(slot.slotIndex, slot.round, leg, { doubleRound: slotDouble });
+            const code = doubleRound ? `E${slot.round}-M${slot.slotIndex}-L${leg}` : `E${slot.round}-M${slot.slotIndex}`;
             await session.run(
               `MATCH (s:Stage {id:$stageId})
                CREATE (m:Match {
@@ -1988,7 +1550,6 @@ const resolvers = {
                  leg:$leg,
                  slotIndex:$slotIndex,
                  fixtureCode:$code,
-                 matchKind:'bracket',
                  groupId:null,
                  leagueHomeSeed:null,
                  leagueAwaySeed:null,
@@ -2010,32 +1571,6 @@ const resolvers = {
               }
             );
           }
-        }
-
-        if (shouldCreateThirdPlaceMatch(maxRound, bracketCfg)) {
-          const id = genId('m');
-          await session.run(
-            `MATCH (s:Stage {id:$stageId})
-             CREATE (m:Match {
-               id:$id,
-               round:$round,
-               leg:1,
-               slotIndex:$slotIndex,
-               fixtureCode:'3P',
-               matchKind:'third_place',
-               groupId:null,
-               leagueHomeSeed:null,
-               leagueAwaySeed:null,
-               homeInscriptionId:null,
-               awayInscriptionId:null,
-               homeDisplayName:'Perdedor SF1',
-               awayDisplayName:'Perdedor SF2',
-               homeTournamentId:null,
-               awayTournamentId:null
-             })
-             CREATE (s)-[:HAS_MATCH]->(m)`,
-            { stageId, id, round: maxRound, slotIndex: THIRD_PLACE_SLOT_INDEX }
-          );
         }
 
         await hydrateEliminationFirstRoundFromBracket(session, stageId);
@@ -2232,20 +1767,16 @@ const resolvers = {
           return true;
         }
 
-        const currentMatch = matchR.records[0].get('m').properties;
-        const currentRound = Number(currentMatch.round ?? 1);
-        const currentSlot = Number(currentMatch.slotIndex ?? 0);
         const duplicateR = await session.run(
           `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-           WHERE (m.homeInscriptionId = $iid OR m.awayInscriptionId = $iid)
-             AND m.id <> $matchId
-             AND NOT (coalesce(toInteger(m.round), 1) = $round AND coalesce(toInteger(m.slotIndex), 0) = $slot)
+           WHERE m.homeInscriptionId = $iid OR m.awayInscriptionId = $iid
            RETURN m
            LIMIT 1`,
-          { stageId, iid: iidNorm, matchId, round: currentRound, slot: currentSlot }
+          { stageId, iid: iidNorm }
         );
-        const alreadyInAnother = duplicateR.records.length > 0;
+        const alreadyInAnother = duplicateR.records.some((record) => String(record.get('m').properties.id) !== String(matchId));
         if (alreadyInAnother) throw new Error('BAD_REQUEST: la inscripción ya está ubicada en otra llave');
+        const currentMatch = matchR.records[0].get('m').properties;
         if (
           (role === 'home' && String(currentMatch.awayInscriptionId || '') === iidNorm) ||
           (role === 'away' && String(currentMatch.homeInscriptionId || '') === iidNorm)
@@ -2254,16 +1785,23 @@ const resolvers = {
         }
 
         if (stageCap && stageCap > 0) {
-          const stageCount = await countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId);
-          const idExistsR = await session.run(
+          const stageCountR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-             WHERE m.homeInscriptionId = $iid OR m.awayInscriptionId = $iid
-             RETURN m LIMIT 1`,
-            { stageId, iid: iidNorm }
+             WITH m.homeInscriptionId AS h, m.awayInscriptionId AS aw
+             UNWIND [h, aw] AS raw
+             WITH raw WHERE raw IS NOT NULL AND toString(raw) <> ''
+               AND NOT toString(raw) STARTS WITH $slotPrefix
+             RETURN count(DISTINCT toString(raw)) AS count`,
+            { stageId, slotPrefix: 'liga360-slot:' }
           );
-          const idAlreadyInMatches = idExistsR.records.length > 0;
+          const stageCount = Number(stageCountR.records[0]?.get('count') || 0);
+          const existsAlready = duplicateR.records.length > 0;
           const assigningSynthetic = isSyntheticSlotInscriptionId(iidNorm);
-          if (!assigningSynthetic && !idAlreadyInMatches && stageCount >= stageCap) {
+          if (
+            !assigningSynthetic &&
+            !existsAlready &&
+            stageCount >= stageCap
+          ) {
             throw new Error('STAGE_CAPACITY_REACHED');
           }
         }
@@ -2276,15 +1814,13 @@ const resolvers = {
            SET ${setField}`,
           { matchId, iid: iidNorm, displayName: displayName || null, tid: tournamentId }
         );
-        if (isPhysicalInscriptionId(iidNorm)) {
-          await session.run(
-            `MATCH (s:Stage {id:$stageId})
-             MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
-             SET i.displayName = $displayName
-             MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
-            { stageId, tid: tournamentId, iid: iidNorm, displayName: displayName || iidNorm }
-          );
-        }
+        await session.run(
+          `MATCH (s:Stage {id:$stageId})
+           MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
+           SET i.displayName = $displayName
+           MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
+          { stageId, tid: tournamentId, iid: iidNorm, displayName: displayName || iidNorm }
+        );
         return true;
       } finally {
         await session.close();
@@ -2451,7 +1987,12 @@ const resolvers = {
         const stageProps = stageCheck.records[0].get('s').properties;
         const stageCapacity = deriveStageCapacity(stageProps);
         if (stageCapacity && stageCapacity > 0) {
-          const totalCount = await countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId);
+          const totalR = await session.run(
+            `MATCH (s:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid})
+             RETURN COUNT(DISTINCT toString(i.inscriptionId)) AS count`,
+            { stageId, tid: tournamentId }
+          );
+          const totalCount = Number(totalR.records[0]?.get('count') || 0);
           const existsR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
              RETURN i LIMIT 1`,
@@ -2461,15 +2002,13 @@ const resolvers = {
             throw new Error('STAGE_CAPACITY_REACHED');
           }
         }
-        if (isPhysicalInscriptionId(iid)) {
-          await session.run(
-            `MATCH (s:Stage {id:$stageId})
-             MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
-             SET i.displayName = $displayName
-             MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
-            { stageId, tid: tournamentId, iid, displayName }
-          );
-        }
+        await session.run(
+          `MATCH (s:Stage {id:$stageId})
+           MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
+           SET i.displayName = $displayName
+           MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
+          { stageId, tid: tournamentId, iid, displayName }
+        );
         return true;
       } finally {
         await session.close();
@@ -2732,54 +2271,68 @@ const resolvers = {
             const stageId = elimStageR.records[0].get('stageId');
             const curMatchR = await session.run(
               `MATCH (m:Match {id:$matchId})
-               RETURN m.round AS round, m.slotIndex AS slotIndex, m.matchKind AS matchKind, m.fixtureCode AS fixtureCode LIMIT 1`,
+               RETURN m.round AS round, m.slotIndex AS slotIndex LIMIT 1`,
               { matchId }
             );
             if (curMatchR.records.length > 0) {
               const round = Number(curMatchR.records[0].get('round') || 1);
               const slotIndex = Number(curMatchR.records[0].get('slotIndex') || 1);
-              const curMatchMeta = {
-                round,
-                slotIndex,
-                matchKind: curMatchR.records[0].get('matchKind'),
-                fixtureCode: curMatchR.records[0].get('fixtureCode'),
-              };
-              const isThirdPlace = isThirdPlaceMatchProps(curMatchMeta);
 
-              if (!isThirdPlace) {
               // Traer todas las patas del mismo slot (soporta double round)
               const allLegsR = await session.run(
                 `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
                  WHERE m.round = $round AND m.slotIndex = $slotIndex
-                 RETURN m
-                 ORDER BY COALESCE(m.leg, 1), m.id`,
+                 RETURN m.homeInscriptionId AS hid, m.awayInscriptionId AS aid,
+                        m.homeDisplayName AS hdisplay, m.awayDisplayName AS adisplay,
+                        m.homeTournamentId AS htid, m.awayTournamentId AS atid,
+                        m.homeScore AS hs, m.awayScore AS as_, m.status AS status`,
                 { stageId, round, slotIndex }
               );
-              const resolvedLegs = [];
-              for (const rec of allLegsR.records) {
-                const leg = matchFromNeoProps(rec.get('m').properties);
-                await resolveMatchRefs(leg, context.driver);
-                resolvedLegs.push(leg);
+              const allLegs = allLegsR.records.map(r => ({
+                hid: r.get('hid'), aid: r.get('aid'),
+                hdisplay: r.get('hdisplay'), adisplay: r.get('adisplay'),
+                htid: r.get('htid'), atid: r.get('atid'),
+                hs: r.get('hs') != null ? Number(r.get('hs')) : null,
+                as_: r.get('as_') != null ? Number(r.get('as_')) : null,
+                status: String(r.get('status') || ''),
+              }));
+
+              // Resolver refs sintéticas (liga360-slot:sg/ew) a IDs reales antes de calcular ganador
+              for (const leg of allLegs) {
+                if (leg.hid && (leg.hid.startsWith('liga360-slot:') || leg.hid.startsWith('pos:'))) {
+                  const r = await resolvePositionRef(context.driver, leg.hid);
+                  if (r?.inscriptionId && !isSyntheticSlotInscriptionId(r.inscriptionId)) {
+                    leg.hid = r.inscriptionId;
+                    if (r.displayName) leg.hdisplay = r.displayName;
+                  }
+                }
+                if (leg.aid && (leg.aid.startsWith('liga360-slot:') || leg.aid.startsWith('pos:'))) {
+                  const r = await resolvePositionRef(context.driver, leg.aid);
+                  if (r?.inscriptionId && !isSyntheticSlotInscriptionId(r.inscriptionId)) {
+                    leg.aid = r.inscriptionId;
+                    if (r.displayName) leg.adisplay = r.displayName;
+                  }
+                }
               }
 
-              if (resolvedLegs.every((l) => isMatchFinishedStatus(l.status))) {
-                const winner = await resolveEliminationSeriesWinnerFromResolvedLegs(
-                  context.driver,
-                  resolvedLegs
-                );
-                if (winner?.inscriptionId && winner.displayName) {
-                  const persistable = findPersistableWinnerFromLegs(
-                    {
-                      inscriptionId: winner.inscriptionId,
-                      displayName: winner.displayName,
-                    },
-                    resolvedLegs
-                  );
-                  const winnerId = isPhysicalInscriptionId(persistable?.inscriptionId ?? '')
-                    ? persistable.inscriptionId
-                    : winner.inscriptionId;
-                  const winnerDisplay = persistable?.displayName ?? winner.displayName;
-                  const winnerTournamentId = persistable?.tournamentId ?? null;
+              // Avanzar solo cuando todas las patas del slot estén finalizadas
+              if (allLegs.every(l => l.status === 'finished')) {
+                // Score agregado por inscriptionId
+                const scoreMap = {};
+                for (const leg of allLegs) {
+                  if (leg.hid && !isSyntheticSlotInscriptionId(leg.hid)) {
+                    if (!scoreMap[leg.hid]) scoreMap[leg.hid] = { score: 0, displayName: leg.hdisplay || leg.hid, tournamentId: leg.htid };
+                    scoreMap[leg.hid].score += (leg.hs ?? 0);
+                  }
+                  if (leg.aid && !isSyntheticSlotInscriptionId(leg.aid)) {
+                    if (!scoreMap[leg.aid]) scoreMap[leg.aid] = { score: 0, displayName: leg.adisplay || leg.aid, tournamentId: leg.atid };
+                    scoreMap[leg.aid].score += (leg.as_ ?? 0);
+                  }
+                }
+                const entries = Object.entries(scoreMap);
+                if (entries.length === 2 && entries[0][1].score !== entries[1][1].score) {
+                  const [winEntry] = entries.sort((a, b) => b[1].score - a[1].score);
+                  const winner = { inscriptionId: winEntry[0], ...winEntry[1] };
 
                   const nextRound = round + 1;
                   const nextSlotIndex = Math.ceil(slotIndex / 2);
@@ -2788,13 +2341,13 @@ const resolvers = {
                   const nextMatchesR = await session.run(
                     `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
                      WHERE m.round = $nextRound AND m.slotIndex = $nextSlotIndex
-                       AND coalesce(m.matchKind, 'bracket') <> 'third_place'
                      RETURN m.id AS id, COALESCE(m.leg, 1) AS leg`,
                     { stageId, nextRound, nextSlotIndex }
                   );
                   for (const nRec of nextMatchesR.records) {
                     const nextMatchId = nRec.get('id');
                     const nextLeg = Number(nRec.get('leg') || 1);
+                    // En la segunda pata del double round los roles están invertidos
                     const putAsHome = nextLeg === 2 ? !isHomeInLeg1 : isHomeInLeg1;
                     const inscField = putAsHome ? 'homeInscriptionId' : 'awayInscriptionId';
                     const displayField = putAsHome ? 'homeDisplayName' : 'awayDisplayName';
@@ -2802,60 +2355,10 @@ const resolvers = {
                     await session.run(
                       `MATCH (m:Match {id:$nextMatchId})
                        SET m.${inscField} = $iid, m.${displayField} = $dn, m.${tidField} = $tid`,
-                      {
-                        nextMatchId,
-                        iid: winnerId,
-                        dn: winnerDisplay,
-                        tid: winnerTournamentId,
-                      }
+                      { nextMatchId, iid: winner.inscriptionId, dn: winner.displayName, tid: winner.tournamentId ?? null }
                     );
                   }
                 }
-              }
-
-              // Perdedor de semifinal → partido de tercer puesto (si está configurado)
-              if (!isThirdPlace && resolvedLegs.every((l) => isMatchFinishedStatus(l.status))) {
-                const stageCfgR = await session.run(
-                  `MATCH (s:Stage {id:$stageId}) RETURN s.configJson AS cfg LIMIT 1`,
-                  { stageId }
-                );
-                const stageCfg = parseJsonSafe(stageCfgR.records[0]?.get('cfg')) || {};
-                const bracketCfg = resolveEliminationBracketConfig(stageCfg, false);
-                const maxRoundR = await session.run(
-                  `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-                   WHERE coalesce(m.matchKind, 'bracket') <> 'third_place'
-                   RETURN max(coalesce(toInteger(m.round), 1)) AS maxRound`,
-                  { stageId }
-                );
-                const maxRound = Number(maxRoundR.records[0]?.get('maxRound') || 0);
-                const semiRound = maxRound - 1;
-                if (
-                  shouldCreateThirdPlaceMatch(maxRound, bracketCfg) &&
-                  round === semiRound &&
-                  (slotIndex === 1 || slotIndex === 2)
-                ) {
-                  const loserPick = await resolveEliminationSeriesLoserFromResolvedLegs(
-                    context.driver,
-                    resolvedLegs
-                  );
-                  if (loserPick?.displayName) {
-                    const persistableLoser = findPersistableWinnerFromLegs(loserPick, resolvedLegs);
-                    const loserId = isPhysicalInscriptionId(persistableLoser?.inscriptionId ?? '')
-                      ? persistableLoser.inscriptionId
-                      : loserPick.inscriptionId;
-                    const loserDisplay = persistableLoser?.displayName ?? loserPick.displayName;
-                    const loserTid = persistableLoser?.tournamentId ?? null;
-                    const inscField = slotIndex === 1 ? 'homeInscriptionId' : 'awayInscriptionId';
-                    const displayField = slotIndex === 1 ? 'homeDisplayName' : 'awayDisplayName';
-                    const tidField = slotIndex === 1 ? 'homeTournamentId' : 'awayTournamentId';
-                    await session.run(
-                      `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match {matchKind:'third_place'})
-                       SET m.${inscField} = $iid, m.${displayField} = $dn, m.${tidField} = $tid`,
-                      { stageId, iid: loserId, dn: loserDisplay, tid: loserTid }
-                    );
-                  }
-                }
-              }
               }
             }
           }
@@ -3260,7 +2763,6 @@ const resolvers = {
     },
   },
   Match: {
-    matchKind: (parent) => (parent.matchKind != null ? String(parent.matchKind) : null),
     homeCompetitor: async (parent, _args, { driver }) => {
       const session = driver.session();
       try {

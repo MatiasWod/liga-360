@@ -8,21 +8,14 @@ import {
 } from '../../services/tournaments/configuration';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage } from './types';
 import {
-  bracketDisplayCode,
-  eliminationMatchSubtitle,
   buildEliminationTruncatePreview,
   buildSameStageWinnerSlotId,
   eliminationRoundLegSteps,
-  formatWinnerSlotLabel,
-  expandAssignedIdsForPool,
-  buildPoolExclusionSet,
-  eliminationMaxRoundFromMatches,
+  inscriptionIdsAssignedAnywhereInMatches,
   inscriptionIdsUsedElsewhere,
-  isEliminationSlotDoubleLeg,
   matchesForRoundLeg,
-  parseEliminationBracketConfig,
+  matchDisplayCode,
   parseSameStageWinnerSlotId,
-  resolveWinnerSlotLabelFromRef,
   sortEliminationInitMatches,
   type EliminationRoundLegKey,
 } from './eliminationInitHelpers';
@@ -32,7 +25,7 @@ import {
   buildSectionTitle,
   type EligibleInscription,
 } from './incomingTransitionEligibility';
-import { BracketParticipantPicker, summarizeParticipantOptionLabel } from './BracketParticipantPicker';
+import { BracketParticipantPicker } from './BracketParticipantPicker';
 import type { ParticipantPoolSection, PoolEntry } from './bracketParticipantPool';
 import { filterPoolSectionsForRole, normPoolId } from './bracketParticipantPool';
 
@@ -48,7 +41,12 @@ export interface EliminationInitWizardProps {
 }
 
 function parseDoubleRound(stage: TournamentStage): boolean {
-  return parseEliminationBracketConfig(stage.configJson).matchesPerTie === 'double';
+  try {
+    const c = JSON.parse(stage.configJson || '{}') as Record<string, unknown>;
+    return c.matchesPerTie === 'double';
+  } catch {
+    return false;
+  }
 }
 
 export function resolveStageName(tournament: TournamentEntity, stageId?: string | null): string | null {
@@ -61,74 +59,14 @@ export function resolveStageName(tournament: TournamentEntity, stageId?: string 
   return null;
 }
 
-function headlineFromEligible(el: EligibleInscription): string {
-  const raw = String(el.optionLabel || el.displayName || '').trim();
-  const { headline } = summarizeParticipantOptionLabel(raw);
-  const sid = String(el.inscriptionId || '').trim();
-  if (headline && headline !== sid) return headline;
-  return el.shortLabel ?? el.displayName ?? sid;
-}
-
-function resolveParticipantDisplayLabel(
-  tournament: TournamentEntity,
-  stage: TournamentStage,
-  eligibleFromTables: ReadonlyArray<EligibleInscription>,
-  eligibleByPoolId: Map<string, EligibleInscription>,
-  inscriptionId: string,
-  fallbackDisplayName?: string | null
-): string | undefined {
-  const id = String(inscriptionId || '').trim();
-  if (!id) return undefined;
-
-  const crossWinner = resolveWinnerSlotLabelFromRef(tournament, id);
-  if (crossWinner) return crossWinner;
-
-  const sameStageMatchId = parseSameStageWinnerSlotId(stage.id, id);
-  if (sameStageMatchId) {
-    const wm = (stage.matches || []).find((x) => x.id === sameStageMatchId);
-    if (wm) return `${formatWinnerSlotLabel(wm, stage.name)} — pendiente`;
-  }
-
-  const direct = eligibleByPoolId.get(id);
-  if (direct) return headlineFromEligible(direct);
-
-  const fb = String(fallbackDisplayName || '').trim();
-  if (fb && /^Ganador\b/i.test(fb)) return fb;
-
-  if (id.startsWith('liga360-slot:ew:') || id.startsWith('pos:ew:')) {
-    return resolveWinnerSlotLabelFromRef(tournament, id) ?? fb ?? id;
-  }
-
-  if (fb && /^Gan\.\s/i.test(fb)) {
-    const w = resolveWinnerSlotLabelFromRef(tournament, id);
-    if (w) return w;
-  }
-
-  const resolvedMatches = eligibleFromTables.filter((e) => String(e.resolvedRealId ?? '') === id);
-  if (resolvedMatches.length === 1) {
-    return headlineFromEligible(resolvedMatches[0]!);
-  }
-  if (resolvedMatches.length > 1) {
-    if (fb && /^Gan[\.\s]/i.test(fb)) return fb;
-    const league = resolvedMatches.find((e) => e.source === 'league');
-    const elim = resolvedMatches.find((e) => e.source === 'elimination');
-    if (elim) return headlineFromEligible(elim);
-    if (league) return headlineFromEligible(league);
-  }
-
-  return fb || id;
-}
-
 function buildParticipantPoolSections(
   tournament: TournamentEntity,
   stage: TournamentStage,
   poolItems: ReadonlyArray<{ id: string | number; display_name: string }>,
   inscriptionById: Map<string, InscriptionItem>,
   eligibleFromTables: ReadonlyArray<EligibleInscription>,
-  /** IDs ya asignados en algún partido: se excluyen del pool (cupo y clasificados por igual). */
-  idsAlreadyOnEliminationBracket?: ReadonlySet<string> | null,
-  /** Si hay transiciones entrantes definidas, el cupo general no se muestra: los participantes deben venir de la etapa anterior. */
-  hasIncomingTransitions?: boolean
+  /** Paso > primera ronda: el cupo solo lista inscripciones que aún no están en ninguna llave. */
+  idsAlreadyOnEliminationBracket?: ReadonlySet<string> | null
 ): ParticipantPoolSection[] {
   const seen = new Set<string>();
   const tournamentName = String(tournament.name || '').trim() || 'Torneo';
@@ -143,15 +81,10 @@ function buildParticipantPoolSections(
   /** 1) Priorizar clasificados desde tablas (G1P9 · …): si están también en cupo, gana esta etiqueta. */
   const groupedEligible = new Map<string, PoolEntry[]>();
   for (const el of eligibleFromTables) {
-    const sid = String(el.inscriptionId || '').trim();
+    const sid = String(el.inscriptionId).trim();
     if (!sid || seen.has(sid)) continue;
-    if (idsAlreadyOnEliminationBracket?.has(sid)) continue;
-    const realId = String(el.resolvedRealId ?? '').trim();
-    if (realId && idsAlreadyOnEliminationBracket?.has(realId)) continue;
     seen.add(sid);
-    const raw = String(el.optionLabel || el.displayName || '').trim() || sid;
-    const { headline } = summarizeParticipantOptionLabel(raw);
-    const shown = headline !== sid ? headline : (el.shortLabel ?? raw);
+    const shown = String(el.optionLabel || el.displayName || '').trim() || sid;
     const entry: PoolEntry = { kind: 'assigned', id: sid, displayName: shown };
     const list = groupedEligible.get(el.sectionTitle);
     if (list) list.push(entry);
@@ -198,10 +131,10 @@ function buildParticipantPoolSections(
   }
 
   const cupoLabel = buildSectionTitle(tournamentName, '', '', 'Cupo');
-  if (cupoEntries.length > 0 && !hasIncomingTransitions) sections.push({ sectionLabel: cupoLabel, entries: cupoEntries });
+  if (cupoEntries.length > 0) sections.push({ sectionLabel: cupoLabel, entries: cupoEntries });
 
   const assignedLabel = buildSectionTitle(tournamentName, '', stageName, 'Asignados en configuración');
-  if (assignedEntries.length > 0 && !hasIncomingTransitions) sections.push({ sectionLabel: assignedLabel, entries: assignedEntries });
+  if (assignedEntries.length > 0) sections.push({ sectionLabel: assignedLabel, entries: assignedEntries });
 
   return sections;
 }
@@ -229,7 +162,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
   const [stepIndex, setStepIndex] = React.useState(0);
   const [slotBusyKey, setSlotBusyKey] = React.useState<string | null>(null);
   const [finalizeBusy, setFinalizeBusy] = React.useState(false);
-  const [resetBusy, setResetBusy] = React.useState(false);
 
   const doubleRound = React.useMemo(() => parseDoubleRound(stage), [stage.configJson]);
 
@@ -247,20 +179,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     [tournament, stage.id]
   );
 
-  const eligibleByPoolId = React.useMemo(() => {
-    const m = new Map<string, EligibleInscription>();
-    for (const el of eligibleFromTables) {
-      const sid = String(el.inscriptionId || '').trim();
-      if (sid) m.set(sid, el);
-    }
-    return m;
-  }, [eligibleFromTables]);
-
-  const poolExclusionIds = React.useMemo(
-    () => buildPoolExclusionSet(matchesInput, eligibleFromTables),
-    [matchesInput, eligibleFromTables]
-  );
-
   const incomingTransitionCount = React.useMemo(
     () => collectIncomingTransitionRows(tournament, stage.id).length,
     [tournament, stage.id]
@@ -269,15 +187,14 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
   const poolSections = React.useMemo(() => {
     const tournamentName = String(tournament.name || '').trim() || 'Torneo';
     const stageNameTrim = String(stage.name || '').trim() || 'Etapa';
-    const idsForStrictCupo = poolExclusionIds;
+    const idsForStrictCupo = stepIndex > 0 ? inscriptionIdsAssignedAnywhereInMatches(matchesInput) : null;
     const base = buildParticipantPoolSections(
       tournament,
       stage,
       participantPoolItems,
       inscriptionById,
       eligibleFromTables,
-      idsForStrictCupo,
-      incomingTransitionCount > 0
+      idsForStrictCupo
     );
 
     if (stepIndex <= 0 || steps.length === 0) return base;
@@ -298,12 +215,12 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     for (const mm of prevSorted) {
       const synth = buildSameStageWinnerSlotId(stage.id, mm.id);
       if (seenSynth.has(synth)) continue;
-      if (poolExclusionIds.has(synth)) continue;
       seenSynth.add(synth);
+      const code = matchDisplayCode(mm);
       winners.push({
         kind: 'assigned',
         id: synth,
-        displayName: `${formatWinnerSlotLabel(mm, stage.name)} — pendiente`,
+        displayName: `Ganador · ${code} — pendiente`,
       });
     }
     if (winners.length === 0) return base;
@@ -322,7 +239,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     stepIndex,
     steps,
     matchesInput,
-    poolExclusionIds,
   ]);
 
   const participantOriginsLine = React.useMemo(() => {
@@ -397,29 +313,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     }
   }
 
-  async function resetBracketSlots() {
-    const ok = window.confirm(
-      '¿Limpiar todas las asignaciones del bracket?\n\nEsto quitará los equipos asignados en todas las llaves para poder reasignarlos.'
-    );
-    if (!ok) return;
-    setResetBusy(true);
-    setError('');
-    try {
-      await Promise.all(
-        matchesInput.flatMap((m) => [
-          assignInscriptionToMatchSlot({ stageId: stage.id, matchId: m.id, slotRole: 'home', inscriptionId: null, tournamentId }),
-          assignInscriptionToMatchSlot({ stageId: stage.id, matchId: m.id, slotRole: 'away', inscriptionId: null, tournamentId }),
-        ])
-      );
-      setStepIndex(0);
-      await onReload();
-    } catch (e: any) {
-      setError(e?.message || 'No se pudo limpiar las asignaciones');
-    } finally {
-      setResetBusy(false);
-    }
-  }
-
   async function generateBracket() {
     setSaving(true);
     setError('');
@@ -438,13 +331,21 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
     const displayName =
       nextId == null
         ? null
-        : resolveParticipantDisplayLabel(
-            tournament,
-            stage,
-            eligibleFromTables,
-            eligibleByPoolId,
-            nextId
-          ) ?? nextId;
+        : (() => {
+            const fromWinner = parseSameStageWinnerSlotId(stage.id, nextId);
+            if (fromWinner) {
+              const wm = matchesInput.find((x) => x.id === fromWinner);
+              if (wm) return `Ganador · ${matchDisplayCode(wm)} — pendiente`;
+            }
+            const fromMap = inscriptionById.get(String(nextId));
+            if (fromMap) return fromMap.display_name;
+            const fromEl = eligibleFromTables.find((e) => String(e.inscriptionId) === String(nextId));
+            if (fromEl) return fromEl.displayName;
+            const fromAssigned = (stage.assignedInscriptions || []).find(
+              (a) => String(a.inscriptionId) === String(nextId)
+            );
+            return fromAssigned?.displayName ?? String(nextId);
+          })();
 
     const key = `${match.id}-${role}`;
     setSlotBusyKey(key);
@@ -459,11 +360,8 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
         tournamentId,
         displayName: displayName ?? undefined,
       });
-      // En doble vuelta de esta ronda, auto-asignar la pierna 2 con roles invertidos
-      const bracketCfg = parseEliminationBracketConfig(stage.configJson);
-      const maxRound = eliminationMaxRoundFromMatches(matchesInput);
-      const slotDouble = isEliminationSlotDoubleLeg(match.round ?? 1, maxRound, bracketCfg);
-      if (slotDouble) {
+      // En doble vuelta, auto-asignar la pierna 2 con roles invertidos
+      if (doubleRound) {
         const leg2 = matchesInput.find(
           (m) =>
             (m.round ?? 1) === (match.round ?? 1) &&
@@ -544,14 +442,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
           >
             Siguiente
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={resetBusy || finalizeBusy}
-            onClick={() => void resetBracketSlots()}
-          >
-            {resetBusy ? 'Limpiando…' : 'Limpiar asignaciones'}
-          </Button>
         </div>
       </div>
 
@@ -580,14 +470,10 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {currentMatches.map((m) => {
-          const title = bracketDisplayCode(m);
-          const subtitle = eliminationMatchSubtitle(m);
+          const title = matchDisplayCode(m);
           const homeVal = normId(m.homeAssignedInscription?.inscriptionId);
           const awayVal = normId(m.awayAssignedInscription?.inscriptionId);
-          const blockedElsewhere = expandAssignedIdsForPool(
-            inscriptionIdsUsedElsewhere(matchesInput, m.id),
-            eligibleFromTables
-          );
+          const blockedElsewhere = inscriptionIdsUsedElsewhere(matchesInput, m.id);
 
           const homeBusy = slotBusyKey === `${m.id}-home`;
           const awayBusy = slotBusyKey === `${m.id}-away`;
@@ -596,16 +482,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
           const homeSections = filterPoolSectionsForRole(poolSections, 'home', m, blockedElsewhere);
           const awaySections = filterPoolSectionsForRole(poolSections, 'away', m, blockedElsewhere);
 
-          const resolveSlotLabel = (inscriptionId: string | null | undefined, fallback: string | null | undefined): string | undefined =>
-            resolveParticipantDisplayLabel(
-              tournament,
-              stage,
-              eligibleFromTables,
-              eligibleByPoolId,
-              String(inscriptionId || ''),
-              fallback
-            );
-
           return (
             <div
               key={`${m.id}-${currentKey}`}
@@ -613,7 +489,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
             >
               <p className="mb-3 text-center font-mono text-sm font-semibold tracking-tight text-success-base">
                 {title}
-                <span className="mt-0.5 block font-sans text-xs font-normal text-text-muted">{subtitle}</span>
                 {doubleRound && (
                   <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-[10px] font-normal text-blue-700">
                     ida y vuelta
@@ -630,7 +505,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
                     sections={homeSections}
                     disabled={homeBusy || awayBusy}
                     value={homeVal}
-                    valueLabel={resolveSlotLabel(m.homeAssignedInscription?.inscriptionId, m.homeAssignedInscription?.displayName)}
                     emptyLabel="Sin asignar"
                     onChange={(rid) => void assignSlot(m, 'home', rid)}
                   />
@@ -644,7 +518,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
                     sections={awaySections}
                     disabled={homeBusy || awayBusy}
                     value={awayVal}
-                    valueLabel={resolveSlotLabel(m.awayAssignedInscription?.inscriptionId, m.awayAssignedInscription?.displayName)}
                     emptyLabel="Sin asignar"
                     onChange={(rid) => void assignSlot(m, 'away', rid)}
                   />

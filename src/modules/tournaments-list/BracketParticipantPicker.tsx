@@ -212,67 +212,9 @@ export function summarizeParticipantOptionLabel(optionLabel: string): {
   if (idxTabla >= 0) {
     const tm = /\btabla\s+general\s+P(\d+)\b/i.exec(segments[idxTabla]);
     if (tm) {
-      const stageHint = idxTabla > 0 ? segments[idxTabla - 1] : null;
       return {
-        headline: `Posición ${Number(tm[1])} · ${stageHint ?? 'Liga'}`,
+        headline: `Posición ${Number(tm[1])} · Tabla única`,
         subline: sublineSkippingIdx(idxTabla),
-      };
-    }
-  }
-
-  // Ganador con etapa origen: "Ganador Partido 1 - Repechaje"
-  const idxGanStage = segments.findIndex((s) => /^Ganador\s+Partido\s+\d+\s+-\s+.+/i.test(s));
-  if (idxGanStage >= 0) {
-    const gm = /^Ganador\s+Partido\s+(\d+)\s+-\s+(.+)$/i.exec(segments[idxGanStage].trim());
-    if (gm) {
-      return {
-        headline: `Ganador Partido ${Number(gm[1])} - ${gm[2].trim()}`,
-        subline: sublineSkippingIdx(idxGanStage),
-      };
-    }
-  }
-
-  const ganStageFull = /^Ganador\s+Partido\s+(\d+)\s+-\s+(.+)$/i.exec(full);
-  if (ganStageFull) {
-    return {
-      headline: `Ganador Partido ${Number(ganStageFull[1])} - ${ganStageFull[2].trim()}`,
-    };
-  }
-
-  // Clasificado desde eliminatoria previa (legacy): "... · Ganador · Partido 3 · Ronda 1"
-  const idxGanador = segments.findIndex((s) => /^Ganador$/i.test(s));
-  if (idxGanador >= 0) {
-    const partSeg = segments[idxGanador + 1] ?? '';
-    const roundSeg = segments[idxGanador + 2] ?? '';
-    const pm = /^Partido\s+(\d+)$/i.exec(partSeg);
-    const rm = /^Ronda\s+(\d+)$/i.exec(roundSeg);
-    if (pm && rm) {
-      const skip = new Set([idxGanador, idxGanador + 1, idxGanador + 2]);
-      const subline = segments.filter((_, i) => !skip.has(i)).join(' · ').trim() || undefined;
-      return {
-        headline: `Ganador · Partido ${Number(pm[1])} · Ronda ${Number(rm[1])}`,
-        subline,
-      };
-    }
-
-    const prev = segments[idxGanador - 1] ?? '';
-    const codeNorm = prev.replace(/\s+/g, '');
-    const elimCode = /^E(\d+)-M(\d+)$/i.exec(prev) ?? /^E(\d+)M(\d+)$/i.exec(codeNorm);
-    if (elimCode) {
-      return {
-        headline: `Ganador · Partido ${Number(elimCode[2])} · Ronda ${Number(elimCode[1])}`,
-        subline: sublineSkippingIdx(idxGanador),
-      };
-    }
-  }
-
-  const idxGanPartido = segments.findIndex((s) => /^Ganador\s+·\s+Partido\s+\d+/i.test(s));
-  if (idxGanPartido >= 0) {
-    const gm = /Ganador\s+·\s+Partido\s+(\d+)\s+·\s+Ronda\s+(\d+)/i.exec(segments[idxGanPartido]);
-    if (gm) {
-      return {
-        headline: `Ganador · Partido ${Number(gm[1])} · Ronda ${Number(gm[2])}`,
-        subline: sublineSkippingIdx(idxGanPartido),
       };
     }
   }
@@ -363,25 +305,10 @@ function buildTriggerSummary(
   };
 }
 
-function buildTriggerSummaryWithFallback(
-  sections: ReadonlyArray<ParticipantPoolSection>,
-  value: string,
-  emptyText: string,
-  fallbackLabel?: string
-): ReturnType<typeof buildTriggerSummary> {
-  const result = buildTriggerSummary(sections, value, emptyText);
-  if (!result.isEmpty && result.headline === normPoolId(value) && fallbackLabel) {
-    return { ...result, headline: fallbackLabel };
-  }
-  return result;
-}
-
 export type BracketParticipantPickerProps = {
   resetSignal: string | number;
   sections: ReadonlyArray<ParticipantPoolSection>;
   value: string;
-  /** Nombre a mostrar cuando el value no se encuentra en ninguna sección (ej: inscripción asignada antes de configurar el pool). */
-  valueLabel?: string;
   disabled?: boolean;
   ariaLabel?: string;
   emptyLabel?: string;
@@ -392,7 +319,6 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
   resetSignal,
   sections,
   value,
-  valueLabel,
   disabled,
   ariaLabel,
   emptyLabel,
@@ -553,19 +479,31 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
 
   const triggerDisplay = React.useMemo(
     () =>
-      safeSections.length === 0 && !normPoolId(value)
+      safeSections.length === 0
         ? {
-            headline: emptyText,
-            subline: 'No hay opciones disponibles' as string | undefined,
+            headline: 'Sin opciones disponibles',
+            subline: undefined as string | undefined,
             isEmpty: true,
             titleAttr: 'Sin opciones disponibles',
           }
-        : buildTriggerSummaryWithFallback(safeSections, value, emptyText, valueLabel),
-    [safeSections, value, emptyText, valueLabel]
+        : buildTriggerSummary(safeSections, value, emptyText),
+    [safeSections, value, emptyText]
   );
 
   const inputClass =
     'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100';
+
+  if (safeSections.length === 0) {
+    return (
+      <div
+        aria-label={ariaLabel}
+        className="mt-1 w-full rounded-xl border border-border-subtle bg-surface-1 px-3 py-2 italic text-xs text-text-muted"
+        role="status"
+      >
+        No hay opciones para este slot.
+      </div>
+    );
+  }
 
   return (
     <div className="relative mt-1 w-full" aria-label={ariaLabel}>
@@ -710,11 +648,7 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                 — {emptyText}
               </button>
 
-              {safeSections.length === 0 ? (
-                <p className="px-2 py-2 text-[11px] italic text-slate-500">
-                  No hay más opciones disponibles para este slot.
-                </p>
-              ) : showGlobalSearchHits ? (
+              {showGlobalSearchHits ? (
                 <ul className="space-y-1">
                   {searchFilteredRows.map((row) => {
                     const lbl = resolvePoolEntryLabel(row.entry);

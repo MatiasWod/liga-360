@@ -105,18 +105,4 @@ describe('buildScheduleFromStage (elimination)', () => {
     const col = out.data.rounds[0]?.matches ?? [];
     expect(col.map((m) => m.id)).toEqual(['b', 'a', 'c']);
   });
-
-  it('asigna matchCode P{n}R{m} en partidos eliminatorios', () => {
-    const out = buildScheduleFromStage({
-      format: 'elimination',
-      matches: [
-        { id: 'm1', round: 1, leg: 1, slotIndex: 2, fixtureCode: 'E1-M2', homeAssignedInscription: null, awayAssignedInscription: null },
-      ],
-    });
-    expect(out?.type).toBe('knockout');
-    if (out?.type !== 'knockout') return;
-    const match = out.data.rounds[0]?.matches[0];
-    expect(match?.matchCode).toBe('P2R1');
-    expect(match?.matchSubtitle).toBe('Partido 2 · Ronda 1');
-  });
 });
