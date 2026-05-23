@@ -33,7 +33,7 @@ export const up = (pgm) => {
       IF NOT EXISTS (
         SELECT 1 FROM pg_trigger WHERE tgname = trg_name
       ) THEN
-        EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON "%I" FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*) EXECUTE FUNCTION trigger_set_updated_at();', trg_name, t.table_name);
+        EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*) EXECUTE FUNCTION trigger_set_updated_at();', trg_name, t.table_name);
       END IF;
     END LOOP;
   END$$;
