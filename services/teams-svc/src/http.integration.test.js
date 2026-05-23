@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 
 const PORT = 4099;
 const JWT_SECRET = 'testsecret';
-const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
+const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@localhost:5432/liga360';
 
 let server;
 let baseUrl;
