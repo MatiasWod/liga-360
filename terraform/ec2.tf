@@ -91,7 +91,7 @@ resource "aws_instance" "k3s_node" {
 
 
 
-user_data = <<-EOF
+  user_data = <<-EOF
 #!/bin/bash
 set -e
 
