@@ -34,7 +34,10 @@ const PORT = process.env.PORT || 4002;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
 const { Pool } = pkg;
-const pool = new Pool({ connectionString: POSTGRES_URL });
+const pool = new Pool({
+  connectionString: POSTGRES_URL,
+  allowExitOnIdle: process.env.NODE_ENV === 'test',
+});
 
 function optionalAuthMiddleware(req, _res, next) {
   const authHeader = req.headers.authorization || '';
@@ -623,4 +626,10 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info({ port: PORT }, 'running');
   });
 }
+
+async function closePool() {
+  await pool.end();
+}
+
+export { app, closePool };
 

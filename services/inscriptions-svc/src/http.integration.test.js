@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { app } from './index.js';
+import { app, closePool } from './index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
@@ -10,6 +10,12 @@ test('GET /health responde ok', async () => {
   const response = await request(app).get('/health');
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.status, 'ok');
+});
+
+test.after(async () => {
+  if (typeof closePool === 'function') {
+    await closePool();
+  }
 });
 
 test('GET /invites sin token responde 401', async () => {

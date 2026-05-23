@@ -11,7 +11,10 @@ const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
 const { Pool } = pkg;
-const pool = new Pool({ connectionString: POSTGRES_URL });
+const pool = new Pool({
+  connectionString: POSTGRES_URL,
+  allowExitOnIdle: process.env.NODE_ENV === 'test',
+});
 const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/f540be8d-4922-4ed3-93a4-5ecb0b6235b8';
 
 function sendDebugLog(payload) {

@@ -8,6 +8,7 @@ const JWT_SECRET = 'testsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@127.0.0.1:5432/liga360';
 
 let server;
+let appModule;
 let baseUrl;
 
 function makeToken(payload) {
@@ -51,8 +52,8 @@ describe('teams-svc HTTP integration', () => {
     process.env.JWT_SECRET = JWT_SECRET;
     process.env.POSTGRES_URL = POSTGRES_URL;
 
-    const { default: appModule } = await import('./index.js');
-    server = appModule;
+    appModule = await import('./index.js');
+    server = appModule.default;
     baseUrl = `http://localhost:${PORT}`;
 
     // Wait for server to be ready
@@ -62,6 +63,9 @@ describe('teams-svc HTTP integration', () => {
   after(async () => {
     if (server && server.close) {
       await new Promise((resolve) => server.close(resolve));
+    }
+    if (typeof appModule?.closePool === 'function') {
+      await appModule.closePool();
     }
   });
 
