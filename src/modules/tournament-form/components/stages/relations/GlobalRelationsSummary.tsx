@@ -90,5 +90,6 @@ function collectRelations(stages: StageDraft[], lookupPool: StageDraft[]) {
 function renderSelection(sel: Selection) {
 	if (sel.kind === 'top') return `Primeros ${sel.count}`;
 	if (sel.kind === 'bottom') return `Últimos ${sel.count}`;
+	if (sel.kind === 'bestN') return `Mejores ${sel.count} del puesto ${sel.fromPosition} entre grupos`;
 	return `Puestos ${sel.from} a ${sel.to}`;
 } 

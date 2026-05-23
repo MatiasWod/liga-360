@@ -9,6 +9,7 @@ type Query {
 enum TournamentStatus {
   draft
   published
+  finished
 }
 
 enum InscriptionMode {
@@ -288,6 +289,7 @@ type Match {
   awayScore: Int
   status: String
   winnerAdvancementTransitionId: ID
+  matchKind: String
 }
 
 type Key {

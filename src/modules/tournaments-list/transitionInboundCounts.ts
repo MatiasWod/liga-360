@@ -21,6 +21,11 @@ type SrcStage = Pick<TournamentStage, 'format' | 'groups' | 'configJson'>;
  */
 export function countTeamsFromInboundTransition(tr: Trans, fromStage: SrcStage): number {
   const kind = String(tr.selectionKind || 'top').toLowerCase();
+
+  // bestN: picks the N best teams from a given position across all groups (not per-group)
+  if (kind === 'bestn') {
+    return Number(tr.topN) || 0;
+  }
   const cfg = parseCfg(fromStage.configJson ?? null);
 
   if (kind === 'range') {
@@ -59,6 +64,11 @@ export function countTeamsFromInboundTransition(tr: Trans, fromStage: SrcStage):
 
 export function describeInboundSelectionNatural(tr: Trans, fromStage: SrcStage): string {
   const kind = String(tr.selectionKind || 'top').toLowerCase();
+  if (kind === 'bestn') {
+    const n = Number(tr.topN) || 0;
+    const pos = Number(tr.rangeFrom) || 0;
+    return `mejores ${n} que terminaron ${pos}° en su grupo`;
+  }
   if (kind === 'range') {
     const from = Number(tr.rangeFrom) || 0;
     const to = Number(tr.rangeTo) || 0;

@@ -11,11 +11,12 @@ import { GroupSection } from './GroupSection';
 import { MatchRoundList } from './MatchRoundList';
 import { RoundSelector } from './RoundSelector';
 import { getDefaultRoundId } from './utils';
-import type { GoalRecord } from './MatchCard';
+import type { GoalRecord, MatchQuickAction } from './MatchCard';
 
 export const TournamentSchedule: React.FC<
   TournamentScheduleProps & {
     onEdit?: (matchId: string) => void;
+    onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
     goalsByMatchId?: Record<string, GoalRecord[]>;
   }
 > = ({
@@ -24,6 +25,7 @@ export const TournamentSchedule: React.FC<
   theme = 'dark',
   className = '',
   onEdit,
+  onQuickMatchAction,
   goalsByMatchId,
 }) => {
   const [selectedRoundId, setSelectedRoundId] = React.useState<string | null>(() =>
@@ -68,15 +70,15 @@ export const TournamentSchedule: React.FC<
           transition={{ duration: 0.2 }}
         >
           {type === 'league' && selectedRoundId ? (
-            <LeagueRound data={data as LeagueScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
+            <LeagueRound data={data as LeagueScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} onQuickMatchAction={onQuickMatchAction} goalsByMatchId={goalsByMatchId} />
           ) : null}
 
           {type === 'groups' && selectedRoundId ? (
-            <GroupsRounds data={data as GroupsScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
+            <GroupsRounds data={data as GroupsScheduleData} roundId={selectedRoundId} theme={theme} onEdit={onEdit} onQuickMatchAction={onQuickMatchAction} goalsByMatchId={goalsByMatchId} />
           ) : null}
 
           {type === 'knockout' ? (
-            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
+            <KnockoutBracket data={data as KnockoutScheduleData} theme={theme} onEdit={onEdit} onQuickMatchAction={onQuickMatchAction} goalsByMatchId={goalsByMatchId} />
           ) : null}
         </motion.div>
       </AnimatePresence>
@@ -89,17 +91,27 @@ function LeagueRound({
   roundId,
   theme,
   onEdit,
+  onQuickMatchAction,
   goalsByMatchId,
 }: {
   data: LeagueScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
   onEdit?: (matchId: string) => void;
+  onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   const round = data.rounds.find((r) => r.id === roundId);
   const matches = round?.matches ?? [];
-  return <MatchRoundList matches={matches} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />;
+  return (
+    <MatchRoundList
+      matches={matches}
+      theme={theme}
+      onEdit={onEdit}
+      onQuickMatchAction={onQuickMatchAction}
+      goalsByMatchId={goalsByMatchId}
+    />
+  );
 }
 
 function GroupsRounds({
@@ -107,12 +119,14 @@ function GroupsRounds({
   roundId,
   theme,
   onEdit,
+  onQuickMatchAction,
   goalsByMatchId,
 }: {
   data: GroupsScheduleData;
   roundId: string;
   theme: 'light' | 'dark';
   onEdit?: (matchId: string) => void;
+  onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   return (
@@ -122,7 +136,13 @@ function GroupsRounds({
         const matches = round?.matches ?? [];
         return (
           <GroupSection key={g.id} title={g.name} theme={theme}>
-            <MatchRoundList matches={matches} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />
+            <MatchRoundList
+              matches={matches}
+              theme={theme}
+              onEdit={onEdit}
+              onQuickMatchAction={onQuickMatchAction}
+              goalsByMatchId={goalsByMatchId}
+            />
           </GroupSection>
         );
       })}
@@ -134,11 +154,13 @@ function KnockoutBracket({
   data,
   theme,
   onEdit,
+  onQuickMatchAction,
   goalsByMatchId,
 }: {
   data: KnockoutScheduleData;
   theme: 'light' | 'dark';
   onEdit?: (matchId: string) => void;
+  onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   const columns = data.rounds.map((r) => ({
@@ -146,5 +168,13 @@ function KnockoutBracket({
     label: r.label,
     matches: r.matches,
   }));
-  return <BracketView columns={columns} theme={theme} onEdit={onEdit} goalsByMatchId={goalsByMatchId} />;
+  return (
+    <BracketView
+      columns={columns}
+      theme={theme}
+      onEdit={onEdit}
+      onQuickMatchAction={onQuickMatchAction}
+      goalsByMatchId={goalsByMatchId}
+    />
+  );
 }

@@ -208,6 +208,10 @@ function generatePublicInviteCode() {
   return out;
 }
 
+async function ensureInviteHttpColumns() {
+  // columns are guaranteed by migration; no-op at runtime
+}
+
 async function generateUniqueInviteToken(type) {
   for (let attempt = 0; attempt < 25; attempt++) {
     const token = type === 'public' ? generatePublicInviteCode() : generateTargetedInviteToken();
@@ -1700,7 +1704,7 @@ app.delete('/matches/:matchId/events/:eventId', requireOrganizer, async (req, re
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    logger.info({ port: PORT }, 'running');
   });
 }
 
@@ -1717,5 +1721,4 @@ export {
   generatePublicInviteCode,
   generateTargetedInviteToken,
 };
-
 

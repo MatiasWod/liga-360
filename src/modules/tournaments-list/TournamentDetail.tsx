@@ -88,6 +88,7 @@ function zonesFromStage(stage: TournamentStage, allStages: TournamentStage[]): C
 		const kind = String(tr.selectionKind || 'top').toLowerCase();
 		let fromPos = 0;
 		let toPos = 0;
+		let bestNCount: number | undefined;
 		if (kind === 'top' && tr.topN) {
 			fromPos = 1;
 			toPos = Number(tr.topN);
@@ -97,9 +98,13 @@ function zonesFromStage(stage: TournamentStage, allStages: TournamentStage[]): C
 		} else if (kind === 'bottom' && tr.bottomN && totalRows > 0) {
 			fromPos = totalRows - Number(tr.bottomN) + 1;
 			toPos = totalRows;
+		} else if (kind === 'bestn' && tr.topN && tr.rangeFrom) {
+			fromPos = Number(tr.rangeFrom);
+			toPos = Number(tr.rangeFrom);
+			bestNCount = Number(tr.topN);
 		}
 		if (fromPos > 0 && toPos >= fromPos) {
-			zones.push({ fromPos, toPos, label: `→ ${destName}`, colorIndex: zones.length });
+			zones.push({ fromPos, toPos, label: `→ ${destName}`, colorIndex: zones.length, ...(bestNCount ? { bestNCount } : {}) });
 		}
 	}
 	zones.sort((a, b) => a.fromPos - b.fromPos);

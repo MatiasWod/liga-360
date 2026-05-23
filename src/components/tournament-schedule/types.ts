@@ -20,6 +20,14 @@ export interface MatchRecord {
   status: MatchStatus;
   homeScore?: number;
   awayScore?: number;
+  /** Pata de la serie (1 = ida, 2 = vuelta). Presente solo en eliminación doble. */
+  leg?: number;
+  /** Slot de la llave (para agrupar las dos patas de una misma serie). */
+  slotIndex?: number;
+  /** Código P{n}R{m} en eliminatorias (p. ej. P1R1). */
+  matchCode?: string;
+  /** Subtítulo legible: Partido n · Ronda m. */
+  matchSubtitle?: string;
 }
 
 export interface ScheduleRound {
