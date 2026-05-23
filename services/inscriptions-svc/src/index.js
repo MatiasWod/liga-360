@@ -13,7 +13,10 @@ const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localho
 const TOURNAMENTS_GRAPHQL_URL = process.env.TOURNAMENTS_GRAPHQL_URL || 'http://localhost:4000/graphql';
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: POSTGRES_URL });
+const pool = new Pool({
+  connectionString: POSTGRES_URL,
+  allowExitOnIdle: process.env.NODE_ENV === 'test',
+});
 
 function nowIso() {
   return new Date().toISOString();
@@ -1695,12 +1698,19 @@ app.delete('/matches/:matchId/events/:eventId', requireOrganizer, async (req, re
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+async function closePool() {
+  await pool.end();
+}
 
 export {
   app,
+  closePool,
   normalizeTournamentParticipantType,
   assertRoleMatchesParticipantType,
   ensureInviteUsable,
