@@ -1,7 +1,5 @@
 image: alpine:3.20
 
-options:
-  docker: true
 
 definitions:
   services:
