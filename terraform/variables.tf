@@ -29,6 +29,6 @@ variable "key_name" {
 }
 
 variable "domain_name" {
-  type = string
+  type    = string
   default = "liga360.com"
 }
