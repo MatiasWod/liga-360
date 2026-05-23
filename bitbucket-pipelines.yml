@@ -16,7 +16,6 @@ definitions:
 
   caches:
     npm: .npm
-    docker: /var/lib/docker
 
   steps:
     - step: &terraform-validate
