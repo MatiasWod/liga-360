@@ -432,7 +432,6 @@ app.get('/invites', requireOrganizer, async (req, res) => {
   const tournamentId = String(req.query?.tournamentId || '').trim();
   if (!competitionId && !tournamentId) return res.status(400).json({ error: 'competitionId o tournamentId requerido' });
   try {
-    await ensureInviteHttpColumns();
     const listed = competitionId
       ? await pool.query(
           `SELECT id, token, tournament_id, competition_id, type, target_inscription_id, target_team_code, target_participant_user_id, status, expires_at, max_uses, uses_count, created_at
@@ -1696,6 +1695,9 @@ app.delete('/matches/:matchId/events/:eventId', requireOrganizer, async (req, re
   }
 });
 
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 export {
   app,
@@ -1705,10 +1707,5 @@ export {
   generatePublicInviteCode,
   generateTargetedInviteToken,
 };
-
-if (process.env.NODE_ENV !== 'test') {
-  startServer();
-}
-
 
 

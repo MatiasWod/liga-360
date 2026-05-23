@@ -23,6 +23,9 @@ resources:
   - gateway/service.yaml
   - frontend/deployment.yaml
   - frontend/service.yaml
+  - external-secrets/secret-store.yaml
+  - external-secrets/external-secret.yaml
+  - external-secrets/docker-secret.yaml
 
 images:
   - name: liga360/migrator
