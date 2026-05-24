@@ -1,37 +1,51 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+namespace: liga360
+
 resources:
-  - ../../base
-  - ingress.yaml
+  - namespace.yaml
+  - configmap.yaml
+  - postgres/service.yaml
+  - postgres/statefulset.yaml
+  - neo4j/service.yaml
+  - neo4j/statefulset.yaml
+  - db-migrate/job.yaml
+  - auth-svc/deployment.yaml
+  - auth-svc/service.yaml
+  - teams-svc/deployment.yaml
+  - teams-svc/service.yaml
+  - tournaments-svc/deployment.yaml
+  - tournaments-svc/service.yaml
+  - inscriptions-svc/deployment.yaml
+  - inscriptions-svc/service.yaml
+  - gateway/deployment.yaml
+  - gateway/service.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - external-secrets/secret-store.yaml
+  - external-secrets/external-secret.yaml
+  - external-secrets/docker-secret.yaml
 
 images:
   - name: liga360/migrator
-    newName: bcanevaro/liga360-migrator
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/migrator
+    newTag: latest
   - name: liga360/frontend
-    newName: bcanevaro/liga360-frontend
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/frontend
+    newTag: latest
   - name: liga360/gateway
-    newName: bcanevaro/liga360-gateway
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/gateway
+    newTag: latest
   - name: liga360/auth-svc
-    newName: bcanevaro/liga360-auth-svc
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/auth-svc
+    newTag: latest
   - name: liga360/teams-svc
-    newName: bcanevaro/liga360-teams-svc
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/teams-svc
+    newTag: latest
   - name: liga360/tournaments-svc
-    newName: bcanevaro/liga360-tournaments-svc
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
+    newName: liga360/tournaments-svc
+    newTag: latest
   - name: liga360/inscriptions-svc
-    newName: bcanevaro/liga360-inscriptions-svc
-    newTag: 89dca0071a3d506a54975008925f20c15d9f676c
-
-patches:
-  - target:
-      kind: Deployment
-    patch: |-
-      - op: add
-        path: /spec/template/spec/imagePullSecrets
-        value: [{name: credenciales-dockerhub}]
+    newName: liga360/inscriptions-svc
+    newTag: latest
