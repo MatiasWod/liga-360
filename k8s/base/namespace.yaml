@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: liga360
-  labels:
-    app.kubernetes.io/part-of: liga360
