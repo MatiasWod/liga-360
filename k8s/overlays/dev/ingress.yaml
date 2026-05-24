@@ -52,7 +52,7 @@ spec:
         paths:
           # Atrapa cualquier cosa que empiece con /api y la manda al backend
           - path: /api(/|$)(.*)
-            pathType: Prefix
+            pathType: ImplementationSpecific
             backend:
               service:
                 # OJO: Asegurate de que tu Service se llame exactamente 'teams-svc'
