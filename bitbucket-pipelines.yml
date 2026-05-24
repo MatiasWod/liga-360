@@ -48,7 +48,6 @@ definitions:
     - step: &terraform-destroy
         name: Terraform Destroy
         image: hashicorp/terraform:1.8.5
-        trigger: manual
         script:
           - cd terraform
           - terraform init
