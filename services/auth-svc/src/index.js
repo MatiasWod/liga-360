@@ -10,6 +10,18 @@ import { httpLogger, logger } from './logger.js';
 const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
+
+function assertRequiredEnv(name) {
+  if (!process.env[name]) {
+    logger.fatal({ missingEnv: name }, 'missing required env');
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV === 'production') {
+  assertRequiredEnv('JWT_SECRET');
+  assertRequiredEnv('POSTGRES_URL');
+}
 const { Pool } = pkg;
 const pool = new Pool({
   connectionString: POSTGRES_URL,
@@ -26,7 +38,10 @@ function sendDebugLog(payload) {
 }
 
 const app = express();
-app.use(cors());
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : ['*'];
+app.use(cors({ origin: corsOrigins.length === 0 ? '*' : corsOrigins }));
 app.use(bodyParser.json());
 app.use(httpLogger);
 
@@ -34,9 +49,19 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // Registro con 3 modos: team | participant | organizer
 // body: { mode: 'team'|'participant'|'organizer', username, password, name }
-app.post('/register', async (req, res) => {
+async function registerHandler(req, res) {
   try {
     const { mode, username, password, name } = req.body || {};
+    logger.info(
+      {
+        reqId: req.id,
+        mode,
+        username,
+        hasPassword: Boolean(password),
+        nameLength: typeof name === 'string' ? name.length : 0,
+      },
+      'register request'
+    );
     // #region agent log
     sendDebugLog({
       runId: 'initial',
@@ -59,8 +84,14 @@ app.post('/register', async (req, res) => {
       organizer: 'organizer', organizador: 'organizer'
     };
     const kind = modeMap[normalized];
-    if (!kind) return res.status(400).json({ error: 'mode must be team|participant|organizer (or equipo/participante/organizador)' });
-    if (!username || !password || !name) return res.status(400).json({ error: 'username, password, name required' });
+    if (!kind) {
+      logger.warn({ reqId: req.id, mode }, 'register invalid mode');
+      return res.status(400).json({ error: 'mode must be team|participant|organizer (or equipo/participante/organizador)' });
+    }
+    if (!username || !password || !name) {
+      logger.warn({ reqId: req.id, hasUsername: Boolean(username), hasPassword: Boolean(password), hasName: Boolean(name) }, 'register missing fields');
+      return res.status(400).json({ error: 'username, password, name required' });
+    }
 
     const hashed = await bcrypt.hash(password, 10);
     // #region agent log
@@ -128,7 +159,7 @@ app.post('/register', async (req, res) => {
       });
       // #endregion
       if (e.code === '23505') return res.status(409).json({ error: 'username already exists' });
-      logger.error({ err: e }, 'register error');
+      logger.error({ err: e, reqId: req.id, username, kind }, 'register error');
       return res.status(500).json({ error: 'internal_error' });
     } finally {
       client.release();
@@ -146,12 +177,17 @@ app.post('/register', async (req, res) => {
       }
     });
     // #endregion
+    logger.error({ err: e, reqId: req.id }, 'register outer error');
     return res.status(500).json({ error: 'internal_error' });
   }
-});
+}
+
+app.post('/register', registerHandler);
 
 // Login que emite JWT (sin verificación real de password en MVP mínimo)
-app.post('/login', async (req, res) => {
+app.post('/login', loginHandler);
+
+async function loginHandler(req, res) {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
   const r = await pool.query('SELECT * FROM "Users" WHERE username=$1', [username]);
@@ -161,7 +197,7 @@ app.post('/login', async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'invalid credentials' });
   const token = jwt.sign({ sub: user.id, username: user.username, type: user.type, type_id: user.type_id }, JWT_SECRET, { expiresIn: '1d' });
   return res.json({ token, user: { id: user.id, username: user.username, type: user.type, type_id: user.type_id } });
-});
+}
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {

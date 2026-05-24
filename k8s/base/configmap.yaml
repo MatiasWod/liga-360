@@ -12,3 +12,4 @@ data:
   NEO4J_USERNAME: neo4j
   TOURNAMENTS_SUBGRAPH_URL: http://tournaments-svc:4001/graphql
   TOURNAMENTS_GRAPHQL_URL: http://gateway:4000/graphql
+  CORS_ORIGINS: "*"

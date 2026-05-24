@@ -169,3 +169,10 @@ Usar **docker-compose** en la raíz (`docker compose up`). Incluye servicio `mig
 ## Variables
 
 `.env.example` (compose) y `k8s/secrets.env.example` (K8s). Config no sensible: ConfigMap `liga360-config`.
+
+## Checklist de paridad de registro
+
+- Secrets: `JWT_SECRET`, `POSTGRES_URL`, `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `NEO4J_AUTH`.
+- ConfigMap: `TOURNAMENTS_SUBGRAPH_URL`, `TOURNAMENTS_GRAPHQL_URL`, `CORS_ORIGINS`.
+- Ingress apunta al frontend y el frontend enruta `/api/*` hacia los servicios.
+- Job `db-migrate` exitoso antes de desplegar apps.

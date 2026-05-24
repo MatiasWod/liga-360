@@ -33,6 +33,18 @@ export {
 const PORT = process.env.PORT || 4002;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
+
+function assertRequiredEnv(name) {
+  if (!process.env[name]) {
+    logger.fatal({ missingEnv: name }, 'missing required env');
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV === 'production') {
+  assertRequiredEnv('JWT_SECRET');
+  assertRequiredEnv('POSTGRES_URL');
+}
 const { Pool } = pkg;
 const pool = new Pool({
   connectionString: POSTGRES_URL,
@@ -73,7 +85,10 @@ async function autoLinkParticipantByDni(client, participantId, dni) {
 }
 
 function requireAuthMiddleware(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  if (!req.user) {
+    logger.warn({ reqId: req.id }, 'unauthorized request');
+    return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  }
   return next();
 }
 
@@ -100,7 +115,10 @@ async function canWriteTeam(client, teamId, userId, teamCode) {
 }
 
 const app = express();
-app.use(cors());
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : ['*'];
+app.use(cors({ origin: corsOrigins.length === 0 ? '*' : corsOrigins }));
 app.use(bodyParser.json());
 app.use(httpLogger);
 app.use(optionalAuthMiddleware);
@@ -152,6 +170,7 @@ app.get('/teams', requireAuthMiddleware, async (req, res) => {
 
 app.post('/teams', requireAuthMiddleware, async (req, res) => {
   const { name, badgeUrl } = req.body || {};
+  logger.info({ reqId: req.id, userId: req.user?.sub, hasName: Boolean(name) }, 'create team request');
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   const accessCode = generateTeamCode();
   const client = await pool.connect();
@@ -168,7 +187,7 @@ app.post('/teams', requireAuthMiddleware, async (req, res) => {
     return res.status(201).json({ team: r.rows[0], accessCode });
   } catch (e) {
     await client.query('ROLLBACK');
-    logger.error({ err: e }, 'create team error');
+    logger.error({ err: e, reqId: req.id, userId: req.user?.sub }, 'create team error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
@@ -205,8 +224,9 @@ app.patch('/teams/:id', async (req, res) => {
   }
 });
 
-app.post('/participants', async (req, res) => {
+async function createParticipantHandler(req, res) {
   const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode } = req.body || {};
+  logger.info({ reqId: req.id, userId: req.user?.sub, hasTeamId: Boolean(teamId) }, 'create participant request');
   if (!firstName || !String(firstName).trim()) return res.status(400).json({ error: 'firstName required' });
   if (!lastName || !String(lastName).trim()) return res.status(400).json({ error: 'lastName required' });
   const normalizedDni = normalizeDni(dni);
@@ -256,14 +276,16 @@ app.post('/participants', async (req, res) => {
     return res.status(201).json({ participant });
   } catch (e) {
     await client.query('ROLLBACK');
-    logger.error({ err: e }, 'create participant error');
+    logger.error({ err: e, reqId: req.id, userId: req.user?.sub }, 'create participant error');
     return res.status(500).json({ error: 'internal_error' });
   } finally {
     client.release();
   }
-});
+}
 
-app.patch('/participants/:id', async (req, res) => {
+app.post('/participants', createParticipantHandler);
+
+async function updateParticipantHandler(req, res) {
   const participantId = Number(req.params.id);
   const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode } = req.body || {};
   if (!participantId) return res.status(400).json({ error: 'invalid participant id' });
@@ -337,7 +359,9 @@ app.patch('/participants/:id', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}
+
+app.patch('/participants/:id', updateParticipantHandler);
 
 app.post('/teams/:id/members', async (req, res) => {
   const teamId = Number(req.params.id);

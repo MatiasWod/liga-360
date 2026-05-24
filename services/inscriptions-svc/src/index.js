@@ -12,6 +12,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const POSTGRES_URL = process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360';
 const TOURNAMENTS_GRAPHQL_URL = process.env.TOURNAMENTS_GRAPHQL_URL || 'http://localhost:4000/graphql';
 
+function assertRequiredEnv(name) {
+  if (!process.env[name]) {
+    logger.fatal({ missingEnv: name }, 'missing required env');
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV === 'production') {
+  assertRequiredEnv('JWT_SECRET');
+  assertRequiredEnv('POSTGRES_URL');
+  assertRequiredEnv('TOURNAMENTS_GRAPHQL_URL');
+}
+
 const { Pool } = pg;
 const pool = new Pool({
   connectionString: POSTGRES_URL,
@@ -39,25 +52,46 @@ function optionalAuthMiddleware(req, _res, next) {
 }
 
 function requireAuthMiddleware(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  if (!req.user) {
+    logger.warn({ reqId: req.id }, 'unauthorized request');
+    return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  }
   return next();
 }
 
 function requireOrganizer(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
-  if (req.user.type !== 'organizer') return res.status(403).json({ error: 'FORBIDDEN: organizer requerido' });
+  if (!req.user) {
+    logger.warn({ reqId: req.id }, 'unauthorized organizer request');
+    return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  }
+  if (req.user.type !== 'organizer') {
+    logger.warn({ reqId: req.id, userType: req.user.type }, 'forbidden organizer request');
+    return res.status(403).json({ error: 'FORBIDDEN: organizer requerido' });
+  }
   return next();
 }
 
 function requireTeamUser(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
-  if (req.user.type !== 'team') return res.status(403).json({ error: 'FORBIDDEN: usuario team requerido' });
+  if (!req.user) {
+    logger.warn({ reqId: req.id }, 'unauthorized team request');
+    return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  }
+  if (req.user.type !== 'team') {
+    logger.warn({ reqId: req.id, userType: req.user.type }, 'forbidden team request');
+    return res.status(403).json({ error: 'FORBIDDEN: usuario team requerido' });
+  }
   return next();
 }
 
 function requireParticipantUser(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
-  if (req.user.type !== 'participant') return res.status(403).json({ error: 'FORBIDDEN: usuario participant requerido' });
+  if (!req.user) {
+    logger.warn({ reqId: req.id }, 'unauthorized participant request');
+    return res.status(401).json({ error: 'UNAUTHORIZED: token requerido' });
+  }
+  if (req.user.type !== 'participant') {
+    logger.warn({ reqId: req.id, userType: req.user.type }, 'forbidden participant request');
+    return res.status(403).json({ error: 'FORBIDDEN: usuario participant requerido' });
+  }
   return next();
 }
 
@@ -321,7 +355,10 @@ async function clearTournamentInitialAssignments({ tournamentId, inscriptionId, 
 }
 
 const app = express();
-app.use(cors());
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : ['*'];
+app.use(cors({ origin: corsOrigins.length === 0 ? '*' : corsOrigins }));
 app.use(bodyParser.json());
 app.use(httpLogger);
 app.use(optionalAuthMiddleware);
@@ -330,6 +367,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.post('/inscriptions', async (req, res) => {
   const tournamentId = String(req.body?.tournamentId || '').trim();
+  logger.info({ reqId: req.id, userId: req.user?.sub, tournamentId }, 'create inscription request');
   const competitionIdRaw = String(req.body?.competitionId || '').trim();
   const competitionId =
     competitionIdRaw && competitionIdRaw.toLowerCase() !== 'null' && competitionIdRaw.toLowerCase() !== 'undefined'
@@ -429,7 +467,7 @@ app.post('/inscriptions', async (req, res) => {
     if (String(e?.message || '').startsWith('FORBIDDEN:')) {
       return res.status(403).json({ error: e.message });
     }
-    logger.error({ err: e }, 'create public inscription error');
+    logger.error({ err: e, reqId: req.id, userId: req.user?.sub, tournamentId }, 'create public inscription error');
     return res.status(500).json({ error: 'internal_error' });
   }
 });
