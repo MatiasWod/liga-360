@@ -11,11 +11,11 @@ spec:
 
   tls:
     - hosts:
-        - liga360.duckdns.org
+        - liga360.abrdns.com
       secretName: liga360-tls
 
   rules:
-    - host: liga360.duckdns.org
+    - host: liga360.abrdns.com
       http:
         paths:
           - path: /
