@@ -10,22 +10,22 @@ resources:
 images:
   - name: liga360/migrator
     newName: liga360/migrator
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/frontend
     newName: liga360/frontend
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/gateway
     newName: liga360/gateway
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/auth-svc
     newName: liga360/auth-svc
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/teams-svc
     newName: liga360/teams-svc
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/tournaments-svc
     newName: liga360/tournaments-svc
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
   - name: liga360/inscriptions-svc
     newName: liga360/inscriptions-svc
-    newTag: 7de32db0f25277a4ba42224365b9c815fe866fce
+    newTag: 3746dd5c9d5f450acd3e5bcb1addf362c834b441
