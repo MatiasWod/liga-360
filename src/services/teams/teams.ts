@@ -3,7 +3,7 @@ import { authHeaders, parseJsonResponse, TEAMS_BASE } from './client';
 import { readSessionUser } from './session';
 
 export async function getMyTeams(): Promise<TeamInfo[]> {
-  const res = await fetch(`${TEAMS_BASE}/teams?mine=true`, { headers: authHeaders() });
+  const res = await fetch(`${TEAMS_BASE}?mine=true`, { headers: authHeaders() });
   const json = await parseJsonResponse(res, 'No se pudieron cargar los equipos');
   const me = readSessionUser();
   return (json.teams || []).map((team: any) => ({
@@ -17,7 +17,7 @@ export async function getMyTeams(): Promise<TeamInfo[]> {
 }
 
 export async function createTeam(name: string, badgeUrl?: string) {
-  const res = await fetch(`${TEAMS_BASE}/teams`, {
+  const res = await fetch(`${TEAMS_BASE}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ name, badgeUrl: badgeUrl || null }),
@@ -45,7 +45,7 @@ export async function updateTeam(
     teamCode?: string;
   }
 ) {
-  const res = await fetch(`${TEAMS_BASE}/teams/${teamId}`, {
+  const res = await fetch(`${TEAMS_BASE}/${teamId}`, {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -69,7 +69,7 @@ export async function ensureTeamForSession() {
 }
 
 export async function getTeamDetail(teamId: string) {
-  const res = await fetch(`${TEAMS_BASE}/teams/${teamId}`, { headers: authHeaders() });
+  const res = await fetch(`${TEAMS_BASE}/${teamId}`, { headers: authHeaders() });
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || 'No se pudo cargar el equipo');
   const me = readSessionUser();
@@ -94,7 +94,7 @@ export async function getTeamDetail(teamId: string) {
 }
 
 export async function rotateTeamCode(teamId: string) {
-  const res = await fetch(`${TEAMS_BASE}/teams/${teamId}/access-code/rotate`, {
+  const res = await fetch(`${TEAMS_BASE}/${teamId}/access-code/rotate`, {
     method: 'POST',
     headers: authHeaders(),
   });
@@ -104,7 +104,7 @@ export async function rotateTeamCode(teamId: string) {
 }
 
 export async function getMyTeamInviteCode() {
-  const res = await fetch(`${TEAMS_BASE}/teams/me/invite-code`, { headers: authHeaders() });
+  const res = await fetch(`${TEAMS_BASE}/me/invite-code`, { headers: authHeaders() });
   const json = await parseJsonResponse(res, 'No se pudo obtener codigo de invitacion de equipo');
   return {
     teamId: String(json.teamId),
@@ -115,7 +115,7 @@ export async function getMyTeamInviteCode() {
 
 export async function resolveTeamByInviteCode(code: string) {
   const safeCode = String(code || '').trim().toUpperCase();
-  const res = await fetch(`${TEAMS_BASE}/teams/resolve-by-invite-code/${encodeURIComponent(safeCode)}`, {
+  const res = await fetch(`${TEAMS_BASE}/resolve-by-invite-code/${encodeURIComponent(safeCode)}`, {
     headers: authHeaders(),
   });
   const json = await parseJsonResponse(res, 'No se pudo resolver equipo por codigo');

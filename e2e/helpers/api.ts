@@ -109,7 +109,7 @@ export async function ensureOwnedTeam(
   session: Session,
   preferredName: string
 ): Promise<E2ETeam> {
-  const listResponse = await request.get(`${TEAMS_BASE}/teams?mine=true`, {
+  const listResponse = await request.get(`${TEAMS_BASE}?mine=true`, {
     headers: {
       Authorization: `Bearer ${session.token}`,
     },
@@ -120,7 +120,7 @@ export async function ensureOwnedTeam(
 
   let team = existing;
   if (!team) {
-    const createResponse = await request.post(`${TEAMS_BASE}/teams`, {
+    const createResponse = await request.post(`${TEAMS_BASE}`, {
       headers: {
         Authorization: `Bearer ${session.token}`,
       },
@@ -132,7 +132,7 @@ export async function ensureOwnedTeam(
   }
 
   if (!team?.invite_code) {
-    const codeResponse = await request.get(`${TEAMS_BASE}/teams/me/invite-code`, {
+    const codeResponse = await request.get(`${TEAMS_BASE}/me/invite-code`, {
       headers: {
         Authorization: `Bearer ${session.token}`,
       },
@@ -258,7 +258,7 @@ export async function listTeamInvites(
   request: APIRequestContext,
   teamSession: Session
 ) {
-  const response = await request.get(`${INSCRIPTIONS_BASE}/teams/me/invites`, {
+  const response = await request.get(`${INSCRIPTIONS_BASE}/me/invites`, {
     headers: {
       Authorization: `Bearer ${teamSession.token}`,
     },

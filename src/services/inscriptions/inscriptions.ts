@@ -134,7 +134,7 @@ export async function associateInscription(inscriptionId: number) {
 }
 
 export async function listTeamsForOrganizer(): Promise<TeamOption[]> {
-  const res = await fetch(`${TEAMS_BASE}/teams`, { headers: authHeaders() });
+  const res = await fetch(`${TEAMS_BASE}`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudieron cargar equipos');
   return (json.teams || []).map((team: any) => ({
     id: Number(team.id),

@@ -20,7 +20,7 @@ export async function createParticipant(payload: {
 }
 
 export async function removeTeamMember(teamId: string, participantId: string, teamCode?: string) {
-  const res = await fetch(`${TEAMS_BASE}/teams/${teamId}/members/${participantId}`, {
+  const res = await fetch(`${TEAMS_BASE}/${teamId}/members/${participantId}`, {
     method: 'DELETE',
     headers: authHeaders(),
     body: JSON.stringify({ teamCode: teamCode || null }),
