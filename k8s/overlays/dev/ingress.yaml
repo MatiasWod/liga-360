@@ -25,3 +25,37 @@ spec:
                 name: frontend
                 port:
                   number: 80
+
+---
+# ==========================================
+# 2. INGRESS DE LA API (Con reescritura)
+# ==========================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: liga360-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Le decimos a Nginx que vamos a usar Expresiones Regulares
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Le decimos que recorte el prefijo /api y mande el resto (el grupo $2)
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - liga360.duckdns.org
+      secretName: liga360-tls
+  rules:
+    - host: liga360.duckdns.org
+      http:
+        paths:
+          # Atrapa cualquier cosa que empiece con /api y la manda al backend
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                # OJO: Asegurate de que tu Service se llame exactamente 'teams-svc'
+                name: teams-svc
+                port:
+                  number: 4002
