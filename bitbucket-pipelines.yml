@@ -37,7 +37,7 @@ definitions:
           - terraform init
           - terraform plan -out=tfplan
         artifacts:
-          - terraform/tfplan
+          - terraform/**
 
     - step: &terraform-apply
         name: Terraform Apply
@@ -45,7 +45,7 @@ definitions:
         script:
           - cd terraform
           - terraform init
-          - terraform apply -auto-approve
+          - terraform apply -auto-approve tfplan
 
     - step: &terraform-destroy
         name: Terraform Destroy
@@ -106,6 +106,10 @@ pipelines:
       - step: *test
       - step: *terraform-plan
 
+      - step:
+          <<: *terraform-apply
+          trigger: manual
+
       - parallel:
           - step:
               <<: *docker-build-push
@@ -113,9 +117,9 @@ pipelines:
               script:
                 - export SVC="liga360-frontend"
                 - export BUILD_CONTEXT="."
-                - export DOCKERFILE_ARG="-f Dockerfile.frontend"
+                - export DOCKERFILE_ARG="-f deploy/Dockerfile.frontend"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/Dockerfile.frontend .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -187,6 +191,12 @@ pipelines:
                 - docker push "$DOCKER_USER/$SVC:latest"
 
       - step:
+          name: Notify GitOps
+          image: alpine:3.20
+          script:
+            - echo "Images pushed. ArgoCD will sync from k8s/overlays/dev."
+
+      - step:
           name: Update GitOps Tags
           image: alpine:3.20
           script:
@@ -202,11 +212,8 @@ pipelines:
             - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
             - git push origin HEAD:main
 
-      - step:
-          <<: *terraform-apply
-          trigger: manual
-
   custom:
     terraform-destroy:
       - step:
           <<: *terraform-destroy
+          trigger: manual
