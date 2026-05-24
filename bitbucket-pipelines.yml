@@ -1,6 +1,5 @@
 image: alpine:3.20
 
-
 definitions:
   services:
     postgres:
@@ -90,7 +89,6 @@ definitions:
           - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
           - docker push "$DOCKER_USER/$SVC:latest"
 
-
 pipelines:
   pull-requests:
     "**":
@@ -99,28 +97,12 @@ pipelines:
 
   branches:
     main:
-      - step:
-          <<: *terraform-validate
-          condition:
-            changesets:
-              includePaths:
-                - "terraform/**"
-
+      # Ahora estos pasos se ejecutarán SIEMPRE, sin importar si tocaste la carpeta de terraform o no.
+      - step: *terraform-validate
       - step: *build
       - step: *test
-      - step:
-          <<: *terraform-plan
-          condition:
-            changesets:
-              includePaths:
-                - "terraform/**"
-
-      - step:
-          <<: *terraform-apply
-          condition:
-            changesets:
-              includePaths:
-                - "terraform/**"
+      - step: *terraform-plan
+      - step: *terraform-apply
 
       - parallel:
           - step:
