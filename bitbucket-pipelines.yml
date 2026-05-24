@@ -212,8 +212,6 @@ pipelines:
             - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
             - git push origin HEAD:main
 
-  custom:
-    terraform-destroy:
-      - step:
-          <<: *terraform-destroy
-          trigger: manual
+custom:
+  terraform-destroy:
+    - step: *terraform-destroy
