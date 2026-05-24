@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: auth-svc
-          image: liga360/auth-svc
+          image: liga360-auth-svc
           imagePullPolicy: Always
           ports:
             - containerPort: 4003

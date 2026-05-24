@@ -21,7 +21,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: liga360/migrator
+          image: liga360-migrator
           imagePullPolicy: IfNotPresent
           env:
             - name: DATABASE_URL

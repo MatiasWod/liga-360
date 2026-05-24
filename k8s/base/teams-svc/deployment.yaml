@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: teams-svc
-          image: liga360/teams-svc:latest
+          image: liga360-teams-svc:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 4002
