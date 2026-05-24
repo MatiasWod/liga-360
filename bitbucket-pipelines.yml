@@ -1,5 +1,7 @@
 image: alpine:3.20
 
+options:
+  docker: true
 
 definitions:
   services:
@@ -9,6 +11,7 @@ definitions:
         POSTGRES_USER: liga
         POSTGRES_PASSWORD: liga
         POSTGRES_DB: liga360
+
     docker:
       memory: 3072
 
@@ -39,16 +42,14 @@ definitions:
     - step: &terraform-apply
         name: Terraform Apply
         image: hashicorp/terraform:1.8.5
-        trigger: manual
         script:
           - cd terraform
           - terraform init
-          - terraform apply -auto-approve tfplan
+          - terraform apply -auto-approve
 
     - step: &terraform-destroy
         name: Terraform Destroy
         image: hashicorp/terraform:1.8.5
-        trigger: manual
         script:
           - cd terraform
           - terraform init
@@ -83,7 +84,7 @@ definitions:
         services:
           - docker
         caches:
-          - docker
+          - npm
         script:
           - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
           - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" $BUILD_CONTEXT $DOCKERFILE_ARG
@@ -91,10 +92,10 @@ definitions:
           - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
           - docker push "$DOCKER_USER/$SVC:latest"
 
-
 pipelines:
   pull-requests:
     "**":
+      - step: *terraform-validate
       - step: *build
       - step: *test
 
@@ -104,7 +105,6 @@ pipelines:
       - step: *build
       - step: *test
       - step: *terraform-plan
-      - step: *terraform-apply
 
       - parallel:
           - step:
@@ -115,7 +115,7 @@ pipelines:
                 - export BUILD_CONTEXT="."
                 - export DOCKERFILE_ARG="-f Dockerfile.frontend"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/Dockerfile.frontend .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.frontend .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -187,12 +187,6 @@ pipelines:
                 - docker push "$DOCKER_USER/$SVC:latest"
 
       - step:
-          name: Notify GitOps
-          image: alpine:3.20
-          script:
-            - echo "Images pushed. ArgoCD will sync from k8s/overlays/dev." 
-
-      - step:
           name: Update GitOps Tags
           image: alpine:3.20
           script:
@@ -208,6 +202,11 @@ pipelines:
             - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
             - git push origin HEAD:main
 
+      - step:
+          <<: *terraform-apply
+          trigger: manual
+
   custom:
     terraform-destroy:
-      - step: *terraform-destroy
+      - step:
+          <<: *terraform-destroy
