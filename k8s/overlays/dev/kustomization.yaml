@@ -10,22 +10,22 @@ resources:
 images:
   - name: liga360-migrator
     newName: liga360-migrator
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-frontend
     newName: liga360-frontend
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-gateway
     newName: liga360-gateway
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-auth-svc
     newName: liga360-auth-svc
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-teams-svc
     newName: liga360-teams-svc
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-tournaments-svc
     newName: liga360-tournaments-svc
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
   - name: liga360-inscriptions-svc
     newName: liga360-inscriptions-svc
-    newTag: latest
+    newTag: acfbe2c787ef525c379da5e9852501db3b883a02
