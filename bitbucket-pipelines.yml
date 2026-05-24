@@ -99,11 +99,28 @@ pipelines:
 
   branches:
     main:
-      - step: *terraform-validate
+      - step:
+          <<: *terraform-validate
+          condition:
+            changesets:
+              includePaths:
+                - "terraform/**"
+
       - step: *build
       - step: *test
-      - step: *terraform-plan
-      - step: *terraform-apply
+      - step:
+          <<: *terraform-plan
+          condition:
+            changesets:
+              includePaths:
+                - "terraform/**"
+
+      - step:
+          <<: *terraform-apply
+          condition:
+            changesets:
+              includePaths:
+                - "terraform/**"
 
       - parallel:
           - step:
