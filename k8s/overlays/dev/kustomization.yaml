@@ -4,28 +4,8 @@ kind: Kustomization
 namespace: liga360
 
 resources:
-  - namespace.yaml
-  - configmap.yaml
-  - postgres/service.yaml
-  - postgres/statefulset.yaml
-  - neo4j/service.yaml
-  - neo4j/statefulset.yaml
-  - db-migrate/job.yaml
-  - auth-svc/deployment.yaml
-  - auth-svc/service.yaml
-  - teams-svc/deployment.yaml
-  - teams-svc/service.yaml
-  - tournaments-svc/deployment.yaml
-  - tournaments-svc/service.yaml
-  - inscriptions-svc/deployment.yaml
-  - inscriptions-svc/service.yaml
-  - gateway/deployment.yaml
-  - gateway/service.yaml
-  - frontend/deployment.yaml
-  - frontend/service.yaml
-  - external-secrets/secret-store.yaml
-  - external-secrets/external-secret.yaml
-  - external-secrets/docker-secret.yaml
+  - ../../base
+  - ingress.yaml
 
 images:
   - name: liga360/migrator
