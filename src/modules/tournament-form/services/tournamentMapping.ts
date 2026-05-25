@@ -56,6 +56,7 @@ function mapGraphqlTransitionsToRelations(
         label,
         toStageId: String(tr.toStageId),
         selection,
+        timing: tr.timing === 'next_edition' ? 'next_edition' : 'in_season',
         ...(carryOver ? { carryOver } : {}),
       };
     }
@@ -71,10 +72,11 @@ function mapGraphqlTransitionsToRelations(
           stageId: extSid,
           tournamentName: tr.toExternalTournamentName ?? undefined,
         },
+        timing: tr.timing === 'next_edition' ? 'next_edition' : 'in_season',
         ...(carryOver ? { carryOver } : {}),
       };
     }
-    return { id, label, selection, ...(carryOver ? { carryOver } : {}) };
+    return { id, label, selection, timing: tr.timing === 'next_edition' ? 'next_edition' : 'in_season', ...(carryOver ? { carryOver } : {}) };
   });
 }
 
@@ -113,6 +115,8 @@ export const TOURNAMENT_FOR_EDIT_QUERY = `
                         toExternalStageId
                         toExternalTournamentName
                         carryOverJson
+                        timing
+                        placementSnapshotJson
                     }
                 }
             }

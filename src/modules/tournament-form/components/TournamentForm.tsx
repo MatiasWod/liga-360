@@ -277,6 +277,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                             toExternalStageId: toId ? null : extSid,
                             toExternalTournamentName: toId ? null : extName,
                             carryOverJson: rel.carryOver ? JSON.stringify(rel.carryOver) : null,
+                            timing: rel.timing ?? 'in_season',
                         });
                     }
                 }

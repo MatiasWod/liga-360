@@ -16,12 +16,12 @@ import {
   formatWinnerSlotLabel,
   expandAssignedIdsForPool,
   buildPoolExclusionSet,
-  eliminationMaxRoundFromMatches,
   inscriptionIdsUsedElsewhere,
-  isEliminationSlotDoubleLeg,
   matchesForRoundLeg,
   parseEliminationBracketConfig,
   parseSameStageWinnerSlotId,
+  physicalInscriptionIdsUsedElsewhere,
+  resolvePoolChoicePhysicalId,
   resolveWinnerSlotLabelFromRef,
   sortEliminationInitMatches,
   type EliminationRoundLegKey,
@@ -30,9 +30,11 @@ import {
   collectIncomingTransitionRows,
   deriveEligibleInscriptionsFromIncomingTransitions,
   buildSectionTitle,
+  enrichEligibleWithRealTeamNames,
+  isBestThirdSlotLabel,
   type EligibleInscription,
 } from './incomingTransitionEligibility';
-import { BracketParticipantPicker, summarizeParticipantOptionLabel } from './BracketParticipantPicker';
+import { BracketParticipantPicker, displayLabelFromPoolEligible } from './BracketParticipantPicker';
 import type { ParticipantPoolSection, PoolEntry } from './bracketParticipantPool';
 import { filterPoolSectionsForRole, normPoolId } from './bracketParticipantPool';
 
@@ -45,6 +47,12 @@ export interface EliminationInitWizardProps {
   onReload: () => Promise<void>;
   setSaving: (loading: boolean) => void;
   setError: (msg: string) => void;
+  readOnly?: boolean;
+}
+
+function isSyntheticOrEmpty(id: string | null | undefined): boolean {
+  const s = String(id ?? '').trim();
+  return !s || s.startsWith('liga360-slot:') || s.startsWith('pos:');
 }
 
 function parseDoubleRound(stage: TournamentStage): boolean {
@@ -62,11 +70,7 @@ export function resolveStageName(tournament: TournamentEntity, stageId?: string 
 }
 
 function headlineFromEligible(el: EligibleInscription): string {
-  const raw = String(el.optionLabel || el.displayName || '').trim();
-  const { headline } = summarizeParticipantOptionLabel(raw);
-  const sid = String(el.inscriptionId || '').trim();
-  if (headline && headline !== sid) return headline;
-  return el.shortLabel ?? el.displayName ?? sid;
+  return displayLabelFromPoolEligible(el);
 }
 
 function resolveParticipantDisplayLabel(
@@ -74,6 +78,7 @@ function resolveParticipantDisplayLabel(
   stage: TournamentStage,
   eligibleFromTables: ReadonlyArray<EligibleInscription>,
   eligibleByPoolId: Map<string, EligibleInscription>,
+  inscriptionById: Map<string, InscriptionItem>,
   inscriptionId: string,
   fallbackDisplayName?: string | null
 ): string | undefined {
@@ -116,6 +121,15 @@ function resolveParticipantDisplayLabel(
     if (league) return headlineFromEligible(league);
   }
 
+  const fromInscription = inscriptionById.get(id)?.display_name;
+  if (fromInscription && (!fb || isBestThirdSlotLabel(fb))) {
+    return String(fromInscription).trim();
+  }
+
+  // Don't use the tournament name as a display label — it indicates stale/wrong stored data.
+  const tournamentName = String(tournament.name || '').trim();
+  if (fb && tournamentName && fb === tournamentName) return id;
+
   return fb || id;
 }
 
@@ -149,9 +163,7 @@ function buildParticipantPoolSections(
     const realId = String(el.resolvedRealId ?? '').trim();
     if (realId && idsAlreadyOnEliminationBracket?.has(realId)) continue;
     seen.add(sid);
-    const raw = String(el.optionLabel || el.displayName || '').trim() || sid;
-    const { headline } = summarizeParticipantOptionLabel(raw);
-    const shown = headline !== sid ? headline : (el.shortLabel ?? raw);
+    const shown = displayLabelFromPoolEligible(el);
     const entry: PoolEntry = { kind: 'assigned', id: sid, displayName: shown };
     const list = groupedEligible.get(el.sectionTitle);
     if (list) list.push(entry);
@@ -219,6 +231,7 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
   onReload,
   setSaving,
   setError,
+  readOnly = false,
 }) => {
   const matchesInput = React.useMemo(
     () => sortEliminationInitMatches(stage.matches || []),
@@ -243,8 +256,12 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
   const currentMatches = currentKey ? matchesForRoundLeg(matchesInput, currentKey) : [];
 
   const eligibleFromTables = React.useMemo(
-    () => deriveEligibleInscriptionsFromIncomingTransitions(tournament, stage.id),
-    [tournament, stage.id]
+    () =>
+      enrichEligibleWithRealTeamNames(
+        deriveEligibleInscriptionsFromIncomingTransitions(tournament, stage.id),
+        inscriptionById
+      ),
+    [tournament, stage.id, inscriptionById]
   );
 
   const eligibleByPoolId = React.useMemo(() => {
@@ -435,6 +452,19 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
 
   async function assignSlot(match: TournamentMatchRow, role: 'home' | 'away', rawId: string) {
     const nextId = rawId === '' ? null : String(rawId);
+    if (nextId) {
+      const physicalElsewhere = physicalInscriptionIdsUsedElsewhere(
+        matchesInput,
+        eligibleFromTables,
+        match.id
+      );
+      const physical = resolvePoolChoicePhysicalId(nextId, eligibleFromTables);
+      if (physical && physicalElsewhere.has(physical)) {
+        const msg = 'Este equipo ya está asignado en otra llave de este cuadro';
+        setError(msg);
+        throw new Error(msg);
+      }
+    }
     const displayName =
       nextId == null
         ? null
@@ -443,6 +473,7 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
             stage,
             eligibleFromTables,
             eligibleByPoolId,
+            inscriptionById,
             nextId
           ) ?? nextId;
 
@@ -459,29 +490,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
         tournamentId,
         displayName: displayName ?? undefined,
       });
-      // En doble vuelta de esta ronda, auto-asignar la pierna 2 con roles invertidos
-      const bracketCfg = parseEliminationBracketConfig(stage.configJson);
-      const maxRound = eliminationMaxRoundFromMatches(matchesInput);
-      const slotDouble = isEliminationSlotDoubleLeg(match.round ?? 1, maxRound, bracketCfg);
-      if (slotDouble) {
-        const leg2 = matchesInput.find(
-          (m) =>
-            (m.round ?? 1) === (match.round ?? 1) &&
-            (m.slotIndex ?? 0) === (match.slotIndex ?? 0) &&
-            (m.leg ?? 1) === 2
-        );
-        if (leg2) {
-          const reversedRole = role === 'home' ? 'away' : 'home';
-          await assignInscriptionToMatchSlot({
-            stageId: stage.id,
-            matchId: leg2.id,
-            slotRole: reversedRole,
-            inscriptionId: nextId,
-            tournamentId,
-            displayName: displayName ?? undefined,
-          });
-        }
-      }
       await onReload();
     } catch (e: any) {
       setError(e?.message || 'No se pudo asignar el slot');
@@ -514,18 +522,28 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
 
   return (
     <div className="space-y-4">
+      {readOnly && (
+        <div className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
+          <span className="font-medium text-text-primary">Vista de solo lectura · </span>
+          {stage.stageStatus === 'finished'
+            ? 'La etapa está finalizada. Las asignaciones no se pueden modificar.'
+            : 'Ya hay partidos jugados en esta etapa. Las asignaciones están bloqueadas.'}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-text-primary">
             {stepLabel} · {currentMatches.length}{' '}
             {currentMatches.length === 1 ? 'partido' : 'partidos'}
           </p>
-          <p className="text-[11px] text-text-muted">
-            Paso {stepIndex + 1} de {totalSteps}
-            {doubleRound
-              ? ' · Asignás local y visitante de la ida; la vuelta se configura automáticamente en reversa.'
-              : ' · Podés ubicar equipo libre, clasificados, o pendientes de llaves ya creadas (ganador de una llave anterior).'}
-          </p>
+          {!readOnly && (
+            <p className="text-[11px] text-text-muted">
+              Paso {stepIndex + 1} de {totalSteps}
+              {doubleRound
+                ? ' · Asignás local y visitante de la ida; la vuelta se configura automáticamente en reversa.'
+                : ' · Podés ubicar equipo libre, clasificados, o pendientes de llaves ya creadas (ganador de una llave anterior).'}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -544,14 +562,16 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
           >
             Siguiente
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={resetBusy || finalizeBusy}
-            onClick={() => void resetBracketSlots()}
-          >
-            {resetBusy ? 'Limpiando…' : 'Limpiar asignaciones'}
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={resetBusy || finalizeBusy}
+              onClick={() => void resetBracketSlots()}
+            >
+              {resetBusy ? 'Limpiando…' : 'Limpiar asignaciones'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -588,13 +608,34 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
             inscriptionIdsUsedElsewhere(matchesInput, m.id),
             eligibleFromTables
           );
+          const physicalBlockedElsewhere = physicalInscriptionIdsUsedElsewhere(
+            matchesInput,
+            eligibleFromTables,
+            m.id
+          );
+          const resolvePhysical = (id: string) =>
+            resolvePoolChoicePhysicalId(id, eligibleFromTables);
 
           const homeBusy = slotBusyKey === `${m.id}-home`;
           const awayBusy = slotBusyKey === `${m.id}-away`;
 
           const resetKey = `${currentKey}-${m.id}`;
-          const homeSections = filterPoolSectionsForRole(poolSections, 'home', m, blockedElsewhere);
-          const awaySections = filterPoolSectionsForRole(poolSections, 'away', m, blockedElsewhere);
+          const homeSections = filterPoolSectionsForRole(
+            poolSections,
+            'home',
+            m,
+            blockedElsewhere,
+            physicalBlockedElsewhere,
+            resolvePhysical
+          );
+          const awaySections = filterPoolSectionsForRole(
+            poolSections,
+            'away',
+            m,
+            blockedElsewhere,
+            physicalBlockedElsewhere,
+            resolvePhysical
+          );
 
           const resolveSlotLabel = (inscriptionId: string | null | undefined, fallback: string | null | undefined): string | undefined =>
             resolveParticipantDisplayLabel(
@@ -602,19 +643,35 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
               stage,
               eligibleFromTables,
               eligibleByPoolId,
+              inscriptionById,
               String(inscriptionId || ''),
               fallback
             );
 
+          const homeIsReal = !isSyntheticOrEmpty(m.homeAssignedInscription?.inscriptionId);
+          const awayIsReal = !isSyntheticOrEmpty(m.awayAssignedInscription?.inscriptionId);
+          const homeIsEmpty = !m.homeAssignedInscription?.inscriptionId;
+          const awayIsEmpty = !m.awayAssignedInscription?.inscriptionId;
+          // Bye confirmado por backend (cuadro impar); no inferir durante la asignación manual.
+          const isConfirmedBye = String(m.matchKind || '').toLowerCase() === 'bye';
+          const isBye =
+            isConfirmedBye &&
+            ((homeIsReal && awayIsEmpty) || (awayIsReal && homeIsEmpty));
+
           return (
             <div
               key={`${m.id}-${currentKey}`}
-              className="relative z-10 overflow-visible rounded-xl border border-border-subtle bg-surface-1 p-3 shadow-sm"
+              className={`relative z-10 overflow-visible rounded-xl border bg-surface-1 p-3 shadow-sm ${isBye ? 'border-blue-200' : 'border-border-subtle'}`}
             >
               <p className="mb-3 text-center font-mono text-sm font-semibold tracking-tight text-success-base">
                 {title}
                 <span className="mt-0.5 block font-sans text-xs font-normal text-text-muted">{subtitle}</span>
-                {doubleRound && (
+                {isBye && (
+                  <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-[10px] font-medium text-blue-700">
+                    fecha libre
+                  </span>
+                )}
+                {doubleRound && !isBye && (
                   <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-[10px] font-normal text-blue-700">
                     ida y vuelta
                   </span>
@@ -624,30 +681,58 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
               <div className="space-y-2">
                 <label className="block text-[11px] font-medium uppercase text-text-muted">
                   Local
-                  <BracketParticipantPicker
-                    ariaLabel={`Local · ${title}`}
-                    resetSignal={`${resetKey}-home`}
-                    sections={homeSections}
-                    disabled={homeBusy || awayBusy}
-                    value={homeVal}
-                    valueLabel={resolveSlotLabel(m.homeAssignedInscription?.inscriptionId, m.homeAssignedInscription?.displayName)}
-                    emptyLabel="Sin asignar"
-                    onChange={(rid) => void assignSlot(m, 'home', rid)}
-                  />
+                  {readOnly ? (
+                    <p className="mt-0.5 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-primary">
+                      {isBye && homeIsEmpty
+                        ? <span className="italic text-text-muted">Libre · avanza automáticamente</span>
+                        : resolveSlotLabel(m.homeAssignedInscription?.inscriptionId, m.homeAssignedInscription?.displayName) || m.homeAssignedInscription?.displayName || <span className="text-text-muted">Sin asignar</span>}
+                    </p>
+                  ) : (
+                    isBye && homeIsEmpty ? (
+                      <p className="mt-0.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm italic text-blue-600">
+                        Libre · avanza automáticamente
+                      </p>
+                    ) : (
+                      <BracketParticipantPicker
+                        ariaLabel={`Local · ${title}`}
+                        resetSignal={`${resetKey}-home`}
+                        sections={homeSections}
+                        disabled={homeBusy || awayBusy}
+                        value={homeVal}
+                        valueLabel={resolveSlotLabel(m.homeAssignedInscription?.inscriptionId, m.homeAssignedInscription?.displayName)}
+                        emptyLabel="Sin asignar"
+                        onChange={(rid) => void assignSlot(m, 'home', rid)}
+                      />
+                    )
+                  )}
                 </label>
 
                 <label className="block text-[11px] font-medium uppercase text-text-muted">
                   Visitante
-                  <BracketParticipantPicker
-                    ariaLabel={`Visitante · ${title}`}
-                    resetSignal={`${resetKey}-away`}
-                    sections={awaySections}
-                    disabled={homeBusy || awayBusy}
-                    value={awayVal}
-                    valueLabel={resolveSlotLabel(m.awayAssignedInscription?.inscriptionId, m.awayAssignedInscription?.displayName)}
-                    emptyLabel="Sin asignar"
-                    onChange={(rid) => void assignSlot(m, 'away', rid)}
-                  />
+                  {readOnly ? (
+                    <p className="mt-0.5 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-primary">
+                      {isBye && awayIsEmpty
+                        ? <span className="italic text-text-muted">Libre · avanza automáticamente</span>
+                        : resolveSlotLabel(m.awayAssignedInscription?.inscriptionId, m.awayAssignedInscription?.displayName) || m.awayAssignedInscription?.displayName || <span className="text-text-muted">Sin asignar</span>}
+                    </p>
+                  ) : (
+                    isBye && awayIsEmpty ? (
+                      <p className="mt-0.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm italic text-blue-600">
+                        Libre · avanza automáticamente
+                      </p>
+                    ) : (
+                      <BracketParticipantPicker
+                        ariaLabel={`Visitante · ${title}`}
+                        resetSignal={`${resetKey}-away`}
+                        sections={awaySections}
+                        disabled={homeBusy || awayBusy}
+                        value={awayVal}
+                        valueLabel={resolveSlotLabel(m.awayAssignedInscription?.inscriptionId, m.awayAssignedInscription?.displayName)}
+                        emptyLabel="Sin asignar"
+                        onChange={(rid) => void assignSlot(m, 'away', rid)}
+                      />
+                    )
+                  )}
                 </label>
               </div>
             </div>
@@ -655,7 +740,7 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
         })}
       </div>
 
-      {showTruncatePanel ? (
+      {!readOnly && showTruncatePanel ? (
         <div className="rounded-lg border border-border-subtle bg-surface-2 p-3">
           <p className="text-[11px] leading-snug text-text-muted">
             <span className="font-medium text-text-primary">Ronda {wizardRoundFromStep}:</span> se quitan{' '}

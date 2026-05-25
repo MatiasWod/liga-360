@@ -9,6 +9,7 @@ export function isPlaceholderParticipantLabel(raw) {
   if (/^P\d+R\d+(?:-L\d+)?$/i.test(s)) return true;
   if (/^E\d+-M\d+/i.test(s)) return true;
   if (/^P\d+G\d+$/i.test(s)) return true;
+  if (/^BN\d+$/i.test(s)) return true;
   if (/^liga360-slot:/i.test(s) || /^pos:/i.test(s)) return true;
   if (/sin asignar/i.test(s)) return true;
   if (/pendiente/i.test(s)) return true;

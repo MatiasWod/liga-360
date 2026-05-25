@@ -71,8 +71,10 @@ type Mutation {
     toExternalTournamentId: String,
     toExternalStageId: String,
     toExternalTournamentName: String,
-    carryOverJson: String
+    carryOverJson: String,
+    timing: String
   ): Transition!
+  saveTransitionPlacementSnapshot(transitionId: ID!, snapshotJson: String!): Transition!
   deleteTransition(transitionId: ID!): Boolean!
   addGroup(stageId: ID!, name: String!, order: Int!): Group!
   syncStageGroups(stageId: ID!, totalGroups: Int!): [Group!]!
@@ -131,12 +133,14 @@ type Mutation {
   createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
   addKey(stageId: ID!, name: String!, order: Int!): Key!
   linkGroupToKey(keyId: ID!, groupId: ID!): Boolean!
+  hydrateEliminationFirstRoundFromRoster(stageId: ID!): Boolean!
   assignInscriptionToStage(
     stageId: ID!
     inscriptionId: ID!
     tournamentId: ID!
     displayName: String!
     force: Boolean
+    seedOrder: Int
   ): Boolean!
   unassignInscriptionFromStage(
     stageId: ID!
@@ -239,6 +243,10 @@ type Transition {
   toExternalStageId: String
   toExternalTournamentName: String
   carryOverJson: String
+  """in_season (default): avance dentro de la misma edición. next_edition: ascenso/descenso para la próxima temporada."""
+  timing: String
+  """JSON con clasificados pendientes de aplicar en una edición futura."""
+  placementSnapshotJson: String
 }
 
 type Group {

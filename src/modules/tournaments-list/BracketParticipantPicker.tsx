@@ -24,6 +24,16 @@ function groupOrdinalFromGnLabel(label: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** Ej. "Posición 2 · Grupo 3" (headline del picker) → 3 */
+function groupOrdinalFromPositionHeadline(label: string): number | null {
+  const m = /^Posici[oó]n\s+\d+\s*·\s*Grupo\s+(\d+)/i.exec(String(label || '').trim());
+  return m ? Number(m[1]) : null;
+}
+
+function groupOrdinalFromPoolLabel(label: string): number | null {
+  return groupOrdinalFromPositionHeadline(label) ?? groupOrdinalFromGnLabel(label);
+}
+
 function sortEntries(entries: PoolEntry[]): PoolEntry[] {
   return [...entries].sort((a, b) =>
     resolvePoolEntryLabel(a).localeCompare(resolvePoolEntryLabel(b), 'es', {
@@ -39,7 +49,7 @@ function clusterGroupEntries(entries: PoolEntry[]): GroupTabSlot {
 
   for (const en of entries) {
     const label = resolvePoolEntryLabel(en);
-    const gn = groupOrdinalFromGnLabel(label);
+    const gn = groupOrdinalFromPoolLabel(label);
     if (gn != null && gn > 0) {
       let list = byGroup.get(gn);
       if (!list) {
@@ -181,6 +191,26 @@ export function summarizeParticipantOptionLabel(optionLabel: string): {
 
   const normSeg = (s: string): string => s.replace(/\s+/g, '');
 
+  // Mejor tercero entre grupos: "1° mejor 3° entre grupos"
+  const idxBestThirdRank = segments.findIndex((s) =>
+    /^\d+°\s+mejor\s+\d+°\s+entre\s+grupos$/i.test(String(s ?? '').trim())
+  );
+  if (idxBestThirdRank >= 0) {
+    return {
+      headline: segments[idxBestThirdRank],
+      subline: sublineSkippingIdx(idxBestThirdRank),
+    };
+  }
+
+  // Cupo BN1 / BN2 (mejor tercero)
+  const idxBnSlot = segments.findIndex((s) => /^BN\d+$/i.test(normSeg(s)));
+  if (idxBnSlot >= 0) {
+    return {
+      headline: `${segments[idxBnSlot]} · mejor tercero`,
+      subline: sublineSkippingIdx(idxBnSlot),
+    };
+  }
+
   // Posición/grupo nuevo: P9G2
   const idxPgn = segments.findIndex((s) => /^P\d+G\d+$/i.test(normSeg(s)));
   if (idxPgn >= 0) {
@@ -216,6 +246,24 @@ export function summarizeParticipantOptionLabel(optionLabel: string): {
       return {
         headline: `Posición ${Number(tm[1])} · ${stageHint ?? 'Liga'}`,
         subline: sublineSkippingIdx(idxTabla),
+      };
+    }
+  }
+
+  // Grupos (finalizeEligibleRowsForQuota): "... · Grupo 1 · posición 2 · Equipo"
+  for (let i = 0; i < segments.length - 1; i += 1) {
+    const gm = /^Grupo\s+(.+)$/i.exec(String(segments[i] ?? '').trim());
+    const pm = /^posici[oó]n\s+(\d+)/i.exec(String(segments[i + 1] ?? '').trim());
+    if (gm && pm) {
+      const skip = new Set([i, i + 1]);
+      const subline =
+        segments
+          .filter((_, j) => !skip.has(j))
+          .join(' · ')
+          .trim() || undefined;
+      return {
+        headline: `Posición ${Number(pm[1])} · Grupo ${gm[1].trim()}`,
+        subline,
       };
     }
   }
@@ -322,6 +370,26 @@ export function summarizeParticipantOptionLabel(optionLabel: string): {
       firstRaw.length <= 52 ? firstRaw : `${firstRaw.slice(0, 49)}…`,
     subline: remainder || undefined,
   };
+}
+
+/** Etiqueta corta para pool/bracket; evita mostrar solo el nombre del torneo como fallback. */
+export function displayLabelFromPoolEligible(el: {
+  inscriptionId?: string;
+  optionLabel?: string;
+  displayName?: string;
+  shortLabel?: string;
+}): string {
+  const sid = String(el.inscriptionId || '').trim();
+  const raw = String(el.optionLabel || el.displayName || '').trim();
+  const { headline } = summarizeParticipantOptionLabel(raw || sid);
+  if (headline && headline !== sid) {
+    const firstSeg = raw.split(/\s*·\s*/)[0]?.trim() ?? '';
+    if (raw.includes(' · ') && headline === firstSeg) {
+      return String(el.shortLabel || el.displayName || sid).trim() || sid;
+    }
+    return headline;
+  }
+  return String(el.shortLabel ?? el.displayName ?? raw ?? sid).trim() || sid;
 }
 
 function buildTriggerSummary(

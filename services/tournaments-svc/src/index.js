@@ -24,6 +24,12 @@ import {
   shouldCreateThirdPlaceMatch,
   THIRD_PLACE_SLOT_INDEX,
 } from './bracketElimination.js';
+import {
+  buildWinnerSlotRefs,
+  defaultBracketAdvanceTarget,
+  findRefBasedAdvanceTargets,
+  resolveAdvanceRoleForLeg,
+} from './eliminationAdvance.js';
 import { httpLogger, logger } from './logger.js';
 import {
   doubleRoundRobinFromSingle,
@@ -31,6 +37,18 @@ import {
   validateSingleRoundRobin,
 } from './roundRobin.js';
 import { computeStandings } from './standings.js';
+import { STAGE_CYCLE_CHECK_CYPHER, STAGE_CYCLE_ERROR } from './stageTransitionCycle.js';
+import {
+  assertEliminationPhysicalNotDuplicateElsewhere,
+} from './eliminationSlotAssignment.js';
+import { syncEliminationDoubleLegPair } from './eliminationLegSync.js';
+import {
+  assertStageAllowsMatchResults,
+  computeEffectiveStageStatus,
+  fetchStageStatusInputs,
+  resolveEffectiveStageStatusForMatch,
+} from './stageStatus.js';
+import { isNextEditionTiming, normalizeTransitionTiming } from './stageTransitionTiming.js';
 import {
   isPhysicalInscriptionId,
   isPlaceholderParticipantLabel,
@@ -268,11 +286,11 @@ function matchFromNeoProps(m) {
   };
 }
 
-/** Misma orden que el resolver Stage.assignedInscriptions (displayName, inscriptionId). */
+/** Misma orden que el resolver Stage.assignedInscriptions (seedOrder, displayName, inscriptionId). */
 async function loadOrderedInscriptionsFromStage(session, stageId) {
   const res = await session.run(
     `MATCH (s:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-     RETURN i ORDER BY i.displayName, i.inscriptionId`,
+     RETURN i ORDER BY coalesce(i.seedOrder, 999999), i.displayName, i.inscriptionId`,
     { stageId }
   );
   return res.records.map((r) => {
@@ -420,6 +438,7 @@ async function hydrateEliminationFirstRoundFromBracket(session, stageId) {
     const awayIdx = swap ? idxA : idxB;
     const home = homeIdx >= 0 && homeIdx < n ? teams[homeIdx] : null;
     const away = awayIdx >= 0 && awayIdx < n ? teams[awayIdx] : null;
+    const matchKind = (home && !away) || (!home && away) ? 'bye' : 'bracket';
     await session.run(
       `MATCH (m:Match {id:$id})
        SET m.homeInscriptionId = $hid,
@@ -427,7 +446,8 @@ async function hydrateEliminationFirstRoundFromBracket(session, stageId) {
            m.homeTournamentId = $htid,
            m.awayInscriptionId = $aid,
            m.awayDisplayName = $adn,
-           m.awayTournamentId = $atid`,
+           m.awayTournamentId = $atid,
+           m.matchKind = $matchKind`,
       {
         id,
         hid: home?.inscriptionId ?? null,
@@ -436,6 +456,7 @@ async function hydrateEliminationFirstRoundFromBracket(session, stageId) {
         aid: away?.inscriptionId ?? null,
         adn: away?.displayName ?? null,
         atid: away?.tournamentId ?? null,
+        matchKind,
       }
     );
   }
@@ -840,7 +861,8 @@ async function resolvePositionRef(driver, posRef) {
         const gid = gr.get('gid');
         const inscR = await session.run(
           `MATCH (g:Group {id:$gid})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-           RETURN i.inscriptionId AS iid, i.displayName AS dn`,
+           RETURN i.inscriptionId AS iid, i.displayName AS dn
+           ORDER BY i.displayName, i.inscriptionId`,
           { gid }
         );
         const inscriptions = inscR.records.map((r) => ({ inscriptionId: r.get('iid'), displayName: r.get('dn') }));
@@ -850,7 +872,7 @@ async function resolvePositionRef(driver, posRef) {
            RETURN m.homeInscriptionId AS h, m.awayInscriptionId AS a,
                   m.homeDisplayName AS hd, m.awayDisplayName AS ad,
                   m.homeScore AS hs, m.awayScore AS as_,
-                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+                  coalesce(m.status, m.matchStatus, 'scheduled') AS matchStatus`,
           { gid }
         );
         const matches = mR.records.map((r) => ({
@@ -884,7 +906,8 @@ async function resolvePositionRef(driver, posRef) {
 
       const inscR = await session.run(
         `MATCH (g:Group {id:$gid})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-         RETURN i.inscriptionId AS iid, i.displayName AS dn`,
+         RETURN i.inscriptionId AS iid, i.displayName AS dn
+         ORDER BY i.displayName, i.inscriptionId`,
         { gid: groupId }
       );
       const inscriptions = inscR.records.map((r) => ({
@@ -897,7 +920,7 @@ async function resolvePositionRef(driver, posRef) {
          RETURN m.homeInscriptionId AS h, m.awayInscriptionId AS a,
                 m.homeDisplayName AS hd, m.awayDisplayName AS ad,
                 m.homeScore AS hs, m.awayScore AS as_,
-                coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+                coalesce(m.status, m.matchStatus, 'scheduled') AS matchStatus`,
         { gid: groupId }
       );
       const matches = mR.records.map((r) => ({
@@ -918,7 +941,8 @@ async function resolvePositionRef(driver, posRef) {
 
       const inscR = await session.run(
         `MATCH (s:Stage {id:$sid})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-         RETURN i.inscriptionId AS iid, i.displayName AS dn`,
+         RETURN i.inscriptionId AS iid, i.displayName AS dn
+         ORDER BY i.displayName, i.inscriptionId`,
         { sid: stageId }
       );
       const inscriptions = inscR.records.map((r) => ({
@@ -931,7 +955,7 @@ async function resolvePositionRef(driver, posRef) {
          RETURN m.homeInscriptionId AS h, m.awayInscriptionId AS a,
                 m.homeDisplayName AS hd, m.awayDisplayName AS ad,
                 m.homeScore AS hs, m.awayScore AS as_,
-                coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+                coalesce(m.status, m.matchStatus, 'scheduled') AS matchStatus`,
         { sid: stageId }
       );
       const matches = mR.records.map((r) => ({
@@ -1003,11 +1027,32 @@ async function pruneOrphanAdvancesToBetweenStages(session, fromStageId, toStageI
      WHERE a.id IN $ids AND b.id IN $ids
      AND NOT EXISTS {
        MATCH (a)-[:EMITS|HAS_TRANSITION]->(tr:Transition)
-       WHERE (tr)-[:TO]->(b) OR (tr)-[:TO_STAGE]->(b)
+       WHERE coalesce(tr.timing, 'in_season') <> 'next_edition'
+         AND ((tr)-[:TO]->(b) OR (tr)-[:TO_STAGE]->(b))
      }
      DELETE adv`,
     { ids: [fromStageId, toStageId] }
   );
+}
+
+function mapTransitionGraphql(t, dst) {
+  return {
+    id: t.id,
+    type: t.type,
+    label: t.label ?? null,
+    toStageId: dst?.id ?? null,
+    selectionKind: t.selectionKind ?? null,
+    topN: t.topN != null ? Number(t.topN) : null,
+    rangeFrom: t.rangeFrom != null ? Number(t.rangeFrom) : null,
+    rangeTo: t.rangeTo != null ? Number(t.rangeTo) : null,
+    bottomN: t.bottomN != null ? Number(t.bottomN) : null,
+    toExternalTournamentId: t.toExternalTournamentId ?? null,
+    toExternalStageId: t.toExternalStageId ?? null,
+    toExternalTournamentName: t.toExternalTournamentName ?? null,
+    carryOverJson: t.carryOverJson ?? null,
+    timing: t.timing ?? 'in_season',
+    placementSnapshotJson: t.placementSnapshotJson ?? null,
+  };
 }
 
 async function deleteMatchesForStage(session, stageId) {
@@ -1375,15 +1420,11 @@ const resolvers = {
         await pruneOrphanAdvancesToBetweenStages(session, fromStageId, toStageId);
         const cycleCheck = await session.run(
           `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
-           OPTIONAL MATCH p=(b)-[:ADVANCES_TO*1..]->(a)
-           RETURN p IS NOT NULL AS hasCycle`,
+           ${STAGE_CYCLE_CHECK_CYPHER}`,
           { from: fromStageId, to: toStageId }
         );
         if (cycleCheck.records[0]?.get('hasCycle')) {
-          throw new Error(
-            'BAD_REQUEST: transición inválida: ya hay un camino de avance desde la etapa destino hacia la etapa origen ' +
-              '(ciclo en el grafo). Si borraste transiciones antes, recargá la página; si el flujo es válido, revisá otras relaciones entre etapas.'
-          );
+          throw new Error(STAGE_CYCLE_ERROR);
         }
         await session.run(
           `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
@@ -1412,23 +1453,24 @@ const resolvers = {
       toExternalStageId,
       toExternalTournamentName,
       carryOverJson,
+      timing: timingArg,
     }, { driver }) => {
       const id = genId('tr');
+      const timing = normalizeTransitionTiming(timingArg);
+      const nextEdition = isNextEditionTiming(timing);
       const session = driver.session();
       try {
         if (toStageId) {
-          await pruneOrphanAdvancesToBetweenStages(session, fromStageId, toStageId);
-          const cycleCheck = await session.run(
-            `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
-             OPTIONAL MATCH p=(b)-[:ADVANCES_TO*1..]->(a)
-             RETURN p IS NOT NULL AS hasCycle`,
-            { from: fromStageId, to: toStageId }
-          );
-          if (cycleCheck.records[0]?.get('hasCycle')) {
-            throw new Error(
-              'BAD_REQUEST: transición inválida: ya hay un camino de avance desde la etapa destino hacia la etapa origen ' +
-                '(ciclo en el grafo). Si borraste transiciones antes, recargá la página; si el flujo es válido, revisá otras relaciones entre etapas.'
+          if (!nextEdition) {
+            await pruneOrphanAdvancesToBetweenStages(session, fromStageId, toStageId);
+            const cycleCheck = await session.run(
+              `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
+               ${STAGE_CYCLE_CHECK_CYPHER}`,
+              { from: fromStageId, to: toStageId }
             );
+            if (cycleCheck.records[0]?.get('hasCycle')) {
+              throw new Error(STAGE_CYCLE_ERROR);
+            }
           }
           await session.run(
             `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
@@ -1441,11 +1483,11 @@ const resolvers = {
                rangeFrom:$rangeFrom,
                rangeTo:$rangeTo,
                bottomN:$bottomN,
-               carryOverJson:$carryOverJson
+               carryOverJson:$carryOverJson,
+               timing:$timing
              })-[:TO]->(b)
              CREATE (a)-[:HAS_TRANSITION]->(tr)
              CREATE (tr)-[:TO_STAGE]->(b)
-             CREATE (a)-[:ADVANCES_TO]->(b)
              RETURN tr`,
             {
               from: fromStageId,
@@ -1458,8 +1500,16 @@ const resolvers = {
               rangeTo: rangeTo ?? null,
               bottomN: bottomN ?? null,
               carryOverJson: carryOverJson ?? null,
+              timing,
             }
           );
+          if (!nextEdition) {
+            await session.run(
+              `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
+               MERGE (a)-[:ADVANCES_TO]->(b)`,
+              { from: fromStageId, to: toStageId }
+            );
+          }
         } else {
           await session.run(
             `MATCH (a:Stage {id:$from})
@@ -1475,7 +1525,8 @@ const resolvers = {
                toExternalTournamentId:$toExternalTournamentId,
                toExternalStageId:$toExternalStageId,
                toExternalTournamentName:$toExternalTournamentName,
-               carryOverJson:$carryOverJson
+               carryOverJson:$carryOverJson,
+               timing:$timing
              })
              CREATE (a)-[:HAS_TRANSITION]->(tr)
              RETURN tr`,
@@ -1492,6 +1543,7 @@ const resolvers = {
               toExternalStageId: toExternalStageId ?? null,
               toExternalTournamentName: toExternalTournamentName ?? null,
               carryOverJson: carryOverJson ?? null,
+              timing,
             }
           );
         }
@@ -1508,7 +1560,36 @@ const resolvers = {
           toExternalStageId: toExternalStageId ?? null,
           toExternalTournamentName: toExternalTournamentName ?? null,
           carryOverJson: carryOverJson ?? null,
+          timing,
+          placementSnapshotJson: null,
         };
+      } finally {
+        await session.close();
+      }
+    },
+    saveTransitionPlacementSnapshot: async (_, { transitionId, snapshotJson }, context) => {
+      requireOrganizer(context);
+      const raw = String(snapshotJson ?? '').trim();
+      if (!raw) throw new Error('BAD_REQUEST: snapshotJson requerido');
+      try {
+        JSON.parse(raw);
+      } catch {
+        throw new Error('BAD_REQUEST: snapshotJson debe ser JSON válido');
+      }
+      const session = context.driver.session();
+      try {
+        const res = await session.run(
+          `MATCH (tr:Transition {id:$id})
+           SET tr.placementSnapshotJson = $snapshot
+           WITH tr
+           OPTIONAL MATCH (tr)-[:TO_STAGE]->(dst:Stage)
+           RETURN tr, dst`,
+          { id: transitionId, snapshot: raw }
+        );
+        if (res.records.length === 0) throw new Error('NOT_FOUND: transición no existe');
+        const t = res.records[0].get('tr').properties;
+        const dst = res.records[0].get('dst')?.properties || null;
+        return mapTransitionGraphql(t, dst);
       } finally {
         await session.close();
       }
@@ -1691,6 +1772,11 @@ const resolvers = {
           { stageId, groupId }
         );
         if (groupR.records.length === 0) throw new Error('BAD_REQUEST: grupo no pertenece a la etapa');
+
+        const dn = String(displayName || '').trim();
+        if (!dn || isPlaceholderParticipantLabel(dn)) {
+          throw new Error('BAD_REQUEST: displayName debe ser el nombre real del equipo');
+        }
 
         const { teamsPerGroup } = deriveGroupsConfig(stageProps);
         if (teamsPerGroup > 0) {
@@ -2229,6 +2315,9 @@ const resolvers = {
              SET ${clearField}`,
             { matchId }
           );
+          if (stageFmt === 'elimination') {
+            await syncEliminationDoubleLegPair(session, stageId, stageProps, matchId);
+          }
           return true;
         }
 
@@ -2237,15 +2326,27 @@ const resolvers = {
         const currentSlot = Number(currentMatch.slotIndex ?? 0);
         const duplicateR = await session.run(
           `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-           WHERE (m.homeInscriptionId = $iid OR m.awayInscriptionId = $iid)
+           WHERE (toString(m.homeInscriptionId) = $iid OR toString(m.awayInscriptionId) = $iid)
              AND m.id <> $matchId
-             AND NOT (coalesce(toInteger(m.round), 1) = $round AND coalesce(toInteger(m.slotIndex), 0) = $slot)
+             AND NOT (toInteger(coalesce(m.round, 1)) = $round AND toInteger(coalesce(m.slotIndex, 0)) = $slot)
            RETURN m
            LIMIT 1`,
           { stageId, iid: iidNorm, matchId, round: currentRound, slot: currentSlot }
         );
         const alreadyInAnother = duplicateR.records.length > 0;
         if (alreadyInAnother) throw new Error('BAD_REQUEST: la inscripción ya está ubicada en otra llave');
+        if (stageFmt === 'elimination' && iidNorm) {
+          await assertEliminationPhysicalNotDuplicateElsewhere({
+            session,
+            driver: context.driver,
+            stageId,
+            matchId,
+            round: currentRound,
+            slotIndex: currentSlot,
+            candidateInscriptionId: iidNorm,
+            resolvePositionRefFn: resolvePositionRef,
+          });
+        }
         if (
           (role === 'home' && String(currentMatch.awayInscriptionId || '') === iidNorm) ||
           (role === 'away' && String(currentMatch.homeInscriptionId || '') === iidNorm)
@@ -2257,7 +2358,7 @@ const resolvers = {
           const stageCount = await countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId);
           const idExistsR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-             WHERE m.homeInscriptionId = $iid OR m.awayInscriptionId = $iid
+             WHERE toString(m.homeInscriptionId) = $iid OR toString(m.awayInscriptionId) = $iid
              RETURN m LIMIT 1`,
             { stageId, iid: iidNorm }
           );
@@ -2276,14 +2377,29 @@ const resolvers = {
            SET ${setField}`,
           { matchId, iid: iidNorm, displayName: displayName || null, tid: tournamentId }
         );
+        if (stageFmt === 'elimination' && inscriptionId) {
+          await session.run(
+            `MATCH (m:Match {id:$matchId})
+             WITH m
+             WHERE m.homeInscriptionId IS NOT NULL AND trim(toString(m.homeInscriptionId)) <> ''
+               AND m.awayInscriptionId IS NOT NULL AND trim(toString(m.awayInscriptionId)) <> ''
+             SET m.matchKind = 'bracket'`,
+            { matchId }
+          );
+        }
         if (isPhysicalInscriptionId(iidNorm)) {
+          const dn = String(displayName || '').trim();
+          const safeDn = dn && !isPlaceholderParticipantLabel(dn) ? dn : null;
           await session.run(
             `MATCH (s:Stage {id:$stageId})
              MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
-             SET i.displayName = $displayName
+             SET i.displayName = coalesce($displayName, i.displayName)
              MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
-            { stageId, tid: tournamentId, iid: iidNorm, displayName: displayName || iidNorm }
+            { stageId, tid: tournamentId, iid: iidNorm, displayName: safeDn }
           );
+        }
+        if (stageFmt === 'elimination') {
+          await syncEliminationDoubleLegPair(session, stageId, stageProps, matchId);
         }
         return true;
       } finally {
@@ -2423,7 +2539,26 @@ const resolvers = {
         await session.close();
       }
     },
-    assignInscriptionToStage: async (_, { stageId, inscriptionId, tournamentId, displayName, force }, context) => {
+    hydrateEliminationFirstRoundFromRoster: async (_, { stageId }, context) => {
+      requireOrganizer(context);
+      const session = context.driver.session();
+      try {
+        const stageR = await session.run(
+          `MATCH (s:Stage {id:$stageId}) RETURN s LIMIT 1`,
+          { stageId }
+        );
+        if (stageR.records.length === 0) throw new Error('NOT_FOUND: stage no existe');
+        const stageProps = stageR.records[0].get('s').properties;
+        if (String(stageProps?.format || '').toLowerCase() !== 'elimination') {
+          throw new Error('BAD_REQUEST: la etapa no es de eliminación');
+        }
+        await hydrateEliminationFirstRoundFromBracket(session, stageId);
+        return true;
+      } finally {
+        await session.close();
+      }
+    },
+    assignInscriptionToStage: async (_, { stageId, inscriptionId, tournamentId, displayName, force, seedOrder }, context) => {
       requireOrganizer(context);
       const iid = normalizeInscriptionId(inscriptionId);
       const session = context.driver.session();
@@ -2450,7 +2585,7 @@ const resolvers = {
         }
         const stageProps = stageCheck.records[0].get('s').properties;
         const stageCapacity = deriveStageCapacity(stageProps);
-        if (stageCapacity && stageCapacity > 0) {
+        if (!force && stageCapacity && stageCapacity > 0) {
           const totalCount = await countPhysicalAssignedInscriptionsOnStage(session, stageId, tournamentId);
           const existsR = await session.run(
             `MATCH (:Stage {id:$stageId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
@@ -2462,12 +2597,17 @@ const resolvers = {
           }
         }
         if (isPhysicalInscriptionId(iid)) {
+          const dn = String(displayName || '').trim();
+          const safeDn = dn && !isPlaceholderParticipantLabel(dn) ? dn : null;
+          const seed =
+            seedOrder != null && Number.isFinite(Number(seedOrder)) ? Math.trunc(Number(seedOrder)) : null;
           await session.run(
             `MATCH (s:Stage {id:$stageId})
              MERGE (i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
-             SET i.displayName = $displayName
+             SET i.displayName = coalesce($displayName, i.displayName),
+                 i.seedOrder = coalesce($seedOrder, i.seedOrder)
              MERGE (s)-[:HAS_ASSIGNED_INSCRIPTION]->(i)`,
-            { stageId, tid: tournamentId, iid, displayName }
+            { stageId, tid: tournamentId, iid, displayName: safeDn, seedOrder: seed }
           );
         }
         return true;
@@ -2682,13 +2822,12 @@ const resolvers = {
         );
         if (matchR.records.length === 0) throw new Error('NOT_FOUND: match no existe');
         const stageR = await session.run(
-          `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$matchId}) RETURN s.stageStatus AS stageStatus LIMIT 1`,
+          `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$matchId}) RETURN s.id AS stageId LIMIT 1`,
           { matchId }
         );
         if (stageR.records.length > 0) {
-          const stageStatus = stageR.records[0].get('stageStatus');
-          if (stageStatus === 'not_started') throw new Error('STAGE_NOT_STARTED: la etapa aún no ha comenzado');
-          if (stageStatus === 'finished') throw new Error('STAGE_FINISHED: la etapa ya está finalizada');
+          const effectiveStageStatus = await resolveEffectiveStageStatusForMatch(session, matchId);
+          assertStageAllowsMatchResults(effectiveStageStatus);
         }
         const m = matchR.records[0].get('m').properties;
         const homeScoreNum = homeScore != null ? Number(homeScore) : null;
@@ -2709,6 +2848,7 @@ const resolvers = {
            SET m.homeScore = coalesce($homeScore, m.homeScore),
                m.awayScore = coalesce($awayScore, m.awayScore),
                m.status = $status,
+               m.matchStatus = $status,
                m.updatedAt = $updatedAt`,
           { matchId, homeScore: homeScoreNum, awayScore: awayScoreNum, status: matchStatus, updatedAt: new Date().toISOString() }
         );
@@ -2781,24 +2921,14 @@ const resolvers = {
                   const winnerDisplay = persistable?.displayName ?? winner.displayName;
                   const winnerTournamentId = persistable?.tournamentId ?? null;
 
-                  const nextRound = round + 1;
-                  const nextSlotIndex = Math.ceil(slotIndex / 2);
-                  const isHomeInLeg1 = slotIndex % 2 === 1;
+                  const legMatchIds = resolvedLegs.map((l) => l.id).filter(Boolean);
+                  const winnerRefs = buildWinnerSlotRefs(String(stageId), legMatchIds);
+                  const refTargets = await findRefBasedAdvanceTargets(session, stageId, winnerRefs);
 
-                  const nextMatchesR = await session.run(
-                    `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
-                     WHERE m.round = $nextRound AND m.slotIndex = $nextSlotIndex
-                       AND coalesce(m.matchKind, 'bracket') <> 'third_place'
-                     RETURN m.id AS id, COALESCE(m.leg, 1) AS leg`,
-                    { stageId, nextRound, nextSlotIndex }
-                  );
-                  for (const nRec of nextMatchesR.records) {
-                    const nextMatchId = nRec.get('id');
-                    const nextLeg = Number(nRec.get('leg') || 1);
-                    const putAsHome = nextLeg === 2 ? !isHomeInLeg1 : isHomeInLeg1;
-                    const inscField = putAsHome ? 'homeInscriptionId' : 'awayInscriptionId';
-                    const displayField = putAsHome ? 'homeDisplayName' : 'awayDisplayName';
-                    const tidField = putAsHome ? 'homeTournamentId' : 'awayTournamentId';
+                  async function persistWinnerToNextMatch(nextMatchId, role) {
+                    const inscField = role === 'home' ? 'homeInscriptionId' : 'awayInscriptionId';
+                    const displayField = role === 'home' ? 'homeDisplayName' : 'awayDisplayName';
+                    const tidField = role === 'home' ? 'homeTournamentId' : 'awayTournamentId';
                     await session.run(
                       `MATCH (m:Match {id:$nextMatchId})
                        SET m.${inscField} = $iid, m.${displayField} = $dn, m.${tidField} = $tid`,
@@ -2809,6 +2939,32 @@ const resolvers = {
                         tid: winnerTournamentId,
                       }
                     );
+                  }
+
+                  if (refTargets.length > 0) {
+                    for (const target of refTargets) {
+                      const role = resolveAdvanceRoleForLeg(target.side, target.leg);
+                      await persistWinnerToNextMatch(target.nextMatchId, role);
+                    }
+                  } else {
+                    const { nextRound, nextSlotIndex, isHomeInLeg1 } = defaultBracketAdvanceTarget(
+                      round,
+                      slotIndex
+                    );
+
+                    const nextMatchesR = await session.run(
+                      `MATCH (:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
+                       WHERE m.round = $nextRound AND m.slotIndex = $nextSlotIndex
+                         AND coalesce(m.matchKind, 'bracket') <> 'third_place'
+                       RETURN m.id AS id, COALESCE(m.leg, 1) AS leg`,
+                      { stageId, nextRound, nextSlotIndex }
+                    );
+                    for (const nRec of nextMatchesR.records) {
+                      const nextMatchId = nRec.get('id');
+                      const nextLeg = Number(nRec.get('leg') || 1);
+                      const putAsHome = nextLeg === 2 ? !isHomeInLeg1 : isHomeInLeg1;
+                      await persistWinnerToNextMatch(nextMatchId, putAsHome ? 'home' : 'away');
+                    }
                   }
                 }
               }
@@ -2930,24 +3086,12 @@ const resolvers = {
       if (parent.stageStatus != null) return parent.stageStatus;
       const session = driver.session();
       try {
-        const res = await session.run(
-          `MATCH (s:Stage {id:$id})
-           OPTIONAL MATCH (other:Stage)-[:EMITS]->(tr:Transition)
-           WHERE (tr)-[:TO]->(s) OR (tr)-[:TO_STAGE]->(s)
-           RETURN s.stageStatus AS persisted,
-                  count(distinct other) AS sourceCount,
-                  sum(CASE WHEN other.stageStatus = 'finished' THEN 1 ELSE 0 END) AS finishedCount`,
-          { id: parent.id }
-        );
-        if (res.records.length === 0) return 'active';
-        const persisted = res.records[0].get('persisted');
-        if (persisted != null) return persisted;
-        const sourceCount = Number(res.records[0].get('sourceCount') || 0);
-        if (sourceCount === 0) return 'active'; // etapa inicial, sin fuentes
-        const finishedCount = Number(res.records[0].get('finishedCount') || 0);
-        if (finishedCount === 0) return 'active'; // datos viejos sin ciclo de vida, retrocompat
-        if (finishedCount === sourceCount) return 'active'; // todas las fuentes finalizadas
-        return 'not_started'; // lifecycle activo, pero quedan fuentes sin finalizar
+        const inputs = await fetchStageStatusInputs(session, parent.id);
+        if (inputs.sourceCount === 0 && inputs.persisted == null) {
+          // Sin registro en Neo4j (p. ej. tests unitarios con parent parcial).
+          return 'active';
+        }
+        return computeEffectiveStageStatus(inputs);
       } finally {
         await session.close();
       }
@@ -2972,7 +3116,7 @@ const resolvers = {
       try {
         const res = await session.run(
           `MATCH (s:Stage {id:$id})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-           RETURN i ORDER BY i.displayName, i.inscriptionId`,
+           RETURN i ORDER BY coalesce(i.seedOrder, 999999), i.displayName, i.inscriptionId`,
           { id: parent.id }
         );
         return res.records.map((r) => {
@@ -3010,7 +3154,8 @@ const resolvers = {
                   m.awayDisplayName AS awayDisplayName,
                   m.homeScore AS homeScore,
                   m.awayScore AS awayScore,
-                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+                  m.status AS status,
+                  coalesce(m.status, m.matchStatus, 'scheduled') AS matchStatus`,
           { id: parent.id }
         );
         const matches = matchesResult.records.map((record) => ({
@@ -3020,6 +3165,7 @@ const resolvers = {
           awayDisplayName: record.get('awayDisplayName'),
           homeScore: record.get('homeScore'),
           awayScore: record.get('awayScore'),
+          status: record.get('status'),
           matchStatus: record.get('matchStatus'),
         }));
 
@@ -3041,21 +3187,7 @@ const resolvers = {
         return res.records.map((r) => {
           const t = r.get('tr').properties;
           const dst = r.get('dst')?.properties || null;
-          return {
-            id: t.id,
-            type: t.type,
-            label: t.label ?? null,
-            toStageId: dst?.id ?? null,
-            selectionKind: t.selectionKind ?? null,
-            topN: t.topN != null ? Number(t.topN) : null,
-            rangeFrom: t.rangeFrom != null ? Number(t.rangeFrom) : null,
-            rangeTo: t.rangeTo != null ? Number(t.rangeTo) : null,
-            bottomN: t.bottomN != null ? Number(t.bottomN) : null,
-            toExternalTournamentId: t.toExternalTournamentId ?? null,
-            toExternalStageId: t.toExternalStageId ?? null,
-            toExternalTournamentName: t.toExternalTournamentName ?? null,
-            carryOverJson: t.carryOverJson ?? null,
-          };
+          return mapTransitionGraphql(t, dst);
         });
       } finally {
         await session.close();
@@ -3199,7 +3331,8 @@ const resolvers = {
                   m.awayDisplayName AS awayDisplayName,
                   m.homeScore AS homeScore,
                   m.awayScore AS awayScore,
-                  coalesce(m.matchStatus, m.status, 'scheduled') AS matchStatus`,
+                  m.status AS status,
+                  coalesce(m.status, m.matchStatus, 'scheduled') AS matchStatus`,
           { id: parent.id }
         );
         const matches = matchesResult.records.map((record) => ({
@@ -3209,6 +3342,7 @@ const resolvers = {
           awayDisplayName: record.get('awayDisplayName'),
           homeScore: record.get('homeScore'),
           awayScore: record.get('awayScore'),
+          status: record.get('status'),
           matchStatus: record.get('matchStatus'),
         }));
 

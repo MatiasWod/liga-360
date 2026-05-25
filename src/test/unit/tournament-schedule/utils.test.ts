@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LeagueScheduleData } from '../../../components/tournament-schedule/types';
-import { getDefaultRoundId, reorderArray } from '../../../components/tournament-schedule/utils';
+import { getDefaultRoundId, resolveSelectedRoundId, reorderArray } from '../../../components/tournament-schedule/utils';
 
 describe('reorderArray', () => {
   it('moves item from index 0 to 2', () => {
@@ -17,5 +17,22 @@ describe('getDefaultRoundId', () => {
       ],
     };
     expect(getDefaultRoundId('league', data)).toBe('r1');
+  });
+});
+
+describe('resolveSelectedRoundId', () => {
+  const data: LeagueScheduleData = {
+    rounds: [
+      { id: 'lr-1|1', label: 'Fecha 1', matches: [] },
+      { id: 'lr-2|1', label: 'Fecha 2', matches: [] },
+    ],
+  };
+
+  it('conserva la fecha seleccionada tras recargar datos', () => {
+    expect(resolveSelectedRoundId('league', data, 'lr-2|1')).toBe('lr-2|1');
+  });
+
+  it('vuelve al default si la fecha previa ya no existe', () => {
+    expect(resolveSelectedRoundId('league', data, 'lr-9|1')).toBe('lr-1|1');
   });
 });

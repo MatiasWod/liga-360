@@ -138,3 +138,21 @@ test('Match incluye matchKind para tercer puesto y variantes de llave', async ()
   const matchFields = new Set(matchType.fields?.map((field) => field.name.value) || []);
   assert.equal(matchFields.has('matchKind'), true);
 });
+
+test('Transition incluye timing y placementSnapshotJson; Mutation saveTransitionPlacementSnapshot', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+  const transitionType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Transition'
+  );
+  assert.ok(transitionType, 'Transition type no encontrado');
+  const transitionFields = new Set(transitionType.fields?.map((field) => field.name.value) || []);
+  assert.equal(transitionFields.has('timing'), true);
+  assert.equal(transitionFields.has('placementSnapshotJson'), true);
+
+  const mutationType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Mutation'
+  );
+  const mutationFields = new Set(mutationType.fields?.map((field) => field.name.value) || []);
+  assert.equal(mutationFields.has('saveTransitionPlacementSnapshot'), true);
+});

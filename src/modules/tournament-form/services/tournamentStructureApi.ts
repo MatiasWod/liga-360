@@ -130,7 +130,63 @@ export async function createTransition(payload: {
   toExternalStageId: string | null;
   toExternalTournamentName: string | null;
   carryOverJson: string | null;
+  timing?: string | null;
 }) {
+  const { timing, ...base } = payload;
+  const transitionVars = {
+    from: base.from,
+    to: base.to,
+    label: base.label,
+    selectionKind: base.selectionKind,
+    topN: base.topN,
+    rangeFrom: base.rangeFrom,
+    rangeTo: base.rangeTo,
+    bottomN: base.bottomN,
+    toExternalTournamentId: base.toExternalTournamentId,
+    toExternalStageId: base.toExternalStageId,
+    toExternalTournamentName: base.toExternalTournamentName,
+    carryOverJson: base.carryOverJson,
+  };
+
+  // timing solo en next_edition: backends sin el arg usan in_season por defecto (Mundial, copas, etc.).
+  if (timing === 'next_edition') {
+    await gql(
+      `mutation AddTransition(
+          $from: ID!,
+          $to: ID,
+          $label: String!,
+          $selectionKind: String!,
+          $topN: Int,
+          $rangeFrom: Int,
+          $rangeTo: Int,
+          $bottomN: Int,
+          $toExternalTournamentId: String,
+          $toExternalStageId: String,
+          $toExternalTournamentName: String,
+          $carryOverJson: String,
+          $timing: String!
+      ) {
+          addTransition(
+              fromStageId: $from,
+              toStageId: $to,
+              label: $label,
+              selectionKind: $selectionKind,
+              topN: $topN,
+              rangeFrom: $rangeFrom,
+              rangeTo: $rangeTo,
+              bottomN: $bottomN,
+              toExternalTournamentId: $toExternalTournamentId,
+              toExternalStageId: $toExternalStageId,
+              toExternalTournamentName: $toExternalTournamentName,
+              carryOverJson: $carryOverJson,
+              timing: $timing
+          ) { id }
+      }`,
+      { ...transitionVars, timing: 'next_edition' }
+    );
+    return;
+  }
+
   await gql(
     `mutation AddTransition(
         $from: ID!,
@@ -161,7 +217,7 @@ export async function createTransition(payload: {
             carryOverJson: $carryOverJson
         ) { id }
     }`,
-    payload
+    transitionVars
   );
 }
 

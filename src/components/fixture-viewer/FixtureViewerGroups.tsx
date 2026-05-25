@@ -17,9 +17,9 @@ export const FixtureViewerGroups: React.FC<FixtureViewerGroupsProps> = ({
 }) => {
   const isDark = theme === 'dark';
   return (
-    <div className={`space-y-10 ${className}`}>
+    <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${className}`}>
       {groups.map((g) => (
-        <section key={g.id}>
+        <section key={g.id} className="min-w-0">
           <h2
             className={`mb-4 border-b pb-2 text-base font-bold ${
               isDark ? 'border-white/15 text-white' : 'border-slate-200 text-brand-dark'

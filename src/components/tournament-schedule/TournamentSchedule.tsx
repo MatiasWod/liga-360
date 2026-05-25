@@ -10,7 +10,7 @@ import { BracketView } from './BracketView';
 import { GroupSection } from './GroupSection';
 import { MatchRoundList } from './MatchRoundList';
 import { RoundSelector } from './RoundSelector';
-import { getDefaultRoundId } from './utils';
+import { getDefaultRoundId, resolveSelectedRoundId } from './utils';
 import type { GoalRecord, MatchQuickAction } from './MatchCard';
 
 export const TournamentSchedule: React.FC<
@@ -33,8 +33,13 @@ export const TournamentSchedule: React.FC<
   );
 
   React.useEffect(() => {
-    const id = getDefaultRoundId(type, data as LeagueScheduleData | GroupsScheduleData | KnockoutScheduleData);
-    if (id) setSelectedRoundId(id);
+    setSelectedRoundId((prev) =>
+      resolveSelectedRoundId(
+        type,
+        data as LeagueScheduleData | GroupsScheduleData | KnockoutScheduleData,
+        prev
+      )
+    );
   }, [data, type]);
 
   const roundTabs = React.useMemo(() => {
@@ -130,7 +135,7 @@ function GroupsRounds({
   goalsByMatchId?: Record<string, GoalRecord[]>;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {data.groups.map((g) => {
         const round = g.rounds.find((r) => r.id === roundId);
         const matches = round?.matches ?? [];

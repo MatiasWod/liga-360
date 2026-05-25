@@ -58,10 +58,13 @@ function mapGraphqlStatusToMatchStatus(raw: string | null | undefined): MatchSta
 function teamFromSlot(
   slot: { inscriptionId: string; displayName: string } | null | undefined,
   side: 'home' | 'away',
-  matchId: string
+  matchId: string,
+  isBye = false
 ): TeamRef {
   if (!slot?.inscriptionId) {
-    return { id: `__empty-${side}-${matchId}`, name: '—' };
+    return isBye
+      ? { id: `__bye-${side}-${matchId}`, name: 'Libre' }
+      : { id: `__empty-${side}-${matchId}`, name: '—' };
   }
   return {
     id: String(slot.inscriptionId),
@@ -69,11 +72,26 @@ function teamFromSlot(
   };
 }
 
-export function matchInputToRecord(m: FixtureMatchInput): MatchRecord {
+function isRealInscriptionId(id: string | null | undefined): boolean {
+  const s = String(id ?? '').trim();
+  return !!s && !s.startsWith('liga360-slot:') && !s.startsWith('pos:');
+}
+
+export function matchInputToRecord(m: FixtureMatchInput, stageFormat?: string | null): MatchRecord {
+  const homeId = m.homeAssignedInscription?.inscriptionId;
+  const awayId = m.awayAssignedInscription?.inscriptionId;
+  const partial =
+    (isRealInscriptionId(homeId) && !awayId) ||
+    (isRealInscriptionId(awayId) && !homeId);
+  const isBye =
+    partial &&
+    (String(m.matchKind || '').toLowerCase() === 'bye' ||
+      String(stageFormat || '').toLowerCase() !== 'elimination');
+
   const rec: MatchRecord = {
     id: m.id,
-    homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id),
-    awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id),
+    homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id, isBye && !homeId),
+    awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id, isBye && !awayId),
     status: mapGraphqlStatusToMatchStatus(m.status),
   };
   if (m.scheduledAt) rec.scheduledAt = m.scheduledAt;
@@ -87,7 +105,7 @@ export function matchInputToRecord(m: FixtureMatchInput): MatchRecord {
 }
 
 function eliminationMatchInputToRecord(m: FixtureMatchInput): MatchRecord {
-  const rec = matchInputToRecord(m);
+  const rec = matchInputToRecord(m, 'elimination');
   rec.matchCode = bracketDisplayCode(m as TournamentMatchRow);
   rec.matchSubtitle = eliminationMatchSubtitle(m as TournamentMatchRow);
   return rec;
@@ -161,7 +179,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
       return {
         id: `lr-${key}`,
         label: leagueRoundTitle(r, leg),
-        matches: rowMatches.map(matchInputToRecord),
+        matches: rowMatches.map((row) => matchInputToRecord(row, 'league')),
       };
     });
     return { type: 'league', data: { rounds } };
@@ -204,7 +222,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
         return {
           id: `gr-${key}`,
           label: leagueRoundTitle(r, leg),
-          matches: rowMatches.map(matchInputToRecord),
+          matches: rowMatches.map((row) => matchInputToRecord(row, 'groups')),
         };
       });
       outGroups.push({ id: g.id, name: g.name, rounds });

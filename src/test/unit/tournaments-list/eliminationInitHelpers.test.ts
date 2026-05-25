@@ -14,6 +14,8 @@ import {
   matchDisplayCode,
   matchesForRoundLeg,
   parseSameStageWinnerSlotId,
+  physicalInscriptionIdsUsedElsewhere,
+  resolvePoolChoicePhysicalId,
   resolveWinnerSlotLabelFromRef,
   sortEliminationInitMatches,
 } from '../../../modules/tournaments-list/eliminationInitHelpers';
@@ -193,5 +195,19 @@ describe('eliminationInitHelpers', () => {
     const out = expandAssignedIdsForPool(assigned, eligible);
     expect(out.has('pos:l:liga:10')).toBe(true);
     expect(out.has('99')).toBe(true);
+  });
+
+  it('physicalInscriptionIdsUsedElsewhere detecta el mismo equipo con ids distintos', () => {
+    const matches = [
+      m({
+        id: 'x',
+        homeAssignedInscription: { inscriptionId: '245', displayName: 'BN2' },
+      }),
+      m({ id: 'y', homeAssignedInscription: null, awayAssignedInscription: null }),
+    ];
+    const eligible = [{ inscriptionId: 'pos:bestN:s:3:2:2', resolvedRealId: '245' }];
+    const blocked = physicalInscriptionIdsUsedElsewhere(matches, eligible, 'y');
+    expect(blocked.has('245')).toBe(true);
+    expect(resolvePoolChoicePhysicalId('pos:bestN:s:3:2:2', eligible)).toBe('245');
   });
 });

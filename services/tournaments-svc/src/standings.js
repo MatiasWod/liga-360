@@ -39,6 +39,15 @@ function ensureTeamRow(rowsByInscriptionId, inscriptionId, displayName) {
   return row;
 }
 
+/** Estado efectivo del partido (status y matchStatus pueden divergir en Neo4j). */
+export function effectiveMatchStatus(match) {
+  const ms = String(match?.matchStatus ?? '').toLowerCase();
+  const st = String(match?.status ?? '').toLowerCase();
+  if (ms === 'finished' || ms === 'completed') return 'finished';
+  if (st === 'finished' || st === 'completed') return 'finished';
+  return ms || st || 'scheduled';
+}
+
 export function computeStandings(matches = [], inscriptions = [], config = {}) {
   const scoring = {
     ...STANDINGS_DEFAULTS,
@@ -53,7 +62,7 @@ export function computeStandings(matches = [], inscriptions = [], config = {}) {
   }
 
   for (const match of matches) {
-    const ms = String(match?.matchStatus || '').toLowerCase();
+    const ms = effectiveMatchStatus(match);
     if (ms !== 'finished' && ms !== 'completed') continue;
     // Para partidos finalizados, un score null se trata como 0 (consistente con la UI).
     const homeScore = toSafeNumber(match?.homeScore) ?? 0;
@@ -99,7 +108,9 @@ export function computeStandings(matches = [], inscriptions = [], config = {}) {
     if (right.points !== left.points) return right.points - left.points;
     if (right.goalDifference !== left.goalDifference) return right.goalDifference - left.goalDifference;
     if (right.goalsFor !== left.goalsFor) return right.goalsFor - left.goalsFor;
-    return left.displayName.localeCompare(right.displayName);
+    const byName = left.displayName.localeCompare(right.displayName);
+    if (byName !== 0) return byName;
+    return String(left.inscriptionId).localeCompare(String(right.inscriptionId));
   });
 
   return rows.map((row, index) => ({

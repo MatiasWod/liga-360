@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveEligibleInscriptionsFromIncomingTransitions,
   collectIncomingTransitionRows,
+  enrichEligibleWithRealTeamNames,
 } from '../../../modules/tournaments-list/incomingTransitionEligibility';
 import type { TournamentEntity, TournamentStage } from '../../../modules/tournaments-list/types';
 
@@ -309,6 +310,237 @@ describe('incomingTransitionEligibility', () => {
     expect(out[0]?.displayName).toBe('Ganador Partido 1 - Repechaje — pendiente');
     expect(out[0]?.inscriptionId).toBe(`liga360-slot:ew:${repechajeId}:r1s1l1`);
     expect(out.find((x) => x.shortLabel === 'P1R3')).toBeUndefined();
+  });
+
+  it('mundial clásico: top 2 por grupo con config pero sin grupos persistidos', () => {
+    const fromStageId = 'groups-stage';
+    const toStageId = 'ko-stage';
+    const groupsStage: Partial<TournamentStage> = {
+      id: fromStageId,
+      name: 'Fase de grupos',
+      order: 1,
+      format: 'groups',
+      configJson: JSON.stringify({ numGroups: 8, teamsPerGroup: 4, groupRoundType: 'single' }),
+      groups: [],
+      transitions: [{ id: 'tr-m', toStageId, selectionKind: 'top', topN: 2 }],
+    };
+    const ko: Partial<TournamentStage> = {
+      id: toStageId,
+      name: 'Eliminatorias',
+      order: 2,
+      format: 'elimination',
+      transitions: [],
+    };
+    const tournament: TournamentEntity = {
+      id: 'mundial',
+      name: 'Mundial',
+      competitions: [
+        {
+          id: 'c',
+          name: 'Copa del Mundo',
+          order: 1,
+          stages: [groupsStage as TournamentStage, ko as TournamentStage],
+        },
+      ],
+    };
+
+    const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
+    expect(out).toHaveLength(16);
+    expect(out.every((r) => r.source === 'groups')).toBe(true);
+    expect(out.some((r) => r.inscriptionId === `pos:sg:${fromStageId}:__cfg:${fromStageId}:g1:1`)).toBe(true);
+    expect(out.find((r) => r.shortLabel === 'P2G8')?.displayName).toBe('Clasificación pendiente');
+  });
+
+  it('mundial clásico: top 2 por grupo con standings resuelve nombres', () => {
+    const fromStageId = 'groups-stage';
+    const toStageId = 'ko-stage';
+    const groups = Array.from({ length: 8 }, (_, i) => ({
+      id: `g${i + 1}`,
+      name: `Grupo ${i + 1}`,
+      order: i + 1,
+      capacity: 4,
+      standings: [
+        {
+          position: 1,
+          inscriptionId: `w${i + 1}`,
+          displayName: `Líder G${i + 1}`,
+          played: 0,
+          won: 0,
+          drawn: 0,
+          lost: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          goalDifference: 0,
+          points: 9,
+        },
+        {
+          position: 2,
+          inscriptionId: `r${i + 1}`,
+          displayName: `Segundo G${i + 1}`,
+          played: 0,
+          won: 0,
+          drawn: 0,
+          lost: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          goalDifference: 0,
+          points: 6,
+        },
+      ],
+    }));
+    const groupsStage: Partial<TournamentStage> = {
+      id: fromStageId,
+      name: 'Fase de grupos',
+      order: 1,
+      format: 'groups',
+      configJson: JSON.stringify({ numGroups: 8, teamsPerGroup: 4 }),
+      groups,
+      transitions: [{ id: 'tr-m2', toStageId, selectionKind: 'top', topN: 2 }],
+    };
+    const ko: Partial<TournamentStage> = {
+      id: toStageId,
+      name: 'Eliminatorias',
+      order: 2,
+      format: 'elimination',
+      transitions: [],
+    };
+    const tournament: TournamentEntity = {
+      id: 'mundial',
+      name: 'Mundial',
+      competitions: [
+        {
+          id: 'c',
+          name: 'Copa del Mundo',
+          order: 1,
+          stages: [groupsStage as TournamentStage, ko as TournamentStage],
+        },
+      ],
+    };
+
+    const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
+    expect(out).toHaveLength(16);
+    const p1g3 = out.find((r) => r.shortLabel === 'P1G3');
+    expect(p1g3?.resolvedRealId).toBe('w3');
+    expect(p1g3?.displayName).toBe('Líder G3');
+    expect(p1g3?.optionLabel).toContain('Grupo 3 · posición 1 · Líder G3');
+  });
+
+  it('bestN: cupos BN1/BN2 son refs pos:bestN, no ids físicos de terceros', () => {
+    const fromStageId = 'groups-stage';
+    const toStageId = 'ko-stage';
+    const groupsStage: Partial<TournamentStage> = {
+      id: fromStageId,
+      name: 'Fase de grupos',
+      order: 1,
+      format: 'groups',
+      groups: [
+        {
+          id: 'g1',
+          name: 'Grupo 1',
+          order: 1,
+          standings: [
+            { position: 3, inscriptionId: '246', displayName: 'BN1', played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 3 },
+          ],
+        },
+        {
+          id: 'g2',
+          name: 'Grupo 2',
+          order: 2,
+          standings: [
+            { position: 3, inscriptionId: '243', displayName: 'BN2', played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 6 },
+          ],
+        },
+        {
+          id: 'g3',
+          name: 'Grupo 3',
+          order: 3,
+          standings: [
+            { position: 3, inscriptionId: '248', displayName: 'Holanda', played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 1 },
+          ],
+        },
+      ],
+      transitions: [{ id: 'tr-bn', toStageId, selectionKind: 'bestN', topN: 2, rangeFrom: 3 }],
+    };
+    const ko: Partial<TournamentStage> = {
+      id: toStageId,
+      name: 'Eliminatorias',
+      order: 2,
+      format: 'elimination',
+      transitions: [],
+    };
+    const tournament: TournamentEntity = {
+      id: 'mini',
+      name: 'Mini mundial',
+      competitions: [
+        {
+          id: 'c',
+          name: 'Copa',
+          order: 1,
+          stages: [groupsStage as TournamentStage, ko as TournamentStage],
+        },
+      ],
+    };
+
+    const out = deriveEligibleInscriptionsFromIncomingTransitions(tournament, toStageId);
+    expect(out).toHaveLength(2);
+
+    const bn1 = out.find((r) => r.shortLabel === 'BN1');
+    expect(bn1?.inscriptionId).toBe(`pos:bestN:${fromStageId}:3:2:1`);
+    expect(bn1?.resolvedRealId).toBe('243');
+    expect(bn1?.displayName).toBe('1° mejor 3° entre grupos');
+    expect(bn1?.optionLabel).toContain('(provisional)');
+
+    const bn2 = out.find((r) => r.shortLabel === 'BN2');
+    expect(bn2?.inscriptionId).toBe(`pos:bestN:${fromStageId}:3:2:2`);
+    expect(bn2?.resolvedRealId).toBe('246');
+    expect(bn2?.inscriptionId).not.toBe('246');
+  });
+
+  it('enrichEligibleWithRealTeamNames: segundo del grupo muestra Brasil aunque la tabla diga BN2', () => {
+    const rows = deriveEligibleInscriptionsFromIncomingTransitions(
+      {
+        id: 'mini',
+        name: 'Mini mundial',
+        competitions: [
+          {
+            id: 'c',
+            name: 'Copa',
+            order: 1,
+            stages: [
+              {
+                id: 'gs',
+                name: 'Grupos',
+                order: 1,
+                format: 'groups',
+                groups: [
+                  {
+                    id: 'g1',
+                    name: 'Grupo 1',
+                    order: 1,
+                    standings: [],
+                  },
+                  {
+                    id: 'g2',
+                    name: 'Grupo 2',
+                    order: 2,
+                    standings: [
+                      { position: 2, inscriptionId: '243', displayName: 'BN2', played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 6 },
+                    ],
+                  },
+                ],
+                transitions: [{ id: 'tr', toStageId: 'ko', selectionKind: 'top', topN: 2 }],
+              } as TournamentStage,
+              { id: 'ko', name: 'Elim', order: 2, format: 'elimination', transitions: [] } as TournamentStage,
+            ],
+          },
+        ],
+      },
+      'ko'
+    );
+    const enriched = enrichEligibleWithRealTeamNames(rows, new Map([['243', { display_name: 'Brasil' }]]));
+    const p2g2 = enriched.find((r) => r.shortLabel === 'P2G2');
+    expect(p2g2?.displayName).toBe('Brasil');
+    expect(p2g2?.optionLabel).toContain('Brasil');
   });
 
   it('liga: sin filas en tabla pero con rango y numParticipants ofrece plazas sintéticas', () => {

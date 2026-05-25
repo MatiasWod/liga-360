@@ -32,6 +32,7 @@ import {
   countTeamsFromInboundTransition as countTeamsFromTransition,
   describeInboundSelectionNatural as describeSelectionNatural,
 } from './transitionInboundCounts';
+import { isNextEditionTransition } from './transitionTiming';
 import { shortPhaseTabTitle } from './BracketParticipantPicker';
 import {
   deriveEligibleInscriptionsFromIncomingTransitions,
@@ -137,7 +138,7 @@ function collectIncomingTransitions(
   for (const c of tournament?.competitions || []) {
     for (const s of c.stages || []) {
       for (const tr of s.transitions || []) {
-        if (String(tr.toStageId || '') === targetStageId) {
+        if (String(tr.toStageId || '') === targetStageId && !isNextEditionTransition(tr)) {
           out.push({ fromStage: s, tr, fromCompetitionName: c.name });
         }
       }
@@ -348,7 +349,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     return map;
   }, [tournament]);
 
-  const pendingRequests = React.useMemo(() => inscriptions.filter((item) => item.status === 'PENDIENTE'), [inscriptions]);
+  const pendingRequests = React.useMemo(
+    () => inscriptions.filter((item) => item.status === 'PENDIENTE' && item.source !== 'invitation'),
+    [inscriptions],
+  );
+  const sentInvitations = React.useMemo(
+    () => inscriptions.filter((item) => item.source === 'invitation'),
+    [inscriptions],
+  );
   const inscriptionById = React.useMemo(() => {
     const map = new Map<string, InscriptionItem>();
     for (const item of inscriptions) map.set(String(item.id), item);
@@ -1002,7 +1010,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   <div>
                     <p className="font-medium text-slate-800">{item.display_name}</p>
                     <p className="text-xs text-slate-500">
-                      {item.source} · {competitionNameById.get(String(item.competition_id || '')) || 'Sin competencia'}
+                      {competitionNameById.get(String(item.competition_id || '')) || 'Sin competencia'}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -1011,9 +1019,38 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   </div>
                 </div>
               ))}
-              {pendingRequests.length === 0 ? <p className="text-sm text-slate-500">No hay peticiones pendientes.</p> : null}
+              {pendingRequests.length === 0 && <p className="text-sm text-slate-500">No hay peticiones pendientes.</p>}
             </div>
           </Card>
+
+          {sentInvitations.length > 0 && (
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Invitaciones enviadas</h3>
+              <div className="space-y-2">
+                {sentInvitations.map((item) => {
+                  const statusLabel =
+                    item.status === 'ACEPTADO'
+                      ? { text: 'Aceptada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                      : item.status === 'RECHAZADO'
+                        ? { text: 'Rechazada', cls: 'bg-red-50 text-red-700 border-red-200' }
+                        : { text: 'Enviada · esperando respuesta', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+                  return (
+                    <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                      <div>
+                        <p className="font-medium text-slate-800">{item.display_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {competitionNameById.get(String(item.competition_id || '')) || 'Sin competencia'}
+                        </p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusLabel.cls}`}>
+                        {statusLabel.text}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           <Card>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">
@@ -1413,6 +1450,12 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                               }}
                               setSaving={setSaving}
                               setError={setError}
+                              readOnly={
+                                stage.stageStatus === 'finished' ||
+                                (stage.matches || []).some((m) =>
+                                  ['finished', 'completed'].includes(String(m.status || '').toLowerCase())
+                                )
+                              }
                             />
                           ) : null}
 
@@ -1572,6 +1615,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       {tab === 'fixture' && tournament ? (
         <FixturePlanningPanel
           tournament={tournament}
+          inscriptionById={inscriptionById}
           onRefresh={async () => {
             await loadTournament();
           }}

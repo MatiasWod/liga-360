@@ -22,6 +22,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
   const [feedback, setFeedback] = React.useState<string>('');
   const [quickSetupOpen, setQuickSetupOpen] = React.useState(false);
   const [templateCompetitions, setTemplateCompetitions] = React.useState<CompetitionMeta[] | null>(null);
+  const [templateSeedTeams, setTemplateSeedTeams] = React.useState<readonly string[] | null>(null);
   const [formKey, setFormKey] = React.useState(0);
 
   const isViewing = mode === 'visualizacion';

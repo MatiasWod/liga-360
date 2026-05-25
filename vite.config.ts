@@ -10,10 +10,20 @@ export default defineConfig({
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api\/graphql/, '/graphql'),
 			},
-			'/api/teams': {
+			'/api/teams/profiles': {
 				target: 'http://localhost:4002',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api\/teams/, ''),
+			},
+			'/api/teams/participants': {
+				target: 'http://localhost:4002',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/teams/, ''),
+			},
+			'/api/teams': {
+				target: 'http://localhost:4002',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/teams/, '/teams'),
 			},
 			'/api/auth': {
 				target: 'http://localhost:4003',
