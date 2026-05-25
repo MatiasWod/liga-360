@@ -17,6 +17,10 @@ definitions:
   steps:
     - step: &terraform-validate
         name: Terraform Validate
+        condition:
+          changesets:
+            includePaths:
+              - "terraform/**"
         image: hashicorp/terraform:1.8.5
         script:
           - cd terraform
@@ -27,6 +31,10 @@ definitions:
 
     - step: &terraform-plan
         name: Terraform Plan
+        condition:
+          changesets:
+            includePaths:
+              - "terraform/**"
         image: hashicorp/terraform:1.8.5
         script:
           - cd terraform
@@ -37,6 +45,10 @@ definitions:
 
     - step: &terraform-apply
         name: Terraform Apply
+        condition:
+          changesets:
+            includePaths:
+              - "terraform/**"
         image: hashicorp/terraform:1.8.5
         trigger: manual
         script:
