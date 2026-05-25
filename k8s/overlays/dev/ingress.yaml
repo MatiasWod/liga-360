@@ -2,34 +2,27 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: liga360
+
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
 spec:
   ingressClassName: nginx
+
   tls:
     - hosts:
         - liga360-v1.duckdns.org
       secretName: liga360-tls
+
   rules:
     - host: liga360-v1.duckdns.org
       http:
         paths:
-          - path: /api(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: teams-svc
-                port:
-                  number: 4002
-
-          # --- REGLA PARA EL FRONTEND ---
-          # Atrapa todo lo demás
-          - path: /()(.*)
-            pathType: ImplementationSpecific
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: frontend
                 port:
                   number: 80
+
