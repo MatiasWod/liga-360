@@ -252,15 +252,156 @@ EOF
 }
 
 
+resource "aws_instance" "k3s_node" {
+  ami                  = data.aws_ami.ubuntu.id
+  instance_type        = var.instance_type
+  key_name             = "vockey"
+  iam_instance_profile = "LabInstanceProfile"
+
+  # CAMBIOS CRÍTICOS DE SEGURIDAD:
+  subnet_id                   = module.vpc.private_subnets[0] # Ahora vive en la subred privada
+  vpc_security_group_ids      = [aws_security_group.k3s_sg.id]
+  associate_public_ip_address = false # Ya no expone IP pública propia
+
+  root_block_device {
+    volume_size = 30
+    volume_type = "gp3"
+  }
+
+  # Mantené intacto todo tu bloque de user_data tal como lo tenías
+  user_data = <<-EOF
+#!/bin/bash
+set -e
+# ... (todo tu script de inicialización de K3s, ArgoCD, etc.) ...
+EOF
+
+  tags = {
+    Name = "liga360-k3s-node"
+  }
+}
+
+# Conservamos tu recurso Elastic IP original
 resource "aws_eip" "k3s_eip" {
   domain = "vpc"
-
   tags = {
     Name = "liga360-eip"
   }
 }
 
-resource "aws_eip_association" "k3s_assoc" {
-  instance_id   = aws_instance.k3s_node.id
-  allocation_id = aws_eip.k3s_eip.id
+# ==============================================================================
+# NUEVOS RECURSOS: NETWORK LOAD BALANCER (NLB)
+# ==============================================================================
+
+resource "aws_lb" "k3s_nlb" {
+  name               = "liga360-k3s-nlb"
+  internal           = false
+  load_balancer_type = "network"
+
+  # Le asignamos tu Elastic IP existente en la subred pública
+  subnet_mapping {
+    subnet_id     = module.vpc.public_subnets[0]
+    allocation_id = aws_eip.k3s_eip.id
+  }
+
+  tags = {
+    Name = "liga360-k3s-nlb"
+  }
+}
+
+# --- TARGET GROUPS ---
+
+resource "aws_lb_target_group" "tg_80" {
+  name        = "liga360-tg-80"
+  port        = 80
+  protocol    = "TCP"
+  vpc_id      = module.vpc.vpc_id
+  target_type = "instance"
+}
+
+resource "aws_lb_target_group" "tg_443" {
+  name        = "liga360-tg-443"
+  port        = 443
+  protocol    = "TCP"
+  vpc_id      = module.vpc.vpc_id
+  target_type = "instance"
+}
+
+resource "aws_lb_target_group" "tg_6443" {
+  name        = "liga360-tg-6443"
+  port        = 6443
+  protocol    = "TCP"
+  vpc_id      = module.vpc.vpc_id
+  target_type = "instance"
+}
+
+resource "aws_lb_target_group" "tg_30443" {
+  name        = "liga360-tg-30443"
+  port        = 30443
+  protocol    = "TCP"
+  vpc_id      = module.vpc.vpc_id
+  target_type = "instance"
+}
+
+# --- LISTENERS ---
+
+resource "aws_lb_listener" "listener_80" {
+  load_balancer_arn = aws_lb.k3s_nlb.arn
+  port              = "80"
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_80.arn
+  }
+}
+
+resource "aws_lb_listener" "listener_443" {
+  load_balancer_arn = aws_lb.k3s_nlb.arn
+  port              = "443"
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_443.arn
+  }
+}
+
+resource "aws_lb_listener" "listener_6443" {
+  load_balancer_arn = aws_lb.k3s_nlb.arn
+  port              = "6443"
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_6443.arn
+  }
+}
+
+resource "aws_lb_listener" "listener_30443" {
+  load_balancer_arn = aws_lb.k3s_nlb.arn
+  port              = "30443"
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_30443.arn
+  }
+}
+
+# --- ATTACHMENTS (Vinculan el balanceador a la instancia privada) ---
+
+resource "aws_lb_target_group_attachment" "attach_80" {
+  target_group_arn = aws_lb_target_group.tg_80.arn
+  target_id        = aws_instance.k3s_node.id
+}
+
+resource "aws_lb_target_group_attachment" "attach_443" {
+  target_group_arn = aws_lb_target_group.tg_443.arn
+  target_id        = aws_instance.k3s_node.id
+}
+
+resource "aws_lb_target_group_attachment" "attach_6443" {
+  target_group_arn = aws_lb_target_group.tg_6443.arn
+  target_id        = aws_instance.k3s_node.id
+}
+
+resource "aws_lb_target_group_attachment" "attach_30443" {
+  target_group_arn = aws_lb_target_group.tg_30443.arn
+  target_id        = aws_instance.k3s_node.id
 }

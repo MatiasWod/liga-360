@@ -25,3 +25,23 @@ output "public_ip" {
 output "app_url" {
   value = "https://app.${var.domain_name}"
 }
+
+output "nlb_dns_name" {
+  description = "El DNS público del Network Load Balancer"
+  value       = aws_lb.k3s_nlb.dns_name
+}
+
+output "elastic_ip" {
+  description = "La IP Elástica pública asociada al balanceador"
+  value       = aws_eip.k3s_eip.public_ip
+}
+
+output "vpc_id" {
+  description = "El ID de la VPC de desarrollo"
+  value       = module.vpc.vpc_id
+}
+
+output "private_instance_id" {
+  description = "El ID de tu nodo K3s (útil para conectarte por AWS Systems Manager)"
+  value       = aws_instance.k3s_node.id
+}
