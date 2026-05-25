@@ -187,6 +187,11 @@ export const RelationsEditor: React.FC<Props> = ({ stage, allStages, lookupStage
 												<span className="text-white/65">{resolveDestLabel(r)}</span>
 												<span className="text-white/25 mx-1.5">·</span>
 												<span className="text-white/45">{renderSelection(r.selection)}</span>
+												{r.timing === 'next_edition' ? (
+													<span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45">
+														Próxima temporada
+													</span>
+												) : null}
 											</div>
 											<button type="button" onClick={() => startEdit(r)}
 												className="shrink-0 p-1 rounded text-white/30 hover:text-white/80 hover:bg-white/8 transition-colors"

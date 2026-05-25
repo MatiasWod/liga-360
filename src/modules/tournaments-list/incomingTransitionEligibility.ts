@@ -15,8 +15,14 @@ import type {
   TournamentMatchRow,
 } from './types';
 import { countTeamsFromInboundTransition } from './transitionInboundCounts';
+import { isNextEditionTransition } from './transitionTiming';
 
 export type EligibleInscriptionSource = 'groups' | 'league' | 'elimination';
+
+/** Etiqueta de cupo sintético (mejor tercero), no nombre de equipo. */
+export function isBestThirdSlotLabel(name: string | null | undefined): boolean {
+  return /^BN\d+$/i.test(String(name ?? '').trim());
+}
 
 export type EligibleInscription = {
   inscriptionId: string;
@@ -79,7 +85,7 @@ export function collectIncomingTransitionRows(
   for (const c of tournament?.competitions || []) {
     for (const s of c.stages || []) {
       for (const tr of s.transitions || []) {
-        if (String(tr.toStageId || '') === targetStageId) {
+        if (String(tr.toStageId || '') === targetStageId && !isNextEditionTransition(tr)) {
           out.push({ fromStage: s, tr, fromCompetitionName: c.name });
         }
       }
@@ -146,16 +152,19 @@ function leagueStandingsSelection(fromStage: TournamentStage, tr: StageTrans): S
 
 function parseStageConfig(stage: TournamentStage): {
   teamsPerGroup?: number;
+  numGroups?: number;
   numParticipants?: number;
   numAdvancing?: number;
 } {
   try {
     const cfg = JSON.parse(String(stage.configJson || '{}'));
     const teamsPerGroup = Number(cfg?.teamsPerGroup);
+    const numGroups = Number(cfg?.numGroups ?? cfg?.groupsCount);
     const numParticipants = Number(cfg?.numParticipants);
     const numAdvancing = Number(cfg?.numAdvancing);
     return {
       teamsPerGroup: Number.isFinite(teamsPerGroup) && teamsPerGroup > 0 ? teamsPerGroup : undefined,
+      numGroups: Number.isFinite(numGroups) && numGroups > 0 ? Math.trunc(numGroups) : undefined,
       numParticipants:
         Number.isFinite(numParticipants) && numParticipants > 0 ? numParticipants : undefined,
       numAdvancing:
@@ -164,6 +173,45 @@ function parseStageConfig(stage: TournamentStage): {
   } catch {
     return {};
   }
+}
+
+type IncomingGroupRef = {
+  id: string;
+  name?: string | null;
+  order?: number | null;
+  capacity?: number | null;
+  standings?: StandingsRow[];
+};
+
+/**
+ * Grupos reales de la etapa; si aún no se sincronizaron en Neo4j, sintetiza plazas desde configJson
+ * (p. ej. Mundial Clásico: numGroups=8 antes de syncStageGroups en inicialización).
+ */
+function resolveGroupsForIncoming(fromStage: TournamentStage, stageCfg: ReturnType<typeof parseStageConfig>): IncomingGroupRef[] {
+  const existing = [...(fromStage.groups || [])].sort(
+    (a, b) => Number(a.order || 0) - Number(b.order || 0)
+  );
+  const cfgCount = stageCfg.numGroups ?? 0;
+  const count = cfgCount > 0 ? Math.max(cfgCount, existing.length) : existing.length;
+  if (count <= 0) return [];
+
+  const out: IncomingGroupRef[] = [];
+  for (let gi = 0; gi < count; gi += 1) {
+    const gIdx = gi + 1;
+    const byOrder = existing.find((g) => Number(g.order || 0) === gIdx);
+    const real = byOrder ?? existing[gi];
+    if (real) {
+      out.push(real);
+      continue;
+    }
+    out.push({
+      id: `__cfg:${fromStage.id}:g${gIdx}`,
+      name: `Grupo ${gIdx}`,
+      order: gIdx,
+      standings: [],
+    });
+  }
+  return out;
 }
 
 function standingsByDistinctPosition(rows: StandingsRow[]): Map<number, StandingsRow> {
@@ -411,9 +459,7 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
     if (fmt === 'groups') {
       const sectionTitle = buildSectionTitle(tournamentLabel, fromCompetitionName, stageLabel, 'desde grupos');
       const stageCfg = parseStageConfig(fromStage);
-      const groups = [...(fromStage.groups || [])].sort(
-        (a, b) => Number(a.order || 0) - Number(b.order || 0)
-      );
+      const groups = resolveGroupsForIncoming(fromStage, stageCfg);
       const pendingLabel = 'Clasificación pendiente';
 
       if (String(tr.selectionKind || '').toLowerCase() === 'bestn') {
@@ -436,11 +482,21 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
           for (let rank = 1; rank <= count; rank++) {
             const candidate = candidates[rank - 1];
             const rankLabel = `${rank}° mejor ${fromPos}° entre grupos`;
-            if (candidate) {
-              upsertEligible({ inscriptionId: candidate.inscriptionId, displayName: candidate.displayName, sectionTitle, shortLabel: `BN${rank}`, source: 'groups', optionLabel: `${lineage} · ${rankLabel} · ${candidate.displayName}` });
-            } else {
-              upsertEligible({ inscriptionId: `pos:bestN:${fromStage.id}:${fromPos}:${count}:${rank}`, displayName: rankLabel, sectionTitle, shortLabel: `BN${rank}`, source: 'groups', optionLabel: `${lineage} · ${rankLabel} · ${pendingLabel}` });
-            }
+            const poolId = `pos:bestN:${fromStage.id}:${fromPos}:${count}:${rank}`;
+            const provisionalName = candidate
+              ? String(candidate.displayName || candidate.inscriptionId).trim()
+              : '';
+            upsertEligible({
+              inscriptionId: poolId,
+              ...(candidate ? { resolvedRealId: candidate.inscriptionId } : {}),
+              displayName: rankLabel,
+              sectionTitle,
+              shortLabel: `BN${rank}`,
+              source: 'groups',
+              optionLabel: candidate
+                ? `${lineage} · ${rankLabel} · ${provisionalName} (provisional)`
+                : `${lineage} · ${rankLabel} · ${pendingLabel}`,
+            });
           }
         }
         continue;
@@ -465,16 +521,20 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
             const shortLabel = `P${posTxt}G${gIdx}`;
             const posNum = Math.trunc(Number(pos)) || Number(posTxt) || 0;
             const go = { groupName: groupHumanName, position: posNum };
+            const safeDisplayName =
+              resolvedName && !isBestThirdSlotLabel(resolvedName)
+                ? resolvedName
+                : pendingLabel;
             // Siempre emitir referencia de posición (pos:sg:); el nombre resuelto va solo en displayName
             bucket.push({
               inscriptionId: `pos:sg:${fromStage.id}:${g.id}:${pos}`,
               ...(resolvedId ? { resolvedRealId: resolvedId } : {}),
-              displayName: resolvedName || pendingLabel,
+              displayName: safeDisplayName,
               sectionTitle,
               shortLabel,
               source: 'groups',
               groupsOrigin: go,
-              optionLabel: resolvedName
+              optionLabel: resolvedName && !isBestThirdSlotLabel(resolvedName)
                 ? `${lineage} · ${shortLabel} · ${resolvedName}`
                 : `${lineage} · ${shortLabel} · ${pendingLabel}`,
             });
@@ -585,5 +645,71 @@ export function deriveEligibleInscriptionsFromIncomingTransitions(
     const cq = collator.compare(a.shortLabel, b.shortLabel);
     if (cq !== 0) return cq;
     return collator.compare(a.displayName, b.displayName);
+  });
+}
+
+/** Sustituye etiquetas BN1/BN2 u otros nombres stale por el display_name real de la inscripción. */
+export function enrichEligibleWithRealTeamNames(
+  rows: ReadonlyArray<EligibleInscription>,
+  inscriptionById: ReadonlyMap<string, { display_name?: string | null }>
+): EligibleInscription[] {
+  const isPositionPoolRef = (id: string): boolean =>
+    id.startsWith('pos:') || id.startsWith('liga360-slot:');
+
+  return rows.map((row) => {
+    const poolId = String(row.inscriptionId ?? '').trim();
+    const realId = String(
+      row.resolvedRealId ?? (!isPositionPoolRef(poolId) ? poolId : '')
+    ).trim();
+    const realName = realId
+      ? String(inscriptionById.get(realId)?.display_name ?? '').trim()
+      : '';
+
+    if (poolId.startsWith('pos:bestN:')) {
+      if (!realName) return row;
+      const rankLabel = String(row.displayName || '').trim();
+      const baseLabel = row.optionLabel.replace(/\s*\(provisional\)\s*$/i, '').trim();
+      const withoutTrailingTeam = baseLabel.replace(/ · [^·]+$/i, '').trim();
+      return {
+        ...row,
+        optionLabel: `${withoutTrailingTeam || baseLabel} · ${realName} (provisional)`,
+      };
+    }
+
+    if (!realId || !realName) return row;
+
+    const currentName = String(row.displayName || '').trim();
+    if (currentName === realName && !isBestThirdSlotLabel(currentName)) return row;
+
+    const shouldReplaceDisplay =
+      !currentName ||
+      currentName === realId ||
+      isBestThirdSlotLabel(currentName) ||
+      currentName.toLowerCase() === 'clasificación pendiente';
+
+    if (!shouldReplaceDisplay) return row;
+
+    let optionLabel = String(row.optionLabel || '').trim();
+    if (optionLabel) {
+      const segments = optionLabel.split(/\s*·\s*/).map((x) => x.trim()).filter(Boolean);
+      const last = segments[segments.length - 1];
+      if (
+        last &&
+        (isBestThirdSlotLabel(last) ||
+          last === currentName ||
+          last.toLowerCase() === 'clasificación pendiente')
+      ) {
+        segments[segments.length - 1] = realName;
+        optionLabel = segments.join(' · ');
+      }
+    } else if (row.shortLabel) {
+      optionLabel = `${row.shortLabel} · ${realName}`;
+    }
+
+    return {
+      ...row,
+      displayName: realName,
+      optionLabel: optionLabel || row.optionLabel,
+    };
   });
 }

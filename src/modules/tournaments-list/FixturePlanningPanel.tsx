@@ -11,20 +11,33 @@ import {
   generateLeagueRoundRobin,
   generateSingleEliminationBracket,
   getTournamentConfigurationById,
+  hydrateEliminationFirstRoundFromRoster,
+  saveTransitionPlacementSnapshot,
   setStageStatus,
 } from '../../services/tournaments/configuration';
 import { updateMatchResult } from '../../services/tournaments/matchResult';
 import type { MatchQuickAction } from '../../components/tournament-schedule/MatchCard';
+import { isByeFromInscriptionSlots } from '../../components/tournament-schedule/matchParticipantUtils';
 import { bothTeamsResolvedFromSlots } from '../../components/tournament-schedule/matchParticipantUtils';
 import { useFixtureSchedulingPrefs } from './useFixtureSchedulingPrefs';
 import type { TournamentEntity, TournamentMatchRow } from './types';
+import {
+  isNextEditionTransition,
+  parseTransitionPlacementSnapshot,
+} from './transitionTiming';
+import { computeAutoAdvance, collectAutoAdvancePlacementsByDest } from './stageAutoAdvance';
+import { resolvePersistedTeamDisplayName } from './teamDisplayName';
+import { effectiveStageStatus } from './stageLifecycle';
+import { enrichStageTeamDisplayNames } from './teamDisplayName';
+import type { InscriptionItem } from '../../services/inscriptionsApi';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
+  inscriptionById?: ReadonlyMap<string, InscriptionItem>;
   onRefresh: () => Promise<void>;
   setSaving: (v: boolean) => void;
   setError: (v: string) => void;
-}> = ({ tournament, onRefresh, setSaving, setError }) => {
+}> = ({ tournament, inscriptionById, onRefresh, setSaving, setError }) => {
   const [competitionId, setCompetitionId] = React.useState(tournament.competitions[0]?.id || '');
   const [stageId, setStageId] = React.useState('');
   const [matchIdDrawerOpen, setMatchIdDrawerOpen] = React.useState<string | null>(null);
@@ -56,25 +69,30 @@ export const FixturePlanningPanel: React.FC<{
 
   const stage = selectableStages.find((s) => s.id === stageId);
 
+  const displayStage = React.useMemo(() => {
+    if (!stage) return undefined;
+    return enrichStageTeamDisplayNames(stage, inscriptionById);
+  }, [stage, inscriptionById]);
+
   /** Busca el TournamentMatchRow por id en la etapa activa (stage o grupos). */
   const matchById = React.useMemo<Map<string, TournamentMatchRow>>(() => {
     const map = new Map<string, TournamentMatchRow>();
-    if (!stage) return map;
-    for (const m of stage.matches || []) map.set(m.id, m);
-    for (const g of stage.groups || []) {
+    if (!displayStage) return map;
+    for (const m of displayStage.matches || []) map.set(m.id, m);
+    for (const g of displayStage.groups || []) {
       for (const m of g.matches || []) map.set(m.id, m);
     }
     return map;
-  }, [stage]);
+  }, [displayStage]);
 
   const scheduleView = React.useMemo(() => {
-    if (!stage || stage.format === 'composed') return null;
+    if (!displayStage || displayStage.format === 'composed') return null;
     return buildScheduleFromStage({
-      format: stage.format,
-      matches: stage.matches,
-      groups: stage.groups,
+      format: displayStage.format,
+      matches: displayStage.matches,
+      groups: displayStage.groups,
     });
-  }, [stage]);
+  }, [displayStage]);
 
   // -- Modo calendario (FixtureViewer) --
 
@@ -161,13 +179,35 @@ export const FixturePlanningPanel: React.FC<{
 
   const [isAdvancing, setIsAdvancing] = React.useState(false);
 
-  const stageStatus = stage?.stageStatus ?? 'active';
+  const stageStatus = effectiveStageStatus(stage);
   const isBlocked = stageStatus === 'not_started';
   const isFinished = stageStatus === 'finished';
   const canManageMatches = !isBlocked && !isFinished;
 
+  const outgoingTransitions = React.useMemo(
+    () => (stage?.transitions ?? []).filter((tr) => tr.toStageId),
+    [stage?.transitions]
+  );
+  const inSeasonOutgoingCount = outgoingTransitions.filter((tr) => !isNextEditionTransition(tr)).length;
+  const nextEditionOutgoing = outgoingTransitions.filter((tr) => isNextEditionTransition(tr));
+
+  function resolveStageLabel(stageId: string | null | undefined): string {
+    const sid = String(stageId ?? '').trim();
+    if (!sid) return '—';
+    for (const c of tournament.competitions ?? []) {
+      const hit = (c.stages ?? []).find((s) => s.id === sid);
+      if (hit) return `${c.name} · ${hit.name}`;
+    }
+    return sid;
+  }
+
   const handleQuickMatchAction = React.useCallback(
     async (matchId: string, action: MatchQuickAction) => {
+      if (isBlocked) {
+        const msg = 'Esta etapa no puede recibir resultados hasta que finalice la etapa anterior';
+        setError(msg);
+        throw new Error(msg);
+      }
       const row = matchById.get(matchId);
       if (
         !row ||
@@ -196,19 +236,35 @@ export const FixturePlanningPanel: React.FC<{
         setSaving(false);
       }
     },
-    [matchById, onRefresh, setError, setSaving]
+    [isBlocked, matchById, onRefresh, setError, setSaving]
   );
 
-  const allMatches: Array<{ id: string; status?: string | null }> = React.useMemo(() => {
+  const allMatches: TournamentMatchRow[] = React.useMemo(() => {
     if (!stage) return [];
     const direct = stage.matches ?? [];
     const fromGroups = (stage.groups ?? []).flatMap((g) => g.matches ?? []);
     return [...direct, ...fromGroups];
   }, [stage]);
 
+  // Fecha libre: un solo equipo real y el otro slot vacío (liga impar o eliminatoria).
+  function isByeMatch(m: TournamentMatchRow): boolean {
+    return isByeFromInscriptionSlots(m.homeAssignedInscription, m.awayAssignedInscription, {
+      matchKind: m.matchKind,
+      stageFormat: stage?.format,
+    });
+  }
+
+  const byeMatches = React.useMemo(
+    () => allMatches.filter(isByeMatch),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allMatches, stage?.format]
+  );
+
   const pendingMatches = allMatches.filter((m) => {
     const s = String(m.status ?? '').toLowerCase();
-    return s !== 'finished' && s !== 'completed' && s !== 'suspended';
+    if (s === 'finished' || s === 'completed' || s === 'suspended') return false;
+    if (isByeMatch(m)) return false; // byes auto-complete on finalization
+    return true;
   });
   const canFinalize = stageStatus === 'active' && pendingMatches.length === 0 && allMatches.length > 0;
 
@@ -216,9 +272,18 @@ export const FixturePlanningPanel: React.FC<{
     if (!stage) return;
     setIsAdvancing(true);
     try {
-      await setStageStatus(stage.id, 'finished');
+      // En eliminatoria, los byes avanzan automáticamente al finalizar la etapa.
+      if (stage.format === 'elimination') {
+        for (const bm of byeMatches) {
+          const s = String(bm.status ?? '').toLowerCase();
+          if (s === 'finished' || s === 'completed') continue;
+          const homeId = String(bm.homeAssignedInscription?.inscriptionId ?? '').trim();
+          const homeWins = !!homeId && !homeId.startsWith('liga360-slot:') && !homeId.startsWith('pos:');
+          await updateMatchResult(bm.id, homeWins ? 1 : 0, homeWins ? 0 : 1, 'completed');
+        }
+      }
 
-      const freshTournament = await getTournamentConfigurationById(tournament.id);
+      let freshTournament = await getTournamentConfigurationById(tournament.id);
       if (!freshTournament) throw new Error('No se pudieron obtener datos actualizados del torneo');
 
       const freshStage = freshTournament.competitions
@@ -227,31 +292,63 @@ export const FixturePlanningPanel: React.FC<{
       if (!freshStage) throw new Error('No se encontró la etapa en datos actualizados');
 
       const outgoing = (stage.transitions || []).filter((tr) => tr.toStageId);
-      for (const tr of outgoing) {
-        const destStageId = tr.toStageId!;
-        const destStage = freshTournament.competitions
-          .flatMap((c: any) => c.stages)
-          .find((s: any) => s.id === destStageId);
-        if (!destStage) continue;
+      const inSeasonOutgoing = outgoing.filter((tr) => !isNextEditionTransition(tr));
+      const nextEditionOutgoing = outgoing.filter((tr) => isNextEditionTransition(tr));
 
+      for (const tr of nextEditionOutgoing) {
         const eligibles = computeAutoAdvance(freshStage, tr);
-        for (const eligible of eligibles) {
+        await saveTransitionPlacementSnapshot(
+          tr.id,
+          JSON.stringify({
+            savedAt: new Date().toISOString(),
+            sourceStageId: stage.id,
+            placements: eligibles,
+          })
+        );
+      }
+
+      const placementsByDest = collectAutoAdvancePlacementsByDest(freshStage, inSeasonOutgoing);
+      for (const [destStageId, teams] of placementsByDest) {
+        for (let seedOrder = 0; seedOrder < teams.length; seedOrder += 1) {
+          const eligible = teams[seedOrder]!;
           await assignInscriptionToStage({
             stageId: destStageId,
             inscriptionId: eligible.inscriptionId,
             tournamentId: tournament.id,
-            displayName: eligible.displayName,
+            displayName: resolvePersistedTeamDisplayName(
+              eligible.displayName,
+              eligible.inscriptionId,
+              inscriptionById
+            ),
             force: true,
+            seedOrder,
           });
         }
+      }
 
+      await setStageStatus(stage.id, 'finished');
+
+      freshTournament = await getTournamentConfigurationById(tournament.id);
+      if (!freshTournament) throw new Error('No se pudieron obtener datos actualizados del torneo');
+
+      for (const destStageId of placementsByDest.keys()) {
         const allSourcesFinished = freshTournament.competitions
           .flatMap((c: any) => c.stages)
-          .filter((s: any) => (s.transitions || []).some((t: any) => t.toStageId === destStageId))
-          .every((s: any) => s.id === stage.id || s.stageStatus === 'finished');
+          .filter((s: any) =>
+            (s.transitions || []).some(
+              (t: any) => t.toStageId === destStageId && !isNextEditionTransition(t)
+            )
+          )
+          .every((s: any) => s.stageStatus === 'finished');
 
         if (allSourcesFinished) {
           await setStageStatus(destStageId, 'active');
+          const destStage = freshTournament.competitions
+            .flatMap((c: any) => c.stages)
+            .find((s: any) => s.id === destStageId);
+          if (String(destStage?.format || '').toLowerCase() === 'elimination') {
+            await hydrateEliminationFirstRoundFromRoster(destStageId);
+          }
         }
       }
 
@@ -261,99 +358,6 @@ export const FixturePlanningPanel: React.FC<{
     } finally {
       setIsAdvancing(false);
     }
-  }
-
-  function computeAutoAdvance(
-    sourceStage: any,
-    tr: any
-  ): Array<{ inscriptionId: string; displayName: string }> {
-    const kind = String(tr.selectionKind || 'top').toLowerCase();
-    const fmt = String(sourceStage.format || '').toLowerCase();
-
-    function pickFromStandings(standings: any[]): Array<{ inscriptionId: string; displayName: string }> {
-      const sorted = [...standings].sort((a, b) => Number(a.position) - Number(b.position));
-      if (kind === 'top') {
-        const n = Number(tr.topN) || 0;
-        return sorted.filter(r => Number(r.position) >= 1 && Number(r.position) <= n)
-          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
-      }
-      if (kind === 'range') {
-        const from = Number(tr.rangeFrom) || 0;
-        const to = Number(tr.rangeTo) || 0;
-        if (from <= 0 || to < from) return [];
-        return sorted.filter(r => Number(r.position) >= from && Number(r.position) <= to)
-          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
-      }
-      if (kind === 'bottom') {
-        const b = Number(tr.bottomN) || 0;
-        return sorted.slice(-b)
-          .map(r => ({ inscriptionId: String(r.inscriptionId), displayName: String(r.displayName || r.inscriptionId) }));
-      }
-      return [];
-    }
-
-    if (fmt === 'league') {
-      return pickFromStandings(sourceStage.standings || []);
-    }
-
-    if (fmt === 'groups') {
-      const seen = new Set<string>();
-      const result: Array<{ inscriptionId: string; displayName: string }> = [];
-      for (const group of (sourceStage.groups || [])) {
-        for (const row of pickFromStandings(group.standings || [])) {
-          if (!seen.has(row.inscriptionId)) {
-            seen.add(row.inscriptionId);
-            result.push(row);
-          }
-        }
-      }
-      return result;
-    }
-
-    if (fmt === 'elimination') {
-      // Clasificar equipos por la ronda más alta que ganaron
-      const maxRoundWon: Record<string, { round: number; displayName: string }> = {};
-      for (const m of (sourceStage.matches || [])) {
-        const status = String(m.status ?? '').toLowerCase();
-        if (status !== 'finished' && status !== 'completed') continue;
-        const hs = Number(m.homeScore ?? 0);
-        const as_ = Number(m.awayScore ?? 0);
-        if (hs === as_) continue;
-        const round = Number(m.round ?? 1);
-        const isHomeWinner = hs > as_;
-        const winnerId = isHomeWinner
-          ? m.homeAssignedInscription?.inscriptionId
-          : m.awayAssignedInscription?.inscriptionId;
-        const winnerDisplay = isHomeWinner
-          ? (m.homeAssignedInscription?.displayName ?? '')
-          : (m.awayAssignedInscription?.displayName ?? '');
-        if (!winnerId || winnerId.startsWith('liga360-slot:') || winnerId.startsWith('pos:')) continue;
-        if (!maxRoundWon[winnerId] || maxRoundWon[winnerId].round < round) {
-          maxRoundWon[winnerId] = { round, displayName: winnerDisplay };
-        }
-      }
-      const sorted = Object.entries(maxRoundWon)
-        .sort((a, b) => b[1].round - a[1].round)
-        .map(([inscriptionId, info]) => ({ inscriptionId, displayName: info.displayName }));
-
-      if (kind === 'top') {
-        const n = Number(tr.topN) || 0;
-        return sorted.slice(0, n);
-      }
-      if (kind === 'range') {
-        const from = Number(tr.rangeFrom) || 0;
-        const to = Number(tr.rangeTo) || 0;
-        if (from <= 0 || to < from) return [];
-        return sorted.slice(from - 1, to);
-      }
-      if (kind === 'bottom') {
-        const b = Number(tr.bottomN) || 0;
-        return sorted.slice(-b);
-      }
-      return [];
-    }
-
-    return [];
   }
 
   // Zonas de clasificación derivadas de las transiciones de la etapa
@@ -402,24 +406,23 @@ export const FixturePlanningPanel: React.FC<{
   type SummarySection = { label: string; teams: string[]; isChampion?: boolean; colorIndex?: number };
 
   const stageSummary = React.useMemo((): SummarySection[] | null => {
-    if (!stage || !isFinished) return null;
+    if (!displayStage || !isFinished) return null;
     const sections: SummarySection[] = [];
     const hasOutgoing = classificationZones.length > 0;
 
     if (hasOutgoing) {
-      if (stage.format === 'league') {
+      if (displayStage.format === 'league') {
         for (const zone of classificationZones) {
-          const teams = (stage.standings ?? [])
+          const teams = (displayStage.standings ?? [])
             .filter((r) => r.position >= zone.fromPos && r.position <= zone.toPos)
             .map((r) => r.displayName);
           if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
         }
-      } else if (stage.format === 'groups') {
-        const sortedGroups = (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      } else if (displayStage.format === 'groups') {
+        const sortedGroups = (displayStage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         for (const zone of classificationZones) {
           const teams: string[] = [];
           if (zone.bestNCount) {
-            // bestN: recolectar todos los equipos en esa posición, rankear globalmente, tomar los N mejores
             const candidates = sortedGroups.flatMap((g) =>
               (g.standings ?? []).filter((r) => r.position === zone.fromPos)
             );
@@ -438,9 +441,9 @@ export const FixturePlanningPanel: React.FC<{
           }
           if (teams.length) sections.push({ label: zone.label, teams, colorIndex: zone.colorIndex });
         }
-      } else if (stage.format === 'elimination') {
+      } else if (displayStage.format === 'elimination') {
         const maxRoundWon: Record<string, { round: number; displayName: string }> = {};
-        for (const m of (stage.matches ?? [])) {
+        for (const m of (displayStage.matches ?? [])) {
           const s = String(m.status ?? '').toLowerCase();
           if (s !== 'finished' && s !== 'completed') continue;
           const hs = Number(m.homeScore ?? 0);
@@ -461,16 +464,16 @@ export const FixturePlanningPanel: React.FC<{
       }
     } else {
       // Etapa final — mostrar campeón/es
-      if (stage.format === 'league') {
-        const champ = (stage.standings ?? []).find((r) => r.position === 1);
+      if (displayStage.format === 'league') {
+        const champ = (displayStage.standings ?? []).find((r) => r.position === 1);
         if (champ) sections.push({ label: 'Campeón', teams: [champ.displayName], isChampion: true });
-      } else if (stage.format === 'groups') {
-        for (const g of (stage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+      } else if (displayStage.format === 'groups') {
+        for (const g of (displayStage.groups ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
           const champ = (g.standings ?? []).find((r) => r.position === 1);
           if (champ) sections.push({ label: `Campeón · ${g.name}`, teams: [champ.displayName], isChampion: true });
         }
-      } else if (stage.format === 'elimination') {
-        const matches = stage.matches ?? [];
+      } else if (displayStage.format === 'elimination') {
+        const matches = displayStage.matches ?? [];
         const lastRound = matches.reduce((max, m) => Math.max(max, m.round ?? 1), 0);
         const finalMatch = matches.find((m) => (m.round ?? 1) === lastRound && (m.slotIndex ?? 1) === 1);
         if (finalMatch) {
@@ -488,7 +491,7 @@ export const FixturePlanningPanel: React.FC<{
     }
 
     return sections.length > 0 ? sections : null;
-  }, [stage, isFinished, classificationZones]);
+  }, [displayStage, isFinished, classificationZones]);
 
   const ZONE_DOT_CLASSES = [
     'bg-emerald-500', 'bg-sky-500', 'bg-amber-500', 'bg-orange-500', 'bg-red-500',
@@ -686,22 +689,24 @@ export const FixturePlanningPanel: React.FC<{
               {stage.format === 'league' ? (
                 <div className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold text-text-primary">Tabla de posiciones</h3>
-                  <StandingsTable rows={stage.standings ?? []} zones={classificationZones} />
+                  <StandingsTable rows={displayStage?.standings ?? []} zones={classificationZones} />
                 </div>
               ) : null}
-              {stage.format === 'groups'
-                ? (stage.groups || [])
+              {stage.format === 'groups' ? (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {(displayStage?.groups || [])
                     .slice()
                     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                     .map((group) => (
-                      <div key={`standings-${group.id}`} className="mt-4 space-y-2">
+                      <div key={`standings-${group.id}`} className="min-w-0 space-y-2">
                         <h3 className="text-sm font-semibold text-text-primary">
-                          Tabla de posiciones · {group.name}
+                          Tabla · {group.name}
                         </h3>
                         <StandingsTable rows={group.standings ?? []} zones={classificationZones} />
                       </div>
-                    ))
-                : null}
+                    ))}
+                </div>
+              ) : null}
               {stage.format === 'elimination' && classificationZones.length > 0 ? (
                 <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
                   {classificationZones.map((z) => (
@@ -717,6 +722,17 @@ export const FixturePlanningPanel: React.FC<{
 
               {stageStatus === 'active' && (
                 <div className="mt-4 space-y-2">
+                  {byeMatches.length > 0 && (
+                    <p className="text-xs text-text-muted">
+                      {stage.format === 'elimination'
+                        ? byeMatches.length === 1
+                          ? '1 equipo avanza con fecha libre (bye) — se completa automáticamente al finalizar la etapa.'
+                          : `${byeMatches.length} equipos avanzan con fecha libre (bye) — se completan automáticamente al finalizar la etapa.`
+                        : byeMatches.length === 1
+                          ? '1 equipo tiene fecha libre en el fixture — no requiere resultado.'
+                          : `${byeMatches.length} equipos tienen fecha libre en el fixture — no requieren resultado.`}
+                    </p>
+                  )}
                   {pendingMatches.length > 0 && (
                     <p className="text-xs text-amber-700">
                       Faltan {pendingMatches.length} {pendingMatches.length === 1 ? 'partido' : 'partidos'} por finalizar o suspender antes de cerrar la etapa.
@@ -732,12 +748,47 @@ export const FixturePlanningPanel: React.FC<{
                     </Button>
                     {canFinalize && (
                       <span className="text-xs text-text-muted">
-                        Todos los partidos jugados. Se pasarán los clasificados automáticamente.
+                        {inSeasonOutgoingCount > 0 && nextEditionOutgoing.length > 0
+                          ? 'Se pasarán clasificados de esta edición y se guardará ascenso/descenso para la próxima temporada.'
+                          : nextEditionOutgoing.length > 0
+                            ? 'Se guardará la clasificación de ascenso/descenso para la próxima temporada (sin mover equipos ahora).'
+                            : 'Todos los partidos jugados. Se pasarán los clasificados automáticamente.'}
                       </span>
                     )}
                   </div>
+                  {nextEditionOutgoing.length > 0 && stageStatus === 'active' ? (
+                    <p className="text-xs text-text-muted">
+                      {nextEditionOutgoing.map((tr) => tr.label || 'Clasificación').join(' · ')} → próxima temporada
+                    </p>
+                  ) : null}
                 </div>
               )}
+
+              {isFinished && nextEditionOutgoing.length > 0 ? (
+                <div className="mt-4 space-y-2 rounded-lg border border-border-subtle bg-surface-1 px-3 py-2">
+                  <p className="text-xs font-medium text-text-primary">Clasificación para próxima temporada</p>
+                  <ul className="space-y-2 text-xs text-text-muted">
+                    {nextEditionOutgoing.map((tr) => {
+                      const snapshot = parseTransitionPlacementSnapshot(tr.placementSnapshotJson);
+                      const dest = resolveStageLabel(tr.toStageId);
+                      return (
+                        <li key={tr.id}>
+                          <span className="font-medium text-text-primary">{tr.label || 'Relación'}</span>
+                          {' → '}
+                          {dest}
+                          {snapshot?.placements?.length ? (
+                            <span className="mt-1 block text-text-muted">
+                              {snapshot.placements.map((p) => p.displayName).join(', ')}
+                            </span>
+                          ) : (
+                            <span className="mt-1 block italic">Sin snapshot guardado</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </>
           ) : null}
         </Card>

@@ -13,6 +13,8 @@ test('isPlaceholderParticipantLabel detecta etiquetas sintéticas', () => {
   assert.equal(isPlaceholderParticipantLabel('Posición 10 · Liga única'), true);
   assert.equal(isPlaceholderParticipantLabel('10° Liga'), true);
   assert.equal(isPlaceholderParticipantLabel('P1R1'), true);
+  assert.equal(isPlaceholderParticipantLabel('BN1'), true);
+  assert.equal(isPlaceholderParticipantLabel('BN2'), true);
   assert.equal(isPlaceholderParticipantLabel('pos:l:st:10'), true);
   assert.equal(isPlaceholderParticipantLabel('Boca Juniors'), false);
   assert.equal(isPlaceholderParticipantLabel('River Plate'), false);

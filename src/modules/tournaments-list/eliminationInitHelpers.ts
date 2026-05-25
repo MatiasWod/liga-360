@@ -249,6 +249,43 @@ export function buildPoolExclusionSet(
   return expandAssignedIdsForPool(inscriptionIdsAssignedAnywhereInMatches(matches), eligibleFromTables);
 }
 
+/** Resuelve un id del pool (pos:/físico) al inscriptionId físico del equipo. */
+export function resolvePoolChoicePhysicalId(
+  choiceId: string | null | undefined,
+  eligibleFromTables: ReadonlyArray<PoolEligibleRef>
+): string | null {
+  const cid = String(choiceId ?? '').trim();
+  if (!cid) return null;
+  if (cid.startsWith('liga360-slot:')) return null;
+  if (cid.startsWith('pos:')) {
+    const hit = eligibleFromTables.find((e) => String(e.inscriptionId || '').trim() === cid);
+    const real = String(hit?.resolvedRealId ?? '').trim();
+    return real || null;
+  }
+  return cid;
+}
+
+/** Equipos físicos ya colocados en otras llaves (excluye un partido opcionalmente). */
+export function physicalInscriptionIdsUsedElsewhere(
+  matches: TournamentMatchRow[],
+  eligibleFromTables: ReadonlyArray<PoolEligibleRef>,
+  excludeMatchId?: string
+): Set<string> {
+  const out = new Set<string>();
+  for (const m of matches) {
+    if (excludeMatchId && m.id === excludeMatchId) continue;
+    for (const slot of [m.homeAssignedInscription, m.awayAssignedInscription]) {
+      const id = String(slot?.inscriptionId ?? '').trim();
+      if (!id) continue;
+      const physical =
+        resolvePoolChoicePhysicalId(id, eligibleFromTables) ??
+        (id.startsWith('pos:') || id.startsWith('liga360-slot:') ? null : id);
+      if (physical) out.add(physical);
+    }
+  }
+  return out;
+}
+
 /**
  * Placeholder de “ganador de esta llave” dentro de la misma etapa (sigue en Neo como inscriptionId textual).
  */

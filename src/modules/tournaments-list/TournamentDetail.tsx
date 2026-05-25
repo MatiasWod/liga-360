@@ -1,7 +1,14 @@
 import React from 'react';
 import type { GoalRecord } from '../../components/tournament-schedule/MatchCard';
+import { RoundSelector } from '../../components/tournament-schedule/RoundSelector';
 import type { ClassificationZone } from '../../components/standings';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
+import { listTournamentInscriptions } from '../../services/inscriptionsApi';
+import { ConvergingEliminationBracket } from './ConvergingEliminationBracket';
+import {
+  buildInscriptionNameLookupFromTournament,
+  mergeInscriptionNameLookups,
+} from './teamDisplayName';
 import { listMatchEvents } from '../../services/matchEvents/matchEvents';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage, StandingsRow } from './types';
 
@@ -161,6 +168,9 @@ function CompactMatchRow({ match, goals }: { match: TournamentMatchRow; goals?: 
 	);
 }
 
+// Máx. columnas por fila en fixture público (grupos, tablas)
+const SCHEDULE_PANEL_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4';
+
 // Splits items into N balanced columns with at most maxPerCol items each
 function splitBalanced<T>(items: T[], maxPerCol = 4): T[][] {
 	if (items.length === 0) return [];
@@ -220,166 +230,8 @@ function GroupMatchBlock({ name, matches, goalsByMatchId }: {
 }
 
 // ---------------------------------------------------------------------------
-// Elimination bracket — left + right converge to center
+// Main component
 // ---------------------------------------------------------------------------
-
-const BRACKET_BASE_H = 68;
-const BRACKET_CARD_W = 176;
-const BRACKET_COL_GAP = 12;
-
-function BracketTeamRow({ name, score, isWinner, isCompleted }: {
-	name: string; score?: number | null; isWinner: boolean; isCompleted: boolean;
-}) {
-	return (
-		<div className="flex items-center gap-1 px-2 py-1">
-			<span className={`flex-1 min-w-0 truncate text-xs ${isWinner ? 'font-semibold text-text-primary' : 'text-text-muted'}`}>
-				{name}
-			</span>
-			<span className={`flex-none w-5 text-right tabular-nums text-xs ${isWinner ? 'font-bold text-text-primary' : 'text-text-muted'}`}>
-				{isCompleted ? (score ?? 0) : ''}
-			</span>
-		</div>
-	);
-}
-
-function BracketMatchSlot({ matches, goalsByMatchId, isAdvancement, isFinalCol }: {
-	matches: TournamentMatchRow[];
-	goalsByMatchId: Record<string, GoalRecord[]>;
-	isAdvancement: boolean;
-	isFinalCol: boolean;
-}) {
-	const borderCls = isFinalCol ? 'border-amber-400/60' : isAdvancement ? 'border-sky-400/50' : 'border-border-subtle';
-	const bgCls    = isFinalCol ? 'bg-amber-500/[0.10]'  : isAdvancement ? 'bg-sky-500/[0.10]'  : 'bg-surface-2';
-	return (
-		<div className={`rounded-lg border overflow-hidden ${borderCls} ${bgCls}`}>
-			{matches.map((m, mi) => {
-				const status = mapMatchStatus(m.status);
-				const isCompleted = status === 'completed';
-				const hs = m.homeScore ?? 0, as_ = m.awayScore ?? 0;
-				const homeWins = isCompleted && hs > as_;
-				const awayWins = isCompleted && as_ > hs;
-				const homeName = m.homeAssignedInscription?.displayName ?? 'Por definir';
-				const awayName = m.awayAssignedInscription?.displayName ?? 'Por definir';
-				return (
-					<div key={m.id}>
-						{mi > 0 && (
-							<p className="text-[9px] text-text-muted px-2 py-0.5 bg-surface-1 border-t border-border-subtle">
-								Vuelta
-							</p>
-						)}
-						<BracketTeamRow name={homeName} score={m.homeScore} isWinner={homeWins} isCompleted={isCompleted} />
-						<div className="border-t border-border-subtle/40" />
-						<BracketTeamRow name={awayName} score={m.awayScore} isWinner={awayWins} isCompleted={isCompleted} />
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-function EliminationBracket({ stage, goalsByMatchId }: {
-	stage: TournamentStage;
-	goalsByMatchId: Record<string, GoalRecord[]>;
-}) {
-	const allMatches = [...(stage.matches || [])].sort((a, b) => {
-		const r = (a.round ?? 0) - (b.round ?? 0);
-		if (r !== 0) return r;
-		const si = (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
-		if (si !== 0) return si;
-		return (a.leg ?? 0) - (b.leg ?? 0);
-	});
-
-	// roundNum → slotIndex → matches[]
-	const roundMap = new Map<number, Map<number, TournamentMatchRow[]>>();
-	for (const m of allMatches) {
-		const r = m.round ?? 1, s = m.slotIndex ?? 1;
-		if (!roundMap.has(r)) roundMap.set(r, new Map());
-		const sm = roundMap.get(r)!;
-		const arr = sm.get(s) ?? [];
-		arr.push(m);
-		sm.set(s, arr);
-	}
-	const roundNums = [...roundMap.keys()].sort((a, b) => a - b);
-	if (roundNums.length === 0) return null;
-
-	const M = roundNums.length;
-	const firstRoundMaxSlot = Math.max(...roundMap.get(roundNums[0])!.keys());
-	const totalH = firstRoundMaxSlot * BRACKET_BASE_H;
-
-	// centerY: BASE_H * (2s-1) * 2^(ri-1) where ri is 1-indexed position in roundNums
-	function cy(roundNum: number, slotIdx: number): number {
-		const ri = roundNums.indexOf(roundNum) + 1;
-		return BRACKET_BASE_H * (2 * slotIdx - 1) * Math.pow(2, ri - 2);
-	}
-
-	// Column assignment:
-	//   last round → center column (M-1)
-	//   left half (slot <= maxSlot/2)  → col = ri (0-indexed)
-	//   right half (slot > maxSlot/2)  → col = 2*(M-1) - ri  (mirrored)
-	interface Entry { roundNum: number; slotIdx: number; matches: TournamentMatchRow[]; col: number; centerY: number; isFinalCol: boolean; isAdvancement: boolean }
-	const entries: Entry[] = [];
-
-	roundNums.forEach((roundNum, ri) => {
-		const slotMap = roundMap.get(roundNum)!;
-		const maxSlot = Math.max(...slotMap.keys());
-		const isLast = ri === M - 1;
-		slotMap.forEach((matches, slotIdx) => {
-			const col = isLast ? M - 1 : slotIdx <= maxSlot / 2 ? ri : 2 * (M - 1) - ri;
-			entries.push({
-				roundNum, slotIdx, matches, col,
-				centerY: cy(roundNum, slotIdx),
-				isFinalCol: isLast,
-				isAdvancement: matches.some((m) => m.winnerAdvancementTransitionId),
-			});
-		});
-	});
-
-	// Labels for left-side columns + center only
-	const colLabels = new Map<number, string>();
-	roundNums.forEach((roundNum, ri) => {
-		const isLast = ri === M - 1;
-		const col = isLast ? M - 1 : ri;
-		if (!colLabels.has(col)) {
-			const slotMap = roundMap.get(roundNum)!;
-			colLabels.set(col, isLast && slotMap.size === 1 ? 'Final' : `Ronda ${roundNum}`);
-		}
-	});
-
-	const CARD_H = 52;
-	const LABEL_H = 24;
-	const totalCols = 2 * M - 1;
-	const totalW = totalCols * (BRACKET_CARD_W + BRACKET_COL_GAP) - BRACKET_COL_GAP;
-
-	return (
-		<div className="overflow-x-auto pb-2">
-			<div className="relative" style={{ width: totalW, height: totalH + LABEL_H }}>
-				{[...colLabels.entries()].map(([col, label]) => (
-					<p key={col} className="absolute text-[10px] text-text-muted font-medium text-center"
-						style={{ left: col * (BRACKET_CARD_W + BRACKET_COL_GAP), top: 0, width: BRACKET_CARD_W }}>
-						{label}
-					</p>
-				))}
-				{entries.map(({ roundNum, slotIdx, matches, col, centerY: center, isFinalCol, isAdvancement }) => {
-					const x = col * (BRACKET_CARD_W + BRACKET_COL_GAP);
-					const top = LABEL_H + center - CARD_H / 2;
-					return (
-						<div key={`${roundNum}-${slotIdx}`} className="absolute"
-							style={{ left: x, top: Math.max(LABEL_H, top), width: BRACKET_CARD_W }}>
-							<BracketMatchSlot
-								matches={matches}
-								goalsByMatchId={goalsByMatchId}
-								isAdvancement={isAdvancement}
-								isFinalCol={isFinalCol}
-							/>
-						</div>
-					);
-				})}
-			</div>
-		</div>
-	);
-}
-
-// Tasks 4.1–4.3: compact standings table
 function CompactStandingsTable({ rows, zones = [] }: { rows: StandingsRow[]; zones?: ClassificationZone[] }) {
 	if (rows.length === 0) return null;
 
@@ -496,6 +348,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [t, setT] = React.useState<TournamentEntity | null>(null);
+	const [inscriptionNameById, setInscriptionNameById] = React.useState<Map<string, string>>(new Map());
 	const [goalsByMatchId, setGoalsByMatchId] = React.useState<Record<string, GoalRecord[]>>({});
 
 	const [competitionId, setCompetitionId] = React.useState('');
@@ -508,8 +361,17 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 			setLoading(true);
 			setError(null);
 			try {
-				const tournament = await getTournamentDetailById(id);
-				setT((tournament || null) as TournamentEntity | null);
+				const [tournament, inscriptions] = await Promise.all([
+					getTournamentDetailById(id),
+					listTournamentInscriptions(id).catch(() => [] as Awaited<ReturnType<typeof listTournamentInscriptions>>),
+				]);
+				const entity = (tournament || null) as TournamentEntity | null;
+				setT(entity);
+				const fromApi = new Map(
+					inscriptions.map((item) => [String(item.id), String(item.display_name || '').trim()])
+				);
+				const fromGraph = entity ? buildInscriptionNameLookupFromTournament(entity) : new Map<string, string>();
+				setInscriptionNameById(mergeInscriptionNameLookups(fromApi, fromGraph));
 
 				if (tournament) {
 					// Task 1.1: init to first competition/stage by order
@@ -724,28 +586,17 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 								</div>
 							)}
 
-							{/* Round pills — league and groups both navigate by fecha */}
+							{/* Selector de fecha — liga y grupos */}
 							{(() => {
 								const rounds = stage?.format === 'league' ? leagueRounds : stage?.format === 'groups' ? groupRounds : [];
 								if (rounds.length === 0) return null;
-								const activeKey = groupRoundKey || rounds[0]?.key;
 								return (
-									<div className="flex flex-wrap gap-1.5">
-										{rounds.map((r) => (
-											<button
-												key={r.key}
-												type="button"
-												onClick={() => setGroupRoundKey(r.key)}
-												className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-													activeKey === r.key
-														? 'border-accent-primary bg-accent-soft text-success-base'
-														: 'border-border-subtle bg-surface-2 text-text-muted hover:border-border-strong hover:text-text-primary'
-												}`}
-											>
-												{r.label}
-											</button>
-										))}
-									</div>
+									<RoundSelector
+										rounds={rounds.map((r) => ({ id: r.key, label: r.label }))}
+										selectedId={groupRoundKey || rounds[0]?.key || null}
+										onChange={setGroupRoundKey}
+										theme="dark"
+									/>
 								);
 							})()}
 
@@ -787,7 +638,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 
 							{/* Elimination — bracket visual */}
 							{stage?.format === 'elimination' && hasMatches && (
-								<EliminationBracket stage={stage} goalsByMatchId={goalsByMatchId} />
+								<ConvergingEliminationBracket stage={stage} nameById={inscriptionNameById} />
 							)}
 
 							{/* Groups: grupos en columnas, cada uno con sub-columnas equilibradas de partidos */}
@@ -799,22 +650,22 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 										(m) => `${m.round ?? 0}|${m.leg ?? 1}` === activeKey,
 									),
 								})).filter(({ matches }) => matches.length > 0);
-								const groupCols = Math.max(1, activeGroups.length);
 								const standingGroups = sortedGroups.filter((g) => (g.standings ?? []).length > 0);
-								const standingCols = Math.max(1, standingGroups.length);
 								return (
 									<div className="space-y-3">
-										<div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${groupCols}, minmax(0, 1fr))` }}>
+										<div className={SCHEDULE_PANEL_GRID}>
 											{activeGroups.map(({ g, matches }) => (
-												<GroupMatchBlock key={g.id} name={g.name} matches={matches} goalsByMatchId={goalsByMatchId} />
+												<div key={g.id} className="min-w-0">
+													<GroupMatchBlock name={g.name} matches={matches} goalsByMatchId={goalsByMatchId} />
+												</div>
 											))}
 										</div>
 										{standingGroups.length > 0 && (
 											<div className="pt-1 space-y-2">
 												<p className="text-xs text-text-muted font-medium">Tabla de posiciones</p>
-												<div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${standingCols}, minmax(0, 1fr))` }}>
+												<div className={SCHEDULE_PANEL_GRID}>
 													{standingGroups.map((g) => (
-														<div key={`s-${g.id}`} className="space-y-1">
+														<div key={`s-${g.id}`} className="min-w-0 space-y-1">
 															<p className="text-[11px] text-text-muted font-medium">{g.name}</p>
 															<CompactStandingsTable rows={g.standings ?? []} zones={zones} />
 														</div>

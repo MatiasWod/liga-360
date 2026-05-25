@@ -1,5 +1,5 @@
 import React from 'react';
-import { bothMatchTeamsResolved } from './matchParticipantUtils';
+import { bothMatchTeamsResolved, isByeMatchRecord, isByeMatchTeam } from './matchParticipantUtils';
 import type { MatchRecord, MatchStatus, TeamRef } from './types';
 
 // ---------------------------------------------------------------------------
@@ -167,13 +167,25 @@ function ScoreDisplay({
   match,
   isDark,
   quickEditHint,
+  isBye = false,
 }: {
   match: MatchRecord;
   isDark: boolean;
   quickEditHint?: boolean;
+  isBye?: boolean;
 }) {
   const textBase = isDark ? 'text-white' : 'text-slate-900';
   const textMuted = isDark ? 'text-white/40' : 'text-slate-400';
+
+  if (isBye && match.status === 'scheduled') {
+    return (
+      <div className="flex flex-col items-center px-3">
+        <span className={`text-xs font-medium italic ${isDark ? 'text-white/50' : 'text-slate-400'}`}>
+          Fecha libre
+        </span>
+      </div>
+    );
+  }
 
   if (match.status === 'postponed') {
     return (
@@ -263,6 +275,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const [lifecycleLoading, setLifecycleLoading] = React.useState<'start' | 'finish' | null>(null);
 
   const teamsResolved = bothMatchTeamsResolved(match);
+  const isBye = isByeMatchRecord(match);
   const canQuickManage = Boolean(onQuickMatchAction) && match.status !== 'postponed' && match.status !== 'completed';
   const canEditScore =
     canQuickManage && teamsResolved && (match.status === 'scheduled' || match.status === 'live');
@@ -439,6 +452,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               match={match}
               isDark={isDark}
               quickEditHint={canEditScore && !scoreEditing}
+              isBye={isBye}
             />
           </button>
         )}
@@ -600,15 +614,21 @@ function TeamName({
 }) {
   const align = side === 'home' ? 'items-end text-right' : 'items-start text-left';
 
+  const isByeSide = isByeMatchTeam(team);
+
   return (
     <div className={`flex min-w-0 w-full flex-col gap-1 ${align}`}>
       {/* Avatar */}
-      <TeamAvatar team={team} side={side} isDark={isDark} />
+      {!isByeSide ? <TeamAvatar team={team} side={side} isDark={isDark} /> : null}
 
       {/* Nombre */}
       <span
         className={`w-full truncate text-sm leading-tight transition-all ${
-          winner
+          isByeSide
+            ? isDark
+              ? 'italic text-white/45'
+              : 'italic text-slate-400'
+            : winner
             ? isDark
               ? 'font-semibold text-white'
               : 'font-semibold text-slate-900'

@@ -44,6 +44,8 @@ export interface Relation {
 	toExternal?: ExternalStageRef; // destino externo (otro torneo o competencia)
 	selection: Selection;
 	carryOver?: CarryOverConfig; // reglas de arrastre entre etapas
+	/** in_season: avance en la misma edición. next_edition: ascenso/descenso para próxima temporada. */
+	timing?: 'in_season' | 'next_edition';
 }
 
 export interface CrossCompetitionOption {

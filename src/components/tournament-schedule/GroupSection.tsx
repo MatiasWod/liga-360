@@ -16,7 +16,7 @@ export const GroupSection: React.FC<GroupSectionProps> = ({
   const isDark = theme === 'dark';
   return (
     <section
-      className={`rounded-xl border p-4 ${
+      className={`rounded-xl border p-4 min-w-0 ${
         isDark ? 'border-white/15 bg-white/5' : 'border-slate-200 bg-slate-50/50'
       } ${className}`}
     >

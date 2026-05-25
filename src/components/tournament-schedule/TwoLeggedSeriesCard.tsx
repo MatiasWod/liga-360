@@ -2,6 +2,7 @@ import React from 'react';
 import type { MatchRecord } from './types';
 import { MatchCard } from './MatchCard';
 import type { GoalRecord, MatchQuickAction } from './MatchCard';
+import { computeTwoLeggedAggregate } from './eliminationSeriesUtils';
 
 interface TwoLeggedSeriesCardProps {
   legs: MatchRecord[];
@@ -9,32 +10,6 @@ interface TwoLeggedSeriesCardProps {
   onEdit?: (matchId: string) => void;
   onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goalsByMatchId?: Record<string, GoalRecord[]>;
-}
-
-function computeAggregate(legs: MatchRecord[]) {
-  const leg1 = legs[0];
-  const leg2 = legs[1];
-
-  const teamA = leg1.homeTeam;
-  const teamB = leg1.awayTeam;
-
-  let scoreA = 0;
-  let scoreB = 0;
-  let hasData = false;
-
-  if (leg1.homeScore != null) { scoreA += leg1.homeScore; hasData = true; }
-  if (leg1.awayScore != null) { scoreB += leg1.awayScore; hasData = true; }
-
-  if (leg2) {
-    // En la vuelta los roles están invertidos: leg2 home = teamB, leg2 away = teamA
-    if (leg2.homeScore != null) { scoreB += leg2.homeScore; hasData = true; }
-    if (leg2.awayScore != null) { scoreA += leg2.awayScore; hasData = true; }
-  }
-
-  const bothFinished = legs.every((l) => l.status === 'completed');
-  const partial = hasData && !bothFinished;
-
-  return { teamA, teamB, scoreA, scoreB, hasData, bothFinished, partial };
 }
 
 export const TwoLeggedSeriesCard: React.FC<TwoLeggedSeriesCardProps> = ({
@@ -49,7 +24,7 @@ export const TwoLeggedSeriesCard: React.FC<TwoLeggedSeriesCardProps> = ({
   const [selectedIdx, setSelectedIdx] = React.useState(0);
   const currentMatch = sortedLegs[selectedIdx] ?? sortedLegs[0];
 
-  const agg = computeAggregate(sortedLegs);
+  const agg = computeTwoLeggedAggregate(sortedLegs);
 
   const mutedText = isDark ? 'text-white/40' : 'text-slate-400';
   const activeTab = isDark
@@ -61,9 +36,7 @@ export const TwoLeggedSeriesCard: React.FC<TwoLeggedSeriesCardProps> = ({
 
   return (
     <div className="space-y-1.5">
-      {/* Fila superior: toggle + global */}
       <div className="flex items-center justify-between px-0.5">
-        {/* Selector Ida / Vuelta */}
         <div className={`flex gap-0.5 rounded-lg p-0.5 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
           {sortedLegs.map((leg, idx) => {
             const label = idx === 0 ? 'Ida' : 'Vuelta';
@@ -81,8 +54,7 @@ export const TwoLeggedSeriesCard: React.FC<TwoLeggedSeriesCardProps> = ({
           })}
         </div>
 
-        {/* Score global */}
-        {agg.hasData ? (
+        {agg?.hasData ? (
           <div className={`flex items-center gap-1 text-[11px] ${mutedText}`}>
             <span className="font-medium uppercase tracking-wide">Global</span>
             <span className={`tabular-nums ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
@@ -104,14 +76,15 @@ export const TwoLeggedSeriesCard: React.FC<TwoLeggedSeriesCardProps> = ({
         )}
       </div>
 
-      {/* MatchCard de la pata seleccionada */}
-      <MatchCard
-        match={currentMatch}
-        theme={theme}
-        onEdit={onEdit}
-        onQuickMatchAction={onQuickMatchAction}
-        goals={goalsByMatchId?.[currentMatch.id]}
-      />
+      {currentMatch ? (
+        <MatchCard
+          match={currentMatch}
+          theme={theme}
+          onEdit={onEdit}
+          onQuickMatchAction={onQuickMatchAction}
+          goals={goalsByMatchId?.[currentMatch.id]}
+        />
+      ) : null}
     </div>
   );
 };

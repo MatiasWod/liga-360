@@ -88,6 +88,38 @@ describe('matchInputToRecord', () => {
     expect(m.venue).toBeUndefined();
     expect(m.referee).toBeUndefined();
   });
+
+  it('marca fecha libre cuando solo un equipo está asignado (liga impar)', () => {
+    const m = matchInputToRecord({
+      id: 'bye1',
+      round: 1,
+      homeAssignedInscription: { inscriptionId: 'team-a', displayName: 'Equipo A' },
+      awayAssignedInscription: null,
+    }, 'league');
+    expect(m.homeTeam).toEqual({ id: 'team-a', name: 'Equipo A' });
+    expect(m.awayTeam).toEqual({ id: '__bye-away-bye1', name: 'Libre' });
+  });
+
+  it('no marca fecha libre en eliminatoria con un solo equipo (inicialización parcial)', () => {
+    const m = matchInputToRecord({
+      id: 'ko1',
+      round: 1,
+      homeAssignedInscription: { inscriptionId: 'team-a', displayName: 'Equipo A' },
+      awayAssignedInscription: null,
+    }, 'elimination');
+    expect(m.awayTeam).toEqual({ id: '__empty-away-ko1', name: '—' });
+  });
+
+  it('marca fecha libre en eliminatoria cuando matchKind es bye', () => {
+    const m = matchInputToRecord({
+      id: 'ko-bye',
+      round: 1,
+      matchKind: 'bye',
+      homeAssignedInscription: { inscriptionId: 'team-a', displayName: 'Equipo A' },
+      awayAssignedInscription: null,
+    }, 'elimination');
+    expect(m.awayTeam).toEqual({ id: '__bye-away-ko-bye', name: 'Libre' });
+  });
 });
 
 describe('buildScheduleFromStage (elimination)', () => {

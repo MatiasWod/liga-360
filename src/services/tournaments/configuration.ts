@@ -46,6 +46,8 @@ export async function getTournamentConfigurationById(tournamentId: string) {
               toExternalTournamentId
               toExternalStageId
               toExternalTournamentName
+              timing
+              placementSnapshotJson
             }
             groups {
               id
@@ -132,12 +134,23 @@ export async function assignInscriptionToStage(payload: {
   tournamentId: string;
   displayName: string;
   force?: boolean;
+  seedOrder?: number;
 }) {
   await gqlRequest(
-    `mutation Assign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!, $force: Boolean) {
-      assignInscriptionToStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName, force: $force)
+    `mutation Assign($stageId: ID!, $inscriptionId: ID!, $tournamentId: ID!, $displayName: String!, $force: Boolean, $seedOrder: Int) {
+      assignInscriptionToStage(stageId: $stageId, inscriptionId: $inscriptionId, tournamentId: $tournamentId, displayName: $displayName, force: $force, seedOrder: $seedOrder)
     }`,
     payload,
+    { auth: true }
+  );
+}
+
+export async function hydrateEliminationFirstRoundFromRoster(stageId: string) {
+  await gqlRequest(
+    `mutation HydrateElimFirstRound($stageId: ID!) {
+      hydrateEliminationFirstRoundFromRoster(stageId: $stageId)
+    }`,
+    { stageId },
     { auth: true }
   );
 }
@@ -314,6 +327,16 @@ export async function setStageStatus(stageId: string, status: 'not_started' | 'a
       setStageStatus(stageId: $stageId, status: $status) { id stageStatus }
     }`,
     { stageId, status },
+    { auth: true }
+  );
+}
+
+export async function saveTransitionPlacementSnapshot(transitionId: string, snapshotJson: string): Promise<void> {
+  await gqlRequest(
+    `mutation SaveTransitionPlacementSnapshot($transitionId: ID!, $snapshotJson: String!) {
+      saveTransitionPlacementSnapshot(transitionId: $transitionId, snapshotJson: $snapshotJson) { id }
+    }`,
+    { transitionId, snapshotJson },
     { auth: true }
   );
 }

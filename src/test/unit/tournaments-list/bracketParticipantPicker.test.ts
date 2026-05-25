@@ -6,6 +6,7 @@ import {
 import {
   shortPhaseTabTitle,
   summarizeParticipantOptionLabel,
+  displayLabelFromPoolEligible,
 } from '../../../modules/tournaments-list/BracketParticipantPicker';
 import type { TournamentMatchRow } from '../../../modules/tournaments-list/types';
 
@@ -40,6 +41,34 @@ describe('BracketParticipantPicker helpers', () => {
     const s = summarizeParticipantOptionLabel('T · C · Liga · tabla general P12 · Riv');
     expect(s.headline).toBe('Posición 12 · Liga');
     expect(s.subline).toBe('T · C · Liga · Riv');
+  });
+
+  it('summarizeParticipantOptionLabel reconoce Grupo N · posición M (Mundial clásico)', () => {
+    const s = summarizeParticipantOptionLabel(
+      'Mundial Clasico · Copa del Mundo · Fase de grupos · Grupo 3 · posición 1 · Argentina'
+    );
+    expect(s.headline).toBe('Posición 1 · Grupo 3');
+    expect(s.subline).toContain('Mundial Clasico');
+    expect(s.subline).toContain('Argentina');
+  });
+
+  it('displayLabelFromPoolEligible no cae al nombre del torneo si falta patrón', () => {
+    expect(
+      displayLabelFromPoolEligible({
+        inscriptionId: 'pos:sg:st:g1:1',
+        optionLabel: 'Mundial Clasico · Copa · Grupos · sin patrón',
+        shortLabel: 'P1G1',
+        displayName: 'Clasificación pendiente',
+      })
+    ).toBe('P1G1');
+  });
+
+  it('summarizeParticipantOptionLabel reconoce cupo BN1 como mejor tercero', () => {
+    const s = summarizeParticipantOptionLabel(
+      'Mini mundial · Copa · Grupos · 1° mejor 3° entre grupos · Italia (provisional)'
+    );
+    expect(s.headline).toBe('1° mejor 3° entre grupos');
+    expect(s.subline).toContain('Italia');
   });
 
   it('filterPoolSectionsForRole mantiene secciones con entradas permitidas para home', () => {

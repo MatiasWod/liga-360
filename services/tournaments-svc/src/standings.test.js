@@ -68,6 +68,18 @@ test('computeStandings: empate total ordena alfabeticamente por displayName', ()
   assert.equal(rows[1].displayName, 'Barsa');
 });
 
+test('computeStandings: mismo displayName desempata por inscriptionId', () => {
+  const inscriptions = [
+    { inscriptionId: '245', displayName: 'BN2' },
+    { inscriptionId: '243', displayName: 'BN2' },
+    { inscriptionId: '241', displayName: 'Argentina' },
+  ];
+  const rows = computeStandings([], inscriptions);
+  assert.equal(rows[0].inscriptionId, '241');
+  assert.equal(rows[1].inscriptionId, '243');
+  assert.equal(rows[2].inscriptionId, '245');
+});
+
 test('computeStandings: incluye inscripcion sin partidos jugados', () => {
   const inscriptions = [
     { inscriptionId: 'A', displayName: 'Atlas' },
@@ -92,6 +104,28 @@ test('computeStandings: ignora partidos no finalizados', () => {
   );
   assert.equal(rows[0].points, 0);
   assert.equal(rows[1].points, 0);
+});
+
+test('computeStandings: cuenta partido finished aunque matchStatus quede scheduled (legacy Neo4j)', () => {
+  const rows = computeStandings(
+    [{
+      homeInscriptionId: 'A',
+      awayInscriptionId: 'B',
+      homeDisplayName: 'Alemania',
+      awayDisplayName: 'Arabia',
+      homeScore: 2,
+      awayScore: 0,
+      status: 'finished',
+      matchStatus: 'scheduled',
+    }],
+    [
+      { inscriptionId: 'A', displayName: 'Alemania' },
+      { inscriptionId: 'B', displayName: 'Arabia' },
+    ]
+  );
+  assert.equal(rows.find((r) => r.inscriptionId === 'A')?.played, 1);
+  assert.equal(rows.find((r) => r.inscriptionId === 'A')?.points, 3);
+  assert.equal(rows.find((r) => r.inscriptionId === 'B')?.played, 1);
 });
 
 test('computeStandings: trata score null como 0 en match finished (consistente con UI)', () => {

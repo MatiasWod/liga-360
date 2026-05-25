@@ -300,6 +300,7 @@ const sistemaLigas: TournamentPreset = {
                 relations.push({
                     id: crypto.randomUUID(),
                     label: `Ascenso a División ${divNum - 1}`,
+                    timing: 'next_edition',
                     toExternal: { tournamentId: 'this', stageId: stageIds[i - 1] },
                     selection: { kind: 'top', count: promotions },
                 });
@@ -310,6 +311,7 @@ const sistemaLigas: TournamentPreset = {
                 relations.push({
                     id: crypto.randomUUID(),
                     label: `Descenso a División ${divNum + 1}`,
+                    timing: 'next_edition',
                     toExternal: { tournamentId: 'this', stageId: stageIds[i + 1] },
                     selection: { kind: 'bottom', count: relegations },
                 });

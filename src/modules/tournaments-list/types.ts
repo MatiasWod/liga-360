@@ -63,6 +63,8 @@ export type TournamentTransition = {
   toExternalTournamentId?: string | null;
   toExternalStageId?: string | null;
   toExternalTournamentName?: string | null;
+  timing?: string | null;
+  placementSnapshotJson?: string | null;
 };
 
 export type TournamentStage = {

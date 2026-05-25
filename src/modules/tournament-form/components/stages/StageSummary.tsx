@@ -286,6 +286,11 @@ const Legend: React.FC<{
 							<span className={`inline-block w-3 h-3 rounded ${COLORS[i % COLORS.length]}`}></span>
 							<span>{r.label}</span>
 							<span className="opacity-70">→ {dest}</span>
+							{r.timing === 'next_edition' ? (
+								<span className="rounded-full border border-border-subtle bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-muted">
+									Próxima temporada
+								</span>
+							) : null}
 							{r.carryOver && <span className="opacity-70"> · CO:{r.carryOver.mode}</span>}
 							{onRemoveRelation && (
 								<button
