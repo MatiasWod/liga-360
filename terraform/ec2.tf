@@ -80,17 +80,17 @@ resource "aws_instance" "k3s_node" {
   key_name             = "vockey"
   iam_instance_profile = "LabInstanceProfile"
 
-  subnet_id                   = module.vpc.public_subnets[0]
+  # --- CAMBIOS DE RED APLICADOS ACÁ ---
+  subnet_id                   = module.vpc.private_subnets[0]
   vpc_security_group_ids      = [aws_security_group.k3s_sg.id]
-  associate_public_ip_address = true
+  associate_public_ip_address = false
 
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
   }
 
-
-
+  # --- TU SCRIPT ORIGINAL INTACTO ---
   user_data = <<-EOF
 #!/bin/bash
 set -e
@@ -228,7 +228,7 @@ EOF_ISSUER
 for i in $(seq 1 10); do
   echo "Bootstrap attempt $i/10..."
   rm -rf ~/.kube/cache 2>/dev/null || true
-  
+
   if kubectl apply -f /tmp/cluster-issuer.yaml && \
       kubectl apply --server-side -f /tmp/cluster-secret-store.yaml && \
      kubectl apply --server-side -f /tmp/argocd-external-secret.yaml && \
@@ -236,7 +236,7 @@ for i in $(seq 1 10); do
     echo "Bootstrap applied successfully!"
     break
   fi
-  
+
   echo "Attempt $i failed, waiting 15s..."
   sleep 15
 done
@@ -251,34 +251,9 @@ EOF
   }
 }
 
-
-resource "aws_instance" "k3s_node" {
-  ami                  = data.aws_ami.ubuntu.id
-  instance_type        = var.instance_type
-  key_name             = "vockey"
-  iam_instance_profile = "LabInstanceProfile"
-
-  # CAMBIOS CRÍTICOS DE SEGURIDAD:
-  subnet_id                   = module.vpc.private_subnets[0] # Ahora vive en la subred privada
-  vpc_security_group_ids      = [aws_security_group.k3s_sg.id]
-  associate_public_ip_address = false # Ya no expone IP pública propia
-
-  root_block_device {
-    volume_size = 30
-    volume_type = "gp3"
-  }
-
-  # Mantené intacto todo tu bloque de user_data tal como lo tenías
-  user_data = <<-EOF
-#!/bin/bash
-set -e
-# ... (todo tu script de inicialización de K3s, ArgoCD, etc.) ...
-EOF
-
-  tags = {
-    Name = "liga360-k3s-node"
-  }
-}
+# ==============================================================================
+# NUEVOS RECURSOS: ELIP Y NETWORK LOAD BALANCER (NLB)
+# ==============================================================================
 
 # Conservamos tu recurso Elastic IP original
 resource "aws_eip" "k3s_eip" {
@@ -287,10 +262,6 @@ resource "aws_eip" "k3s_eip" {
     Name = "liga360-eip"
   }
 }
-
-# ==============================================================================
-# NUEVOS RECURSOS: NETWORK LOAD BALANCER (NLB)
-# ==============================================================================
 
 resource "aws_lb" "k3s_nlb" {
   name               = "liga360-k3s-nlb"
