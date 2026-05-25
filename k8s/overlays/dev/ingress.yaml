@@ -11,11 +11,11 @@ spec:
 
   tls:
     - hosts:
-        - liga360-v1.duckdns.org
+        - liga360.com.ar
       secretName: liga360-tls
 
   rules:
-    - host: liga360-v1.duckdns.org
+    - host: liga360.com.ar
       http:
         paths:
           - path: /
