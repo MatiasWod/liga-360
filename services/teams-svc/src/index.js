@@ -123,6 +123,12 @@ app.use(bodyParser.json());
 app.use(httpLogger);
 app.use(optionalAuthMiddleware);
 
+// El espía para ver la ruta real
+app.use((req, res, next) => {
+  console.log(`-> Al backend de Teams le llegó: ${req.method} ${req.url}`);
+  next();
+});
+
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.get('/teams', requireAuthMiddleware, async (req, res) => {
