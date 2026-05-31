@@ -123,6 +123,16 @@ app.use(bodyParser.json());
 app.use(httpLogger);
 app.use(optionalAuthMiddleware);
 
+/** nginx legacy: /api/teams/profiles|participants → /teams/profiles|participants (prefijo /teams de más). */
+app.use((req, _res, next) => {
+  const url = req.url || '';
+  if (url.startsWith('/teams/profiles')) {
+    req.url = url.replace(/^\/teams\/profiles/, '/profiles');
+  } else if (url.startsWith('/teams/participants')) {
+    req.url = url.replace(/^\/teams\/participants/, '/participants');
+  }
+  next();
+});
 
 // El espía para ver la ruta real
 app.use((req, res, next) => {
@@ -419,7 +429,7 @@ app.delete('/teams/:id/members/:participantId', async (req, res) => {
   }
 });
 
-app.post('/teams/profiles/me/claim-by-dni', requireAuthMiddleware, async (req, res) => {
+app.post('/profiles/me/claim-by-dni', requireAuthMiddleware, async (req, res) => {
   const { dni, firstName, lastName, avatarUrl } = req.body || {};
   const normalizedDni = normalizeDni(dni);
   if (!normalizedDni) return res.status(400).json({ error: 'valid dni required' });
@@ -468,7 +478,7 @@ app.post('/teams/profiles/me/claim-by-dni', requireAuthMiddleware, async (req, r
   }
 });
 
-app.get('/teams/profiles/me', requireAuthMiddleware, async (req, res) => {
+app.get('/profiles/me', requireAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const profileRes = await client.query(
@@ -512,7 +522,7 @@ app.get('/teams/profiles/me', requireAuthMiddleware, async (req, res) => {
   }
 });
 
-app.delete('/teams/profiles/me/participants/:id/unlink', requireAuthMiddleware, async (req, res) => {
+app.delete('/profiles/me/participants/:id/unlink', requireAuthMiddleware, async (req, res) => {
   const participantId = Number(req.params.id);
   if (!participantId) return res.status(400).json({ error: 'invalid participant id' });
   const client = await pool.connect();

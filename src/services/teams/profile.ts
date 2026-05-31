@@ -1,9 +1,9 @@
 import type { LinkedTeam, TeamParticipant } from '../../types/domain';
-import { authHeaders, TEAMS_BASE } from './client';
+import { authHeaders, parseJsonResponse, TEAMS_BASE } from './client';
 
 export async function getMyProfile(): Promise<{ profile: any; participants: TeamParticipant[]; teams: LinkedTeam[] }> {
   const res = await fetch(`${TEAMS_BASE}/profiles/me`, { headers: authHeaders() });
-  const json = await res.json();
+  const json = await parseJsonResponse(res, 'No se pudo cargar perfil');
   if (!res.ok) throw new Error(json?.error || 'No se pudo cargar perfil');
   const participants: TeamParticipant[] = (json.participants || []).map((p: any) => ({
     id: String(p.id),
@@ -29,7 +29,7 @@ export async function claimMyDni(payload: { dni: string; firstName?: string; las
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
+  const json = await parseJsonResponse(res, 'No se pudo reclamar DNI');
   if (!res.ok) throw new Error(json?.error || 'No se pudo reclamar DNI');
   return json;
 }
@@ -39,7 +39,7 @@ export async function unlinkMyParticipant(participantId: string) {
     method: 'DELETE',
     headers: authHeaders(),
   });
-  const json = await res.json();
+  const json = await parseJsonResponse(res, 'No se pudo desvincular participante');
   if (!res.ok) throw new Error(json?.error || 'No se pudo desvincular participante');
   return json;
 }

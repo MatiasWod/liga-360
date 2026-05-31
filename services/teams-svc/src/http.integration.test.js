@@ -220,6 +220,22 @@ describe('teams-svc HTTP integration', () => {
       assert.equal(res.status, 409);
     });
 
+    test('POST /teams/profiles/me/claim-by-dni acepta ruta legacy nginx', async () => {
+      const legacyToken = makeToken({ sub: 9004, type: 'participant' });
+      const res = await httpReq('POST', '/teams/profiles/me/claim-by-dni', {
+        dni: '11223344',
+        firstName: 'Legacy',
+        lastName: 'Route',
+      }, authHeader(legacyToken));
+      assert.equal(res.status, 200);
+      assert.equal(res.body.profile.dni, '11223344');
+    });
+
+    test('GET /teams/profiles/me acepta ruta legacy nginx', async () => {
+      const res = await httpReq('GET', '/teams/profiles/me', null, authHeader(userToken));
+      assert.equal(res.status, 200);
+      assert.ok(res.body.profile);
+    });
   });
 
   describe('invite codes', () => {
