@@ -255,12 +255,15 @@ EOF
 # NUEVOS RECURSOS: ELIP Y NETWORK LOAD BALANCER (NLB)
 # ==============================================================================
 
-# Conservamos tu recurso Elastic IP original
-resource "aws_eip" "k3s_eip" {
-  domain = "vpc"
-  tags = {
-    Name = "liga360-eip"
-  }
+
+variable "EXISTING_EIP" {
+  description = "La Elastic IP estática a utilizar"
+  type        = string
+}
+
+
+data "aws_eip" "k3s_eip" {
+  public_ip = var.EXISTING_EIP
 }
 
 resource "aws_lb" "k3s_nlb" {
@@ -268,10 +271,9 @@ resource "aws_lb" "k3s_nlb" {
   internal           = false
   load_balancer_type = "network"
 
-  # Le asignamos tu Elastic IP existente en la subred pública
   subnet_mapping {
     subnet_id     = module.vpc.public_subnets[0]
-    allocation_id = aws_eip.k3s_eip.id
+    allocation_id = data.aws_eip.k3s_eip.id
   }
 
   tags = {
