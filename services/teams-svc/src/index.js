@@ -123,6 +123,17 @@ app.use(bodyParser.json());
 app.use(httpLogger);
 app.use(optionalAuthMiddleware);
 
+/** nginx legacy: /api/teams/profiles|participants → /teams/profiles|participants (prefijo /teams de más). */
+app.use((req, _res, next) => {
+  const url = req.url || '';
+  if (url.startsWith('/teams/profiles')) {
+    req.url = url.replace(/^\/teams\/profiles/, '/profiles');
+  } else if (url.startsWith('/teams/participants')) {
+    req.url = url.replace(/^\/teams\/participants/, '/participants');
+  }
+  next();
+});
+
 // El espía para ver la ruta real
 app.use((req, res, next) => {
   console.log(`-> Al backend de Teams le llegó: ${req.method} ${req.url}`);
