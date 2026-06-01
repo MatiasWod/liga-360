@@ -175,6 +175,16 @@ describe('teams-svc HTTP integration', () => {
       assert.equal(res.body.participant.last_name, 'Pérez');
     });
 
+    test('POST /teams/participants alias nginx legacy', async () => {
+      const res = await httpReq('POST', '/teams/participants', {
+        firstName: 'Ana',
+        lastName: 'López',
+      });
+      assert.equal(res.status, 201);
+      assert.ok(res.body.participant);
+      assert.equal(res.body.participant.first_name, 'Ana');
+    });
+
     test('POST /participants rechaza sin firstName', async () => {
       const res = await httpReq('POST', '/participants', { lastName: 'Pérez' });
       assert.equal(res.status, 400);

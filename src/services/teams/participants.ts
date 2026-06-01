@@ -14,8 +14,7 @@ export async function createParticipant(payload: {
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error || 'No se pudo crear participante');
+  const json = await parseJsonResponse(res, 'No se pudo crear participante');
   return json.participant;
 }
 

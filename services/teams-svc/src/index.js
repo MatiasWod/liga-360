@@ -301,6 +301,8 @@ async function createParticipantHandler(req, res) {
 }
 
 app.post('/participants', createParticipantHandler);
+/** Alias nginx genérico: /api/teams → /teams/participants (sin rewrite a /participants). */
+app.post('/teams/participants', createParticipantHandler);
 
 async function updateParticipantHandler(req, res) {
   const participantId = Number(req.params.id);
@@ -379,6 +381,7 @@ async function updateParticipantHandler(req, res) {
 }
 
 app.patch('/participants/:id', updateParticipantHandler);
+app.patch('/teams/participants/:id', updateParticipantHandler);
 
 app.post('/teams/:id/members', async (req, res) => {
   const teamId = Number(req.params.id);

@@ -3,6 +3,11 @@ import type { StandingsRow, TournamentMatchRow, TournamentStage } from './types'
 
 type InscriptionLookup = ReadonlyMap<string, { display_name?: string | null }>;
 
+function isPhysicalInscriptionId(raw: string): boolean {
+  const id = String(raw || '').trim();
+  return !!id && !id.startsWith('liga360-slot:') && !id.startsWith('pos:');
+}
+
 /** Nombre visible de equipo: ignora etiquetas BN1/BN2 u otros nombres stale del grafo. */
 export function resolvePersistedTeamDisplayName(
   displayName: string | null | undefined,
@@ -12,6 +17,8 @@ export function resolvePersistedTeamDisplayName(
   const id = String(inscriptionId ?? '').trim();
   const dn = String(displayName ?? '').trim();
   const fromInsc = id ? String(inscriptionById?.get(id)?.display_name ?? '').trim() : '';
+  // Inscripción física (Postgres) manda sobre Neo4j stale — alinea fixture con inicialización.
+  if (fromInsc && isPhysicalInscriptionId(id)) return fromInsc;
   if (fromInsc && (!dn || isBestThirdSlotLabel(dn))) return fromInsc;
   return dn || fromInsc || id || '—';
 }

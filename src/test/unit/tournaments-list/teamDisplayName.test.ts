@@ -12,6 +12,11 @@ describe('teamDisplayName', () => {
     expect(resolvePersistedTeamDisplayName('Brasil', '243', map)).toBe('Brasil');
   });
 
+  it('resolvePersistedTeamDisplayName prefiere inscripción sobre nombre stale del grafo', () => {
+    const map = new Map([['4', { display_name: 'República Checa' }]]);
+    expect(resolvePersistedTeamDisplayName('Mundial FIFA 2026', '4', map)).toBe('República Checa');
+  });
+
   it('enrichStageTeamDisplayNames corrige fixture y tablas de grupos', () => {
     const stage: TournamentStage = {
       id: 's1',
