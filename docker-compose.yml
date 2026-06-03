@@ -40,7 +40,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: Dockerfile.migrator
+      dockerfile: database/Dockerfile
     container_name: liga360-migrate
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
@@ -159,7 +159,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: deploy/Dockerfile.frontend
+      dockerfile: deploy/frontend/Dockerfile
     container_name: liga360-frontend
     depends_on:
       - gateway

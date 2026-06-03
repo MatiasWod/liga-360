@@ -4,7 +4,7 @@ Monorepo con frontend React y backend en microservicios para gestión de torneos
 
 ## Stack del proyecto
 
-- Frontend: React + Vite + Tailwind (`src/`)
+- Frontend: React + Vite + Tailwind (`frontend/`)
 - Backend:
   - gateway (Apollo Gateway): http://localhost:4000
   - tournaments-svc (GraphQL + Neo4j): http://localhost:4001
@@ -72,12 +72,12 @@ curl -s http://localhost:4004/health
 
 ## Despliegue en Kubernetes
 
-Manifiestos Kustomize en `k8s/` (overlay `dev` para cluster local). Guía completa: [k8s/README.md](k8s/README.md).
+Manifiestos Kustomize en `deploy/k8s/` (overlay `dev` para cluster local). Guía completa: [deploy/k8s/README.md](deploy/k8s/README.md).
 
 ```bash
-cp k8s/secrets.env.example k8s/secrets.env
-kubectl create secret generic liga360-secrets -n liga360 --from-env-file=k8s/secrets.env --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -k k8s/overlays/dev
+cp deploy/k8s/secrets.env.example deploy/k8s/secrets.env
+kubectl create secret generic liga360-secrets -n liga360 --from-env-file=deploy/k8s/secrets.env --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -k deploy/k8s/overlays/dev
 ```
 
 ## Comandos útiles

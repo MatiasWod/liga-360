@@ -25,7 +25,7 @@ function getChangedFiles(baseRef) {
 
 function isBusinessLogicFile(file) {
   return (
-    file.startsWith('src/') ||
+    file.startsWith('frontend/') ||
     file.startsWith('services/') ||
     file === 'docker-compose.yml'
   );

@@ -15,15 +15,15 @@ definitions:
     npm: .npm
 
   steps:
-    - step: &terraform-validate
+      - step: &terraform-validate
         name: Terraform Validate
         condition:
           changesets:
             includePaths:
-              - "terraform/**"
+              - "deploy/terraform/**"
         image: hashicorp/terraform:1.8.5
         script:
-          - cd terraform
+          - cd deploy/terraform
           - terraform version
           - terraform fmt -check
           - terraform init
@@ -34,25 +34,25 @@ definitions:
         condition:
           changesets:
             includePaths:
-              - "terraform/**"
+              - "deploy/terraform/**"
         image: hashicorp/terraform:1.8.5
         script:
-          - cd terraform
+          - cd deploy/terraform
           - terraform init
           - terraform plan -out=tfplan
         artifacts:
-          - terraform/tfplan
+          - deploy/terraform/tfplan
 
     - step: &terraform-apply
         name: Terraform Apply
         condition:
           changesets:
             includePaths:
-              - "terraform/**"
+              - "deploy/terraform/**"
         image: hashicorp/terraform:1.8.5
         trigger: manual
         script:
-          - cd terraform
+          - cd deploy/terraform
           - terraform init
           - terraform apply -auto-approve tfplan
 
@@ -60,7 +60,7 @@ definitions:
         name: Terraform Destroy
         image: hashicorp/terraform:1.8.5
         script:
-          - cd terraform
+          - cd deploy/terraform
           - terraform init
           - terraform destroy -auto-approve
 
@@ -123,9 +123,9 @@ pipelines:
               script:
                 - export SVC="liga360-frontend"
                 - export BUILD_CONTEXT="."
-                - export DOCKERFILE_ARG="-f Dockerfile.frontend"
+                - export DOCKERFILE_ARG="-f deploy/frontend/Dockerfile"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/Dockerfile.frontend .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/frontend/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -191,7 +191,7 @@ pipelines:
               script:
                 - export SVC="liga360-migrator"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f Dockerfile.migrator .
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f database/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -200,20 +200,20 @@ pipelines:
           name: Notify GitOps
           image: alpine:3.20
           script:
-            - echo "Images pushed. ArgoCD will sync from k8s/overlays/dev." 
+            - echo "Images pushed. ArgoCD will sync from deploy/k8s/overlays/dev." 
 
       - step:
           name: Update GitOps Tags
           image: alpine:3.20
           script:
             - apk add --no-cache git python3
-            - "python3 -c \"import os;from pathlib import Path;path=Path('k8s/overlays/dev/kustomization.yaml');content=path.read_text(encoding='utf-8');commit=os.environ.get('BITBUCKET_COMMIT','latest');lines=[(line[:len(line)-len(line.lstrip(' '))]+'newTag: '+commit) if line.strip().startswith('newTag:') else line for line in content.splitlines()];updated='\\n'.join(lines)+'\\n';path.write_text(updated,encoding='utf-8') if updated!=content else None\""
+            - "python3 -c \"import os;from pathlib import Path;path=Path('deploy/k8s/overlays/dev/kustomization.yaml');content=path.read_text(encoding='utf-8');commit=os.environ.get('BITBUCKET_COMMIT','latest');lines=[(line[:len(line)-len(line.lstrip(' '))]+'newTag: '+commit) if line.strip().startswith('newTag:') else line for line in content.splitlines()];updated='\\n'.join(lines)+'\\n';path.write_text(updated,encoding='utf-8') if updated!=content else None\""
             - git status --porcelain
             - export GIT_AUTHOR_NAME="bitbucket-pipelines"
             - export GIT_AUTHOR_EMAIL="pipelines@bitbucket"
             - export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
             - export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
-            - git add k8s/overlays/dev/kustomization.yaml
+            - git add deploy/k8s/overlays/dev/kustomization.yaml
             - 'git commit -m "ci: update k8s image tags [skip ci]" || exit 0'
             - git remote set-url origin "https://$BITBUCKET_USER:$BITBUCKET_APP_PASSWORD@bitbucket.org/$BITBUCKET_REPO_FULL_NAME.git"
             - git push origin HEAD:main

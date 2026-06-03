@@ -4,6 +4,15 @@
 .vscode/
 .cursor/
 
+# AI agent configs (local, not committed)
+.agent/
+.claude/
+.codex/
+.gemini/
+.github/
+.opencode/
+.qwen/
+
 # Logs
 *.log
 logs/
@@ -27,7 +36,7 @@ test-results/
 .env
 .env.*
 !.env.example
-k8s/secrets.env
+deploy/k8s/secrets.env
 *.pem
 *.key
 *.crt
@@ -45,7 +54,11 @@ temp/
 !README.md
 !k8s/README.md
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
 # Local notes (never push)
 local-notes/
 openspec/
-.gemini/

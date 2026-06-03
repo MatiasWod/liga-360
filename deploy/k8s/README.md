@@ -1,13 +1,13 @@
 # Liga360 — Kubernetes (GitOps)
 
-Manifiestos [Kustomize](https://kustomize.io/) desplegados vía **Argo CD**. Un solo overlay de entorno en Git: **`k8s/overlays/dev`**.
+Manifiestos [Kustomize](https://kustomize.io/) desplegados vía **Argo CD**. Un solo overlay de entorno en Git: **`deploy/k8s/overlays/dev`**.
 
 ## Modelo DevOps
 
 ```
 Bitbucket (main) → CI build/test → push imágenes Docker Hub
                                         ↓
-Git (k8s/overlays/dev) ← Argo CD Application liga360-dev → namespace liga360
+Git (deploy/k8s/overlays/dev) ← Argo CD Application liga360-dev → namespace liga360
                                         ↓
                          wave 0: Postgres, Neo4j
                          wave 1: Job db-migrate (liga360-migrator)
@@ -16,10 +16,10 @@ Git (k8s/overlays/dev) ← Argo CD Application liga360-dev → namespace liga360
 
 | Capa | Ubicación |
 |------|-----------|
-| Manifiestos | `k8s/base/` + `k8s/overlays/dev/` |
-| GitOps | `argocd/application-dev.yaml` → `path: k8s/overlays/dev` |
+| Manifiestos | `deploy/k8s/base/` + `deploy/k8s/overlays/dev/` |
+| GitOps | `deploy/argocd/application-dev.yaml` → `path: deploy/k8s/overlays/dev` |
 | Imágenes | Docker Hub `bcanevaro/liga360-*` (CI en `bitbucket-pipelines.yml`) |
-| Migraciones SQL | `migrations/` → imagen `Dockerfile.migrator` → Job `db-migrate` |
+| Migraciones SQL | `database/migrations/` → imagen `database/Dockerfile` → Job `db-migrate` |
 | Dev en máquina (sin K8s) | `docker-compose.yml` — camino aparte, no usa overlays K8s |
 
 No hay overlay `local`: el clúster (kind, minikube o remoto) usa el **mismo** `overlays/dev` y las imágenes del registry.
@@ -36,27 +36,29 @@ No hay overlay `local`: el clúster (kind, minikube o remoto) usa el **mismo** `
 ## Estructura
 
 ```
-k8s/
+deploy/k8s/
 ├── base/                 # Recursos comunes + Job db-migrate
 ├── overlays/dev/         # Único overlay: Hub, Ingress, imagePullSecrets
 ├── secrets.env.example
 └── README.md
-argocd/
+deploy/argocd/
 └── application-dev.yaml
-Dockerfile.migrator
-migrations/
+database/
+├── Dockerfile
+├── package.json
+└── migrations/
 ```
 
 ## 1. Secretos (una vez por clúster)
 
 ```bash
-cp k8s/secrets.env.example k8s/secrets.env
+cp deploy/k8s/secrets.env.example deploy/k8s/secrets.env
 # Editar valores en entornos reales
 
 kubectl create namespace liga360 --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic liga360-secrets \
   --namespace liga360 \
-  --from-env-file=k8s/secrets.env \
+  --from-env-file=deploy/k8s/secrets.env \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -66,12 +68,12 @@ Registry privado: crear `credenciales-dockerhub` en `liga360` (el overlay `dev` 
 
 ## 2. Argo CD (camino recomendado)
 
-1. Ajustar `argocd/application-dev.yaml` (`repoURL`, `targetRevision` = rama con los manifiestos).
+1. Ajustar `deploy/argocd/application-dev.yaml` (`repoURL`, `targetRevision` = rama con los manifiestos).
 2. Registrar el repo en Argo si es privado.
 3. Aplicar la Application:
 
    ```bash
-   kubectl apply -f argocd/application-dev.yaml
+   kubectl apply -f deploy/argocd/application-dev.yaml
    ```
 
 4. Sync `liga360-dev` en la UI o:
@@ -106,7 +108,7 @@ Primera vez o rama sin CI: push manual del migrator (y del resto si falta):
 
 ```bash
 docker login
-docker build -f Dockerfile.migrator -t bcanevaro/liga360-migrator:latest .
+docker build -f database/Dockerfile -t bcanevaro/liga360-migrator:latest .
 docker push bcanevaro/liga360-migrator:latest
 ```
 
@@ -117,8 +119,8 @@ Luego **Sync** en Argo (no hace falta overlay distinto).
 Equivalente a lo que Argo aplica, pero **sin** sync waves de Argo:
 
 ```bash
-kubectl kustomize k8s/overlays/dev
-kubectl apply -k k8s/overlays/dev
+kubectl kustomize deploy/k8s/overlays/dev
+kubectl apply -k deploy/k8s/overlays/dev
 ```
 
 Preferí **Argo Sync** como operación habitual para no divergir Git ↔ cluster.
@@ -134,7 +136,7 @@ npm run migrate
 
 ## 5. Acceso a la aplicación
 
-Ingress `liga360.local` (ver `k8s/overlays/dev/ingress.yaml`):
+Ingress `liga360.local` (ver `deploy/k8s/overlays/dev/ingress.yaml`):
 
 ```bash
 kubectl -n liga360 get ingress liga360
@@ -168,7 +170,7 @@ Usar **docker-compose** en la raíz (`docker compose up`). Incluye servicio `mig
 
 ## Variables
 
-`.env.example` (compose) y `k8s/secrets.env.example` (K8s). Config no sensible: ConfigMap `liga360-config`.
+`.env.example` (compose) y `deploy/k8s/secrets.env.example` (K8s). Config no sensible: ConfigMap `liga360-config`.
 
 ## Checklist de paridad de registro
 
