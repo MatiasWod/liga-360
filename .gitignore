@@ -54,10 +54,8 @@ temp/
 !README.md
 !k8s/README.md
 
-# Terraform
+# Terraform (cache de providers, no el estado local)
 .terraform/
-*.tfstate
-*.tfstate.backup
 
 # Local notes (never push)
 local-notes/
