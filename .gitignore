@@ -52,7 +52,7 @@ temp/
 # Keep only main README markdown
 **/*.md
 !README.md
-!k8s/README.md
+!deploy/k8s/README.md
 
 # Terraform (cache de providers, no el estado local)
 .terraform/
