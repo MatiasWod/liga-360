@@ -1,5 +1,5 @@
 # GitOps entrypoint — single deploy path for the cluster (no k8s/overlays/local).
-#   kubectl apply -f argocd/application-dev.yaml
+#   kubectl apply -f deploy/argocd/application-dev.yaml
 #   argocd app sync liga360-dev
 #
 # Requires images on Docker Hub (CI on main) and secret credenciales-dockerhub in liga360.
@@ -17,7 +17,7 @@ spec:
   source:
     repoURL: https://bitbucket.org/itba/pf-2025b-liga360.git
     targetRevision: main
-    path: k8s/overlays/dev
+    path: deploy/k8s/overlays/dev
   destination:
     server: https://kubernetes.default.svc
     namespace: liga360

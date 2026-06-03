@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "hooks:install": "node scripts/setup-hooks.mjs",
-    "migrate": "node-pg-migrate up",
+    "migrate": "node-pg-migrate up --migrations-dir database/migrations",
     "test:changed:guard": "node scripts/check-tests-required.mjs",
     "test": "npm run test:unit",
     "test:unit": "vitest run",

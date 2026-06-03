@@ -63,7 +63,7 @@ Once the EC2 is up and ArgoCD is running:
    ```bash
    git clone https://bitbucket.org/itba/pf-2025b-liga360.git
    cd pf-2025b-liga360
-   kubectl apply -f argocd/application-dev.yaml
+    kubectl apply -f deploy/argocd/application-dev.yaml
    ```
 
 5. **Expose the Application:**

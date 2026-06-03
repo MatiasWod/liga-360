@@ -1,7 +1,7 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY migrator/package.json migrator/package-lock.json ./
+COPY database/package.json database/package-lock.json ./
 RUN npm ci --omit=dev
-COPY migrations ./migrations
+COPY database/migrations ./migrations
 ENV NODE_ENV=production
 CMD ["npm", "run", "migrate"]
