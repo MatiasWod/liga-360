@@ -15,7 +15,7 @@ definitions:
     npm: .npm
 
   steps:
-      - step: &terraform-validate
+    - step: &terraform-validate
         name: Terraform Validate
         condition:
           changesets:
