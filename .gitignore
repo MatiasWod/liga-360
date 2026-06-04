@@ -12,6 +12,7 @@
 .github/
 .opencode/
 .qwen/
+skills/
 
 # Logs
 *.log
