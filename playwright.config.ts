@@ -10,7 +10,7 @@ const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === '1';
 const headed = process.env.PWHEADED === '1';
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests',
   timeout: 45_000,
   expect: {
     timeout: 10_000,

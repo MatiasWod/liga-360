@@ -39,13 +39,12 @@ function uniqueSuffix(): string {
 
 async function parseJson(response: Awaited<ReturnType<APIRequestContext['post']>>) {
   const text = await response.text();
-  let json = null;
+  if (!text) return null;
   try {
-    json = text ? JSON.parse(text) : null;
+    return JSON.parse(text);
   } catch {
-    json = null;
+    return null;
   }
-  return json;
 }
 
 async function assertOk(response: Awaited<ReturnType<APIRequestContext['post']>>, fallback: string) {
@@ -116,9 +115,7 @@ export async function ensureOwnedTeam(
   });
   await assertOk(listResponse, 'No se pudo listar equipos del team');
   const listedJson = await parseJson(listResponse);
-  const existing = Array.isArray(listedJson?.teams) && listedJson.teams.length > 0 ? listedJson.teams[0] : null;
-
-  let team = existing;
+  let team = Array.isArray(listedJson?.teams) && listedJson.teams.length > 0 ? listedJson.teams[0] : null;
   if (!team) {
     const createResponse = await request.post(`${TEAMS_BASE}`, {
       headers: {

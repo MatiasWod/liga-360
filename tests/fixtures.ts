@@ -9,5 +9,4 @@ export { expect };
 
 export async function requireCriticalBackend(testInfo: { title: string }, request: Parameters<typeof ensureBackendsHealthy>[0]) {
   await ensureBackendsHealthy(request);
-  testInfo.title = testInfo.title;
 }
