@@ -195,7 +195,7 @@ spec:
   source:
     repoURL: https://bitbucket.org/itba/pf-2025b-liga360.git
     targetRevision: main
-    path: k8s/overlays/dev
+    path: deploy/k8s/overlays/dev
   destination:
     server: https://kubernetes.default.svc
     namespace: liga360
