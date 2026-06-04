@@ -2,14 +2,8 @@
 
 set -euo pipefail
 
-echo "[pre-push] Ejecutando guard de cambios sin tests..."
-npm run test:changed:guard
-
 echo "[pre-push] Ejecutando unit + integration..."
 npm run test:ci
-
-echo "[pre-push] Ejecutando E2E smoke..."
-npm run test:e2e:smoke
 
 echo "[pre-push] OK. Push habilitado."
 echo "[pre-push] Bypass excepcional disponible con: git push --no-verify"

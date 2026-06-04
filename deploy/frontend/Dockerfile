@@ -11,7 +11,6 @@ COPY tailwind.config.js ./
 COPY tsconfig.json ./
 COPY vite.config.ts ./
 COPY frontend ./frontend
-COPY public ./public
 
 RUN npm run build
 

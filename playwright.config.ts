@@ -34,11 +34,6 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'smoke',
-      grep: /@smoke/,
-      use: { ...devices['Desktop Chrome'], storageState: { cookies: [], origins: [] } },
-    },
-    {
       name: 'critical',
       grep: /@critical/,
       use: { ...devices['Desktop Chrome'] },

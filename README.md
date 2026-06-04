@@ -30,20 +30,6 @@ docker compose up -d --build
 
 Abrir frontend en: http://localhost:5173
 
-### Scripts de arranque
-
-- Linux/macOS:
-
-```bash
-./run_project.sh
-```
-
-- Windows PowerShell:
-
-```powershell
-./run_project.ps1
-```
-
 ## Health checks rápidos
 
 ```bash
