@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import pkg from 'pg';
 import bcrypt from 'bcryptjs';
 import { httpLogger, logger } from './logger.js';
+import client from 'prom-client';
 
 const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
@@ -38,6 +39,10 @@ function sendDebugLog(payload) {
 }
 
 const app = express();
+
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics({ register: client.register });
+
 const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
   : ['*'];
@@ -46,6 +51,16 @@ app.use(bodyParser.json());
 app.use(httpLogger);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (ex) {
+    logger.error({ err: ex }, 'error generating metrics');
+    res.status(500).end();
+  }
+});
 
 // Registro con 3 modos: team | participant | organizer
 // body: { mode: 'team'|'participant'|'organizer', username, password, name }
