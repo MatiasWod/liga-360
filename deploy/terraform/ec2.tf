@@ -232,7 +232,7 @@ for i in $(seq 1 10); do
   if kubectl apply -f /tmp/cluster-issuer.yaml && \
       kubectl apply --server-side -f /tmp/cluster-secret-store.yaml && \
      kubectl apply --server-side -f /tmp/argocd-external-secret.yaml && \
-     kubectl apply --server-side -f /tmp/argocd-bootstrap-application.yaml; then
+     kubectl apply --server-side -f /tmp/argocd-bootstrap.yaml; then
     echo "Bootstrap applied successfully!"
     break
   fi
