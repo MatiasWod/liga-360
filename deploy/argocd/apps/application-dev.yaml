@@ -8,6 +8,8 @@ kind: Application
 metadata:
   name: liga360-dev
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     app.kubernetes.io/part-of: liga360
   finalizers:
