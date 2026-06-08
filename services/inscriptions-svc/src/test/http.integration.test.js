@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { app, closePool } from './index.js';
+import { app, closePool } from '../index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
