@@ -21,7 +21,7 @@ test.after(async () => {
 test('GET /invites sin token responde 401', async () => {
   const response = await request(app).get('/invites?tournamentId=t-1');
   assert.equal(response.statusCode, 401);
-  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
 test('GET /invites con token team responde 403', async () => {
@@ -30,25 +30,25 @@ test('GET /invites con token team responde 403', async () => {
     .get('/invites?tournamentId=t-1')
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 403);
-  assert.match(String(response.body.error || ''), /FORBIDDEN/);
+  assert.match(response.body.error?.code || '', /FORBIDDEN/);
 });
 
 test('GET /teams/me/invites sin token responde 401', async () => {
   const response = await request(app).get('/teams/me/invites');
   assert.equal(response.statusCode, 401);
-  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
 test('POST /invites/code/claim sin token responde 401', async () => {
   const response = await request(app).post('/invites/code/claim').send({ code: 'ABCD1234' });
   assert.equal(response.statusCode, 401);
-  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
 test('GET /participants/me/invites sin token responde 401', async () => {
   const response = await request(app).get('/participants/me/invites');
   assert.equal(response.statusCode, 401);
-  assert.match(String(response.body.error || ''), /UNAUTHORIZED/);
+  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
 test('GET /participants/me/invites con token team responde 403', async () => {
@@ -57,7 +57,7 @@ test('GET /participants/me/invites con token team responde 403', async () => {
     .get('/participants/me/invites')
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 403);
-  assert.match(String(response.body.error || ''), /FORBIDDEN/);
+  assert.match(response.body.error?.code || '', /FORBIDDEN/);
 });
 
 // ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ test('POST /matches/:matchId/events con event_type invalido responde 400', async
     .set('Authorization', `Bearer ${token}`)
     .send({ event_type: 'penalty', display_name: 'Jugador 1', tournament_id: 'trn-1' });
   assert.equal(response.statusCode, 400);
-  assert.match(String(response.body.error || ''), /event_type invalido/);
+  assert.match(response.body.error?.message || '', /event_type invalido/);
 });
 
 test('POST /matches/:matchId/events sin display_name responde 400', async () => {
@@ -97,7 +97,7 @@ test('POST /matches/:matchId/events sin display_name responde 400', async () => 
     .set('Authorization', `Bearer ${token}`)
     .send({ event_type: 'goal', tournament_id: 'trn-1' });
   assert.equal(response.statusCode, 400);
-  assert.match(String(response.body.error || ''), /display_name/);
+  assert.match(response.body.error?.message || '', /display_name/);
 });
 
 test('POST /matches/:matchId/events sin tournament_id responde 400', async () => {
@@ -107,7 +107,7 @@ test('POST /matches/:matchId/events sin tournament_id responde 400', async () =>
     .set('Authorization', `Bearer ${token}`)
     .send({ event_type: 'goal', display_name: 'Jugador 1' });
   assert.equal(response.statusCode, 400);
-  assert.match(String(response.body.error || ''), /tournament_id/);
+  assert.match(response.body.error?.message || '', /tournament_id/);
 });
 
 test('GET /matches/:matchId/events sin token responde 401', async () => {
