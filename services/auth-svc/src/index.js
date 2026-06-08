@@ -7,6 +7,7 @@ import pkg from 'pg';
 import bcrypt from 'bcryptjs';
 import { httpLogger, logger } from './logger.js';
 import client from 'prom-client';
+const promBundle = require('express-prom-bundle');
 
 const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
@@ -40,8 +41,6 @@ function sendDebugLog(payload) {
 
 const app = express();
 
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics({ register: client.register });
 
 const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
@@ -49,6 +48,20 @@ const corsOrigins = process.env.CORS_ORIGINS
 app.use(cors({ origin: corsOrigins.length === 0 ? '*' : corsOrigins }));
 app.use(bodyParser.json());
 app.use(httpLogger);
+
+const metricsMiddleware = promBundle({
+  includeMethod: true,
+  includePath: true,
+  includeStatusCode: true,
+  includeUp: true,
+  autoregister: true,
+  customLabels: { project_name: 'liga360' },
+  promClient: {
+    collectDefaultMetrics: {}
+  }
+});
+
+app.use(metricsMiddleware);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
