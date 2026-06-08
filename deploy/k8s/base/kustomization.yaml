@@ -11,10 +11,14 @@ resources:
   - neo4j/service.yaml
   - neo4j/statefulset.yaml
   - db-migrate/job.yaml
+  - db-migrate-teams/job.yaml
+  - db-migrate-identity/job.yaml
   - auth-svc/deployment.yaml
   - auth-svc/service.yaml
   - teams-svc/deployment.yaml
   - teams-svc/service.yaml
+  - identity-svc/deployment.yaml
+  - identity-svc/service.yaml
   - tournaments-svc/deployment.yaml
   - tournaments-svc/service.yaml
   - inscriptions-svc/deployment.yaml

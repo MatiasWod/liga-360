@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: teams-svc
+  name: identity-svc
   labels:
-    app: teams-svc
+    app: identity-svc
     app.kubernetes.io/part-of: liga360
   annotations:
     argocd.argoproj.io/sync-wave: "2"
@@ -11,27 +11,27 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: teams-svc
+      app: identity-svc
   template:
     metadata:
       labels:
-        app: teams-svc
+        app: identity-svc
     spec:
       containers:
-        - name: teams-svc
-          image: liga360-teams-svc:latest
+        - name: identity-svc
+          image: liga360-identity-svc:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 4002
+            - containerPort: 4005
           env:
             - name: PORT
-              value: "4002"
-            # DB propia (DB-per-service). Requiere la key POSTGRES_URL_TEAMS en liga360-secrets.
+              value: "4005"
+            # DB propia (DB-per-service). Requiere la key POSTGRES_URL_IDENTITY en liga360-secrets.
             - name: POSTGRES_URL
               valueFrom:
                 secretKeyRef:
                   name: liga360-secrets
-                  key: POSTGRES_URL_TEAMS
+                  key: POSTGRES_URL_IDENTITY
           envFrom:
             - configMapRef:
                 name: liga360-config
@@ -40,13 +40,13 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 4002
+              port: 4005
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /health
-              port: 4002
+              port: 4005
             initialDelaySeconds: 15
             periodSeconds: 10
           resources:

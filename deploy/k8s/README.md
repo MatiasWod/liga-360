@@ -178,3 +178,17 @@ Usar **docker-compose** en la raíz (`docker compose up`). Incluye servicio `mig
 - ConfigMap: `TOURNAMENTS_SUBGRAPH_URL`, `TOURNAMENTS_GRAPHQL_URL`, `CORS_ORIGINS`.
 - Ingress apunta al frontend y el frontend enruta `/api/*` hacia los servicios.
 - Job `db-migrate` exitoso antes de desplegar apps.
+
+## DB-per-service: teams-svc + identity-svc
+
+El split teams/identity usa **una base por servicio**. Antes de aplicar los manifiestos hay que provisionar:
+
+1. **Bases de datos** (en el Postgres del clúster): `liga360_teams` y `liga360_identity`.
+2. **Secret keys** en `liga360-secrets` (vía external-secrets / Vault):
+   - `POSTGRES_URL_TEAMS` → `postgresql://<user>:<pass>@postgres:5432/liga360_teams`
+   - `POSTGRES_URL_IDENTITY` → `postgresql://<user>:<pass>@postgres:5432/liga360_identity`
+
+Los Jobs `db-migrate-teams` / `db-migrate-identity` corren las migraciones de
+`database/migrations-teams` y `database/migrations-identity` contra esas DBs (sync-wave 1).
+`teams-svc` e `identity-svc` leen su `POSTGRES_URL` de esas keys. El ruteo `/profiles` lo
+resuelve el nginx del frontend hacia `identity-svc` (no requiere cambios de Ingress).

@@ -30,6 +30,7 @@ services:
       - '55432:5432'
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liga} -d ${POSTGRES_DB:-liga360}"]
       interval: 5s
@@ -49,6 +50,32 @@ services:
         condition: service_healthy
     restart: "no"
 
+  migrate-teams:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    container_name: liga360-migrate-teams
+    command: ["npm", "run", "migrate:teams"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_teams
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-identity:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    container_name: liga360-migrate-identity
+    command: ["npm", "run", "migrate:identity"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_identity
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   auth-svc:
     build: ./services/auth-svc
     container_name: liga360-auth-svc
@@ -56,6 +83,7 @@ services:
       - PORT=4003
       - JWT_SECRET=${JWT_SECRET:-devsecret}
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      - TEAMS_SVC_URL=http://teams-svc:4002
       - NODE_ENV=production
     depends_on:
       postgres:
@@ -98,17 +126,41 @@ services:
     environment:
       - PORT=4002
       - JWT_SECRET=${JWT_SECRET:-devsecret}
-      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_teams
+      - IDENTITY_SVC_URL=http://identity-svc:4005
       - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      migrate-teams:
         condition: service_completed_successfully
     ports:
       - '4002:4002'
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  identity-svc:
+    build: ./services/identity-svc
+    container_name: liga360-identity-svc
+    environment:
+      - PORT=4005
+      - JWT_SECRET=${JWT_SECRET:-devsecret}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_identity
+      - TEAMS_SVC_URL=http://teams-svc:4002
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-identity:
+        condition: service_completed_successfully
+    ports:
+      - '4005:4005'
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4005/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -121,6 +173,8 @@ services:
       - PORT=4004
       - JWT_SECRET=${JWT_SECRET:-devsecret}
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      - TEAMS_SVC_URL=http://teams-svc:4002
+      - IDENTITY_SVC_URL=http://identity-svc:4005
       - TOURNAMENTS_GRAPHQL_URL=http://gateway:4000/graphql
       - NODE_ENV=production
     depends_on:
@@ -128,6 +182,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      teams-svc:
+        condition: service_started
+      identity-svc:
+        condition: service_started
     ports:
       - '4004:4004'
     healthcheck:
@@ -164,6 +222,7 @@ services:
     depends_on:
       - gateway
       - teams-svc
+      - identity-svc
       - auth-svc
       - inscriptions-svc
     ports:
