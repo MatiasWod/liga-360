@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
+const JWT_SECRET = env.jwtSecret;
 
 export function requireOrganizerFromAuthHeader(authorizationHeader) {
   const authHeader = authorizationHeader || '';
