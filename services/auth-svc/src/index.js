@@ -7,7 +7,7 @@ import pkg from 'pg';
 import bcrypt from 'bcryptjs';
 import { httpLogger, logger } from './logger.js';
 import client from 'prom-client';
-const promBundle = require('express-prom-bundle');
+import promBundle from 'express-prom-bundle';
 
 const PORT = process.env.PORT || 4003;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
