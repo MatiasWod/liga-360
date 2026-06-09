@@ -10,22 +10,22 @@ resources:
 images:
   - name: liga360-migrator
     newName: bcanevaro/liga360-migrator
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-frontend
     newName: bcanevaro/liga360-frontend
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-gateway
     newName: bcanevaro/liga360-gateway
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-auth-svc
     newName: bcanevaro/liga360-auth-svc
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-teams-svc
     newName: bcanevaro/liga360-teams-svc
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-tournaments-svc
     newName: bcanevaro/liga360-tournaments-svc
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
   - name: liga360-inscriptions-svc
     newName: bcanevaro/liga360-inscriptions-svc
-    newTag: 02d6edc4f3765cc3367c6721b1aed2fb18a5edb7
+    newTag: e031cd8eb4bc8294f49fff9a25f41b353fa40d37
