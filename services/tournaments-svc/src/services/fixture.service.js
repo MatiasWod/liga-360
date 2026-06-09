@@ -111,35 +111,6 @@ async function hydrateEliminationFirstRoundFromBracket(session, stageId) {
 
 // --- Operaciones públicas ---
 
-export async function ensureEliminationBracket(driver, stageId, totalSlots) {
-  const safeTotalSlots = Number(totalSlots);
-  if (!Number.isInteger(safeTotalSlots) || safeTotalSlots <= 1) {
-    throw new Error('BAD_REQUEST: totalSlots debe ser entero mayor a 1');
-  }
-  const session = driver.session();
-  try {
-    const stageProps = await stageRepo.findRawProps(session, stageId);
-    if (!stageProps) throw new Error('NOT_FOUND: stage no existe');
-    if (String(stageProps?.format || '').toLowerCase() !== 'elimination') {
-      throw new Error('BAD_REQUEST: la etapa no es de eliminación');
-    }
-
-    const existingCount = await matchRepo.countByStage(session, stageId);
-    const requiredMatches = Math.ceil(safeTotalSlots / 2);
-    for (let i = existingCount; i < requiredMatches; i += 1) {
-      await matchRepo.createEliminationEmpty(session, {
-        stageId,
-        id: genId('m'),
-        slotIndex: i + 1,
-        fixtureCode: eliminationFixtureCode(i + 1, 1),
-      });
-    }
-    return await matchRepo.listEliminationOrdered(session, stageId);
-  } finally {
-    await session.close();
-  }
-}
-
 export async function generateLeagueRoundRobin(driver, stageId, doubleRound, maxRounds) {
   const session = driver.session();
   try {

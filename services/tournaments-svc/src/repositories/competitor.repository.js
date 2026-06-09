@@ -13,47 +13,9 @@ export function mapCompetitor(c) {
   };
 }
 
-export async function upsertSnapshot(session, { competitorId, kind, displayName, shortName, avatarUrl, badgeUrl }) {
-  const updatedAt = new Date().toISOString();
-  const res = await session.run(
-    `MERGE (c:Competitor {id:$id})
-     REMOVE c:Team:Participant
-     SET c:Competitor
-     FOREACH (_ IN CASE WHEN $kind = 'team' THEN [1] ELSE [] END | SET c:Team)
-     FOREACH (_ IN CASE WHEN $kind = 'participant' THEN [1] ELSE [] END | SET c:Participant)
-     ON CREATE SET
-       c.kind = $kind,
-       c.displayName = $displayName,
-       c.shortName = $shortName,
-       c.avatarUrl = $avatarUrl,
-       c.badgeUrl = $badgeUrl,
-       c.source = 'sql-snapshot',
-       c.updatedAt = $updatedAt
-     ON MATCH SET
-       c.kind = coalesce($kind, c.kind),
-       c.displayName = coalesce($displayName, c.displayName),
-       c.shortName = coalesce($shortName, c.shortName),
-       c.avatarUrl = coalesce($avatarUrl, c.avatarUrl),
-       c.badgeUrl = coalesce($badgeUrl, c.badgeUrl),
-       c.source = coalesce(c.source, 'sql-snapshot'),
-       c.updatedAt = $updatedAt
-     RETURN c`,
-    {
-      id: competitorId,
-      kind,
-      displayName,
-      shortName: shortName ?? null,
-      avatarUrl: avatarUrl ?? null,
-      badgeUrl: badgeUrl ?? null,
-      updatedAt,
-    }
-  );
-  return res.records[0]?.get('c')?.properties;
-}
-
 /**
- * Competidor de un lado del partido: primero por relación HAS_COMPETITOR (modelo legacy de
- * createMatch); como fallback, materializa desde InscriptionRef (modelo de generateLeagueRoundRobin).
+ * Competidor de un lado del partido: por relación HAS_COMPETITOR (modelo legacy); como fallback,
+ * materializa desde InscriptionRef (modelo de generateLeagueRoundRobin).
  */
 export async function findMatchCompetitor(session, matchId, role, inscriptionId) {
   const res = await session.run(

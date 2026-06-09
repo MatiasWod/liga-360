@@ -16,7 +16,9 @@ export function createApp() {
   app.use(httpLogger);
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
-  app.use('/users', authRoutes);
+  // Rutas en root (POST /register, /login): nginx reescribe /api/auth/* → /* y el frontend
+  // llama /api/auth/login. Montar en /users rompía el ruteo detrás de nginx.
+  app.use(authRoutes);
   app.use(errorHandler);
 
   return app;

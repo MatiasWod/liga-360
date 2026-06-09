@@ -1,6 +1,5 @@
-/** Resuelve el equipo/participante propio del usuario vía teams-svc / identity-svc. */
+/** Resuelve el equipo/participante propio del usuario vía teams-svc (dueño de Team/Participant/Person_Profile). */
 import * as teamsClient from '../clients/teams.client.js';
-import * as identityClient from '../clients/identity.client.js';
 
 export async function getOwnedTeamForUser(userId) {
   const teams = await teamsClient.listOwnedTeamsByUser(userId);
@@ -14,7 +13,7 @@ export async function getOwnedTeamForUser(userId) {
 }
 
 export async function getOwnedParticipantForUser(userId) {
-  const profileId = await identityClient.getProfileIdByUser(userId);
+  const profileId = await teamsClient.getProfileIdByUser(userId);
   if (!profileId) {
     throw new Error('FORBIDDEN: tu usuario participant no tiene perfil de jugador asociado');
   }

@@ -24,3 +24,19 @@ export function requireAuthMiddleware(req, _res, next) {
   }
   return next();
 }
+
+/**
+ * Exige un token de servicio (type === 'service') para endpoints service-to-service
+ * (p. ej. el lookup `GET /profiles?dni|userId`). Evita que un cliente público anónimo o un
+ * usuario final enumere perfiles por DNI. inscriptions-svc firma ese token con el JWT_SECRET
+ * compartido. No expuesto al frontend.
+ */
+export function requireServiceToken(req, _res, next) {
+  if (!req.user) {
+    return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
+  }
+  if (req.user.type !== 'service') {
+    return next(Object.assign(new Error('endpoint interno'), { statusCode: 403, code: 'FORBIDDEN' }));
+  }
+  return next();
+}

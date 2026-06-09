@@ -26,7 +26,6 @@ test('schema incluye mutaciones de inicializacion avanzada', async () => {
 
   assert.equal(mutationFields.has('syncStageGroups'), true);
   assert.equal(mutationFields.has('assignInscriptionToGroup'), true);
-  assert.equal(mutationFields.has('ensureEliminationBracket'), true);
   assert.equal(mutationFields.has('assignInscriptionToMatchSlot'), true);
   assert.equal(mutationFields.has('generateLeagueRoundRobin'), true);
   assert.equal(mutationFields.has('generateSingleEliminationBracket'), true);
@@ -35,6 +34,23 @@ test('schema incluye mutaciones de inicializacion avanzada', async () => {
   assert.equal(mutationFields.has('deleteTransition'), true);
   assert.equal(mutationFields.has('updateMatchScheduling'), true);
   assert.equal(mutationFields.has('setMatchWinnerAdvancement'), true);
+});
+
+test('schema NO expone mutaciones legacy/no usadas (removidas)', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+  const mutationType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Mutation'
+  );
+  const mutationFields = new Set(mutationType.fields?.map((field) => field.name.value) || []);
+
+  for (const removed of [
+    'updateCompetitionMaxSlots', 'addTransitionTopN', 'addGroup', 'addTeamToGroup',
+    'addCompetitorToGroup', 'unassignInscriptionFromGroup', 'upsertCompetitor',
+    'ensureEliminationBracket', 'createMatch', 'addKey', 'linkGroupToKey',
+  ]) {
+    assert.equal(mutationFields.has(removed), false, `${removed} debería estar removida`);
+  }
 });
 
 test('Match incluye winnerAdvancementTransitionId y Mutation setMatchWinnerAdvancement', async () => {

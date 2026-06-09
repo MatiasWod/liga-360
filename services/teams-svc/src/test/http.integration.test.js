@@ -1,5 +1,5 @@
 /**
- * Integración HTTP de teams-svc (requiere Postgres). Profiles se movieron a identity-svc.
+ * Integración HTTP de teams-svc (requiere Postgres). Incluye /profiles (Person_Profile absorbido).
  * Ejecutar con la DB levantada: `npm run test:integration`.
  */
 import { test, describe, before, after } from 'node:test';
@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken';
 
 const PORT = 4099;
 const JWT_SECRET = 'testsecret';
-const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@127.0.0.1:5432/liga360';
+const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@127.0.0.1:5432/liga360_teams';
 
 let server;
 let appModule;
@@ -168,13 +168,13 @@ describe('teams-svc HTTP integration', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.teamId, teamId);
     });
-    test('GET /teams/resolve-by-invite-code/:code resuelve equipo', async () => {
-      const res = await httpReq('GET', `/teams/resolve-by-invite-code/${inviteCode}`, null, authHeader(ownerToken));
+    test('GET /teams?inviteCode= resuelve equipo', async () => {
+      const res = await httpReq('GET', `/teams?inviteCode=${encodeURIComponent(inviteCode)}`, null, authHeader(ownerToken));
       assert.equal(res.status, 200);
       assert.equal(res.body.team.id, teamId);
     });
-    test('GET /teams/resolve-by-invite-code inválido → 404', async () => {
-      assert.equal((await httpReq('GET', '/teams/resolve-by-invite-code/XXX-999', null, authHeader(ownerToken))).status, 404);
+    test('GET /teams?inviteCode= inválido → 404', async () => {
+      assert.equal((await httpReq('GET', '/teams?inviteCode=XXX-999', null, authHeader(ownerToken))).status, 404);
     });
   });
 

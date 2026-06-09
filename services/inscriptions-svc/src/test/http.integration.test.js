@@ -39,8 +39,8 @@ test('GET /teams/me/invites sin token responde 401', async () => {
   assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
-test('POST /invites/code/claim sin token responde 401', async () => {
-  const response = await request(app).post('/invites/code/claim').send({ code: 'ABCD1234' });
+test('POST /invites/claims sin token responde 401', async () => {
+  const response = await request(app).post('/invites/claims').send({ code: 'ABCD1234' });
   assert.equal(response.statusCode, 401);
   assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
@@ -58,88 +58,4 @@ test('GET /participants/me/invites con token team responde 403', async () => {
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 403);
   assert.match(response.body.error?.code || '', /FORBIDDEN/);
-});
-
-// ---------------------------------------------------------------------------
-// Match Events — happy path + auth guard
-// ---------------------------------------------------------------------------
-
-test('POST /matches/:matchId/events sin token responde 401', async () => {
-  const response = await request(app)
-    .post('/matches/match-test-1/events')
-    .send({ event_type: 'goal', display_name: 'Jugador 1', tournament_id: 'trn-1' });
-  assert.equal(response.statusCode, 401);
-});
-
-test('POST /matches/:matchId/events con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 10, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .post('/matches/match-test-1/events')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ event_type: 'goal', display_name: 'Jugador 1', tournament_id: 'trn-1' });
-  assert.equal(response.statusCode, 403);
-});
-
-test('POST /matches/:matchId/events con event_type invalido responde 400', async () => {
-  const token = jwt.sign({ sub: 1, type: 'organizer' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .post('/matches/match-test-1/events')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ event_type: 'penalty', display_name: 'Jugador 1', tournament_id: 'trn-1' });
-  assert.equal(response.statusCode, 400);
-  assert.match(response.body.error?.message || '', /event_type invalido/);
-});
-
-test('POST /matches/:matchId/events sin display_name responde 400', async () => {
-  const token = jwt.sign({ sub: 1, type: 'organizer' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .post('/matches/match-test-1/events')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ event_type: 'goal', tournament_id: 'trn-1' });
-  assert.equal(response.statusCode, 400);
-  assert.match(response.body.error?.message || '', /display_name/);
-});
-
-test('POST /matches/:matchId/events sin tournament_id responde 400', async () => {
-  const token = jwt.sign({ sub: 1, type: 'organizer' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .post('/matches/match-test-1/events')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ event_type: 'goal', display_name: 'Jugador 1' });
-  assert.equal(response.statusCode, 400);
-  assert.match(response.body.error?.message || '', /tournament_id/);
-});
-
-test('GET /matches/:matchId/events sin token responde 401', async () => {
-  const response = await request(app).get('/matches/match-test-1/events');
-  assert.equal(response.statusCode, 401);
-});
-
-test('PATCH /matches/:matchId/events/:eventId sin token responde 401', async () => {
-  const response = await request(app)
-    .patch('/matches/match-test-1/events/999')
-    .send({ display_name: 'Nuevo nombre' });
-  assert.equal(response.statusCode, 401);
-});
-
-test('PATCH /matches/:matchId/events/:eventId con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 10, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .patch('/matches/match-test-1/events/999')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ display_name: 'Nuevo nombre' });
-  assert.equal(response.statusCode, 403);
-});
-
-test('DELETE /matches/:matchId/events/:eventId sin token responde 401', async () => {
-  const response = await request(app).delete('/matches/match-test-1/events/999');
-  assert.equal(response.statusCode, 401);
-});
-
-test('DELETE /matches/:matchId/events/:eventId con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 10, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
-  const response = await request(app)
-    .delete('/matches/match-test-1/events/999')
-    .set('Authorization', `Bearer ${token}`);
-  assert.equal(response.statusCode, 403);
 });

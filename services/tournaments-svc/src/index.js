@@ -1,10 +1,11 @@
 import { env } from './config/env.js';
-import { getDriver, waitForNeo4j, closeDriver } from './config/neo4j.js';
+import { getDriver, waitForNeo4j, ensureConstraints, closeDriver } from './config/neo4j.js';
 import { createApp } from './app.js';
 import { logger } from './logger.js';
 
 async function bootstrap() {
   await waitForNeo4j();
+  await ensureConstraints();
   const driver = getDriver();
 
   const { app, apolloServer } = await createApp(driver);

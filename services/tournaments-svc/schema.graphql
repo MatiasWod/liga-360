@@ -41,7 +41,6 @@ type Mutation {
   deleteTournament(id: ID!): Boolean!
   createCompetition(tournamentId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
   updateCompetition(competitionId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
-  updateCompetitionMaxSlots(competitionId: ID!, maxSlots: Int): Competition!
   addStage(
     competitionId: ID!,
     name: String!,
@@ -58,7 +57,6 @@ type Mutation {
     configJson: String,
     childrenJson: String
   ): Stage!
-  addTransitionTopN(fromStageId: ID!, toStageId: ID!, topN: Int!): Transition!
   addTransition(
     fromStageId: ID!,
     toStageId: ID,
@@ -76,18 +74,7 @@ type Mutation {
   ): Transition!
   saveTransitionPlacementSnapshot(transitionId: ID!, snapshotJson: String!): Transition!
   deleteTransition(transitionId: ID!): Boolean!
-  addGroup(stageId: ID!, name: String!, order: Int!): Group!
   syncStageGroups(stageId: ID!, totalGroups: Int!): [Group!]!
-  addTeamToGroup(groupId: ID!, teamId: ID!): Boolean!
-  addCompetitorToGroup(
-    groupId: ID!,
-    competitorId: ID!,
-    kind: CompetitorKind!,
-    displayName: String!,
-    shortName: String,
-    avatarUrl: String,
-    badgeUrl: String
-  ): Boolean!
   assignInscriptionToGroup(
     stageId: ID!
     groupId: ID!
@@ -95,20 +82,6 @@ type Mutation {
     tournamentId: ID!
     displayName: String!
   ): Boolean!
-  unassignInscriptionFromGroup(
-    groupId: ID!
-    inscriptionId: ID!
-    tournamentId: ID!
-  ): Boolean!
-  upsertCompetitor(
-    competitorId: ID!,
-    kind: CompetitorKind!,
-    displayName: String!,
-    shortName: String,
-    avatarUrl: String,
-    badgeUrl: String
-  ): Competitor!
-  ensureEliminationBracket(stageId: ID!, totalSlots: Int!): [Match!]!
   generateLeagueRoundRobin(stageId: ID!, doubleRound: Boolean!, maxRounds: Int): [Match!]!
   generateSingleEliminationBracket(stageId: ID!, doubleRound: Boolean!): [Match!]!
   generateGroupsStageRoundRobin(stageId: ID!, doubleRound: Boolean!, maxRounds: Int): [Match!]!
@@ -130,9 +103,6 @@ type Mutation {
     leg: Int!
     slotIndex: Int!
   ): Boolean!
-  createMatch(stageId: ID!, groupId: ID, homeTeamId: ID!, awayTeamId: ID!, round: Int, leg: Int, scheduledAt: String): Match!
-  addKey(stageId: ID!, name: String!, order: Int!): Key!
-  linkGroupToKey(keyId: ID!, groupId: ID!): Boolean!
   hydrateEliminationFirstRoundFromRoster(stageId: ID!): Boolean!
   assignInscriptionToStage(
     stageId: ID!

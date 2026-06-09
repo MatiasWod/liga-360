@@ -8,6 +8,7 @@ import * as teamsClient from '../clients/teams.client.js';
 import * as tournamentsClient from '../clients/tournaments.client.js';
 import * as ownerService from './owner.service.js';
 import { conflict, notFound, translateError } from './serviceErrors.js';
+import { logger } from '../logger.js';
 
 const normalizeTeamName = (s) => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '');
 
@@ -168,7 +169,15 @@ async function hydrateInscriptionsWithTeams(rows) {
   if (ids.length === 0 && names.length === 0) {
     return rows.map((r) => ({ ...r, team_badge_url: null }));
   }
-  const teams = await teamsClient.resolveTeams(ids, names);
+  // Degradación elegante: si teams-svc no responde, devolvemos el listado SIN enriquecer
+  // (nombre/escudo del equipo) en lugar de fallar toda la petición con 502.
+  let teams;
+  try {
+    teams = await teamsClient.resolveTeams(ids, names);
+  } catch (err) {
+    logger.warn({ err: err.message }, 'teams-svc no disponible: inscripciones sin enriquecer con equipo');
+    return rows.map((r) => ({ ...r, team_badge_url: null }));
+  }
   const byId = {};
   const byName = {};
   for (const t of teams) {

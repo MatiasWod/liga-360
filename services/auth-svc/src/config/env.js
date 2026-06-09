@@ -15,7 +15,7 @@ if (process.env.NODE_ENV === 'production') {
 export const env = {
   port: parseInt(process.env.PORT || '4003', 10),
   jwtSecret: process.env.JWT_SECRET || 'devsecret',
-  postgresUrl: process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360',
+  postgresUrl: process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360_auth',
   teamsSvcUrl: process.env.TEAMS_SVC_URL || 'http://teams-svc:4002',
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigins: process.env.CORS_ORIGINS

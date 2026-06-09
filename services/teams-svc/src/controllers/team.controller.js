@@ -11,17 +11,17 @@ function parseCsv(value) {
 
 export async function list(req, res, next) {
   try {
-    const { ownerUserId, personProfileId, ids, names, mine } = req.query;
+    const { ownerUserId, ids, names, mine, inviteCode } = req.query;
     // Lookups service-to-service (sin auth de usuario).
     if (ownerUserId !== undefined) return res.json(await teamService.listOwnedByUser(Number(ownerUserId)));
-    if (personProfileId !== undefined) return res.json(await teamService.listByProfile(Number(personProfileId)));
     if (ids !== undefined || names !== undefined) {
       return res.json(await teamService.resolveTeams({ ids: parseCsv(ids), names: parseCsv(names) }));
     }
-    // Listado del usuario (requiere token).
+    // Resto requiere token.
     if (!req.user) {
       return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
     }
+    if (inviteCode !== undefined) return res.json(await teamService.resolveByInviteCode(String(inviteCode)));
     return res.json(await teamService.listTeams({ onlyMine: String(mine || '').toLowerCase() === 'true', userId: req.user.sub }));
   } catch (e) {
     next(e);
@@ -73,14 +73,6 @@ export async function rotateAccessCode(req, res, next) {
 export async function getMyInviteCode(req, res, next) {
   try {
     res.json(await teamService.getMyInviteCode(req.user.sub));
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function resolveByInviteCode(req, res, next) {
-  try {
-    res.json(await teamService.resolveByInviteCode(req.params.code));
   } catch (e) {
     next(e);
   }

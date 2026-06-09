@@ -12,7 +12,6 @@ import * as advancementService from '../services/advancement.service.js';
 import * as fixtureService from '../services/fixture.service.js';
 import * as matchService from '../services/match.service.js';
 import * as standingsService from '../services/standings.service.js';
-import * as competitorService from '../services/competitor.service.js';
 
 function requireOrganizer(context) {
   return requireOrganizerFromAuthHeader(context?.headers?.authorization || '');
@@ -47,8 +46,6 @@ const resolvers = {
       requireOrganizer(context);
       return competitionService.update(context.driver, competitionId, { name, order, maxSlots });
     },
-    updateCompetitionMaxSlots: (_p, { competitionId, maxSlots }, { driver }) =>
-      competitionService.updateMaxSlots(driver, competitionId, maxSlots),
 
     addStage: (_p, args, { driver }) => stageService.create(driver, args),
     updateStage: (_p, args, context) => {
@@ -60,8 +57,6 @@ const resolvers = {
       return stageService.setStatus(context.driver, stageId, status);
     },
 
-    addTransitionTopN: (_p, { fromStageId, toStageId, topN }, { driver }) =>
-      advancementService.addTopNTransition(driver, fromStageId, toStageId, topN),
     addTransition: (_p, args, { driver }) => advancementService.addTransition(driver, args),
     saveTransitionPlacementSnapshot: (_p, { transitionId, snapshotJson }, context) => {
       requireOrganizer(context);
@@ -72,28 +67,15 @@ const resolvers = {
       return advancementService.deleteTransition(context.driver, transitionId);
     },
 
-    addGroup: (_p, args, { driver }) => groupService.addGroup(driver, args),
     syncStageGroups: (_p, { stageId, totalGroups }, context) => {
       requireOrganizer(context);
       return groupService.syncStageGroups(context.driver, stageId, totalGroups);
     },
-    addTeamToGroup: (_p, args, { driver }) => groupService.addTeamToGroup(driver, args),
-    addCompetitorToGroup: (_p, args, { driver }) => groupService.addCompetitorToGroup(driver, args),
     assignInscriptionToGroup: (_p, args, context) => {
       requireOrganizer(context);
       return groupService.assignInscriptionToGroup(context.driver, args);
     },
-    unassignInscriptionFromGroup: (_p, args, context) => {
-      requireOrganizer(context);
-      return groupService.unassignInscriptionFromGroup(context.driver, args);
-    },
 
-    upsertCompetitor: (_p, args, { driver }) => competitorService.upsert(driver, args),
-
-    ensureEliminationBracket: (_p, { stageId, totalSlots }, context) => {
-      requireOrganizer(context);
-      return fixtureService.ensureEliminationBracket(context.driver, stageId, totalSlots);
-    },
     generateLeagueRoundRobin: (_p, { stageId, doubleRound, maxRounds }, context) => {
       requireOrganizer(context);
       return fixtureService.generateLeagueRoundRobin(context.driver, stageId, doubleRound, maxRounds);
@@ -123,7 +105,6 @@ const resolvers = {
       requireOrganizer(context);
       return matchService.updateMatchScheduling(context.driver, args);
     },
-    createMatch: (_p, args, { driver }) => matchService.createMatch(driver, args),
     updateMatchDateTime: (_p, args, context) => {
       requireOrganizer(context);
       return matchService.updateMatchDateTime(context.driver, args);
@@ -136,9 +117,6 @@ const resolvers = {
       requireOrganizer(context);
       return matchService.updateMatchResult(context.driver, args);
     },
-
-    addKey: (_p, args, { driver }) => keyService.addKey(driver, args),
-    linkGroupToKey: (_p, { keyId, groupId }, { driver }) => keyService.linkGroupToKey(driver, keyId, groupId),
 
     assignInscriptionToStage: (_p, { stageId, inscriptionId, tournamentId, displayName, force, seedOrder }, context) => {
       requireOrganizer(context);

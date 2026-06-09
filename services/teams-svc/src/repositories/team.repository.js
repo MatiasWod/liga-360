@@ -107,10 +107,19 @@ export async function generateUniqueInviteCode(client, name, maxAttempts = 50) {
 }
 
 export async function getMembers(client, teamId) {
+  // Cuando el participante está reclamado (person_profile_id), la identidad (nombre/dni/avatar)
+  // proviene del Person_Profile (fuente de verdad); el nickname es propio del roster.
   const r = await client.query(
-    `SELECT p.id, p.first_name, p.last_name, p.nickname, p.avatar_url, p.dni, p.person_profile_id
+    `SELECT p.id,
+            COALESCE(pp.first_name, p.first_name) AS first_name,
+            COALESCE(pp.last_name, p.last_name)   AS last_name,
+            p.nickname,
+            COALESCE(pp.avatar_url, p.avatar_url) AS avatar_url,
+            COALESCE(pp.dni, p.dni)               AS dni,
+            p.person_profile_id
      FROM "Team_Member" tm
      JOIN "Participant" p ON p.id = tm.participant_id
+     LEFT JOIN "Person_Profile" pp ON pp.id = p.person_profile_id
      WHERE tm.team_id = $1
      ORDER BY p.id`,
     [teamId]
@@ -118,7 +127,7 @@ export async function getMembers(client, teamId) {
   return r.rows;
 }
 
-/** Equipos vinculados a un person_profile_id (para hidratar /profiles/me en identity-svc). */
+/** Equipos vinculados a un person_profile_id (para hidratar /profiles/me, ahora local). */
 export async function listByProfileId(client, profileId) {
   const r = await client.query(
     `SELECT DISTINCT t.id, t.name, t.badge_url

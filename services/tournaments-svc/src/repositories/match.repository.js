@@ -94,7 +94,7 @@ export async function trimAfterRound(session, stageId, lastRoundInclusive) {
   );
 }
 
-/** Lista de partidos de la etapa (eliminación) ordenada como devuelve ensureEliminationBracket. */
+/** Lista de partidos de la etapa (eliminación) ordenada por slot/ronda. */
 export async function listEliminationOrdered(session, stageId) {
   const res = await session.run(
     `MATCH (s:Stage {id:$stageId})-[:HAS_MATCH]->(m:Match)
@@ -114,19 +114,6 @@ export async function listByStageGroupedOrdered(session, stageId) {
     { stageId }
   );
   return res.records.map((record) => matchFromNeoProps(record.get('m').properties));
-}
-
-export async function createEliminationEmpty(session, { stageId, id, slotIndex, fixtureCode }) {
-  await session.run(
-    `MATCH (s:Stage {id:$stageId})
-     CREATE (m:Match {
-       id:$id, round:1, leg:1, slotIndex:$slotIndex, fixtureCode:$fixtureCode,
-       groupId:null, homeInscriptionId:null, awayInscriptionId:null,
-       homeDisplayName:null, awayDisplayName:null, homeTournamentId:null, awayTournamentId:null
-     })
-     CREATE (s)-[:HAS_MATCH]->(m)`,
-    { stageId, id, slotIndex, fixtureCode }
-  );
 }
 
 export async function createEliminationSlot(session, { stageId, id, round, leg, slotIndex, code }) {
@@ -318,35 +305,6 @@ export async function findLegsByRoundSlot(session, stageId, round, slotIndex) {
     { stageId, round, slotIndex }
   );
   return res.records.map((rec) => matchFromNeoProps(rec.get('m').properties));
-}
-
-/** Partido legado creado con relaciones HAS_COMPETITOR (mutation createMatch). */
-export async function createLegacyMatch(session, { stageId, groupId, id, round, leg, scheduledAt, homeTeamId, awayTeamId }) {
-  await session.run(
-    `MATCH (s:Stage {id:$stageId})
-     OPTIONAL MATCH (g:Group {id:$groupId})
-     MATCH (home:Competitor {id:$homeTeamId})
-     MATCH (away:Competitor {id:$awayTeamId})
-     CREATE (m:Match {
-       id:$id, round:$round, leg:$leg, scheduledAt:$scheduledAt,
-       homeTeamId:$homeTeamId, awayTeamId:$awayTeamId
-     })
-     CREATE (s)-[:HAS_MATCH]->(m)
-     FOREACH (_ IN CASE WHEN g IS NULL THEN [] ELSE [1] END | CREATE (g)-[:HAS_MATCH]->(m))
-     CREATE (m)-[:HAS_COMPETITOR {role:'home'}]->(home)
-     CREATE (m)-[:HAS_COMPETITOR {role:'away'}]->(away)
-     RETURN m`,
-    {
-      stageId,
-      groupId: groupId ?? null,
-      id,
-      round: round ?? null,
-      leg: leg ?? null,
-      scheduledAt: scheduledAt ?? null,
-      homeTeamId,
-      awayTeamId,
-    }
-  );
 }
 
 /** Partidos de la siguiente ronda/slot del bracket (excluye tercer puesto). */

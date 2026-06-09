@@ -2,12 +2,6 @@ image: alpine:3.20
 
 definitions:
   services:
-    postgres:
-      image: postgres:16-alpine
-      variables:
-        POSTGRES_USER: liga
-        POSTGRES_PASSWORD: liga
-        POSTGRES_DB: liga360
     docker:
       memory: 3072
 
@@ -78,13 +72,11 @@ definitions:
         image: node:20-alpine
         caches:
           - npm
-        services:
-          - postgres
         script:
+          # Las suites unit/integration no requieren Postgres (los servicios SQL aíslan el acceso
+          # a datos en repos y se testean sin DB). Las migraciones por servicio viven en
+          # database/migrations-{auth,teams,inscriptions} y corren en deploy (Jobs db-migrate-*).
           - npm ci --cache .npm --prefer-offline
-          - export POSTGRES_URL=postgresql://liga:liga@localhost:5432/liga360
-          - export DATABASE_URL=postgresql://liga:liga@localhost:5432/liga360
-          - npm run migrate
           - npm install --prefix services/inscriptions-svc
           - npm install --prefix services/tournaments-svc
           - npm run test:ci
@@ -170,6 +162,17 @@ pipelines:
                 - export SVC="liga360-teams-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
+                - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
+                - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
+                - docker push "$DOCKER_USER/$SVC:latest"
+
+          - step:
+              <<: *docker-build-push
+              name: Build + Push MatchEvents Svc
+              script:
+                - export SVC="liga360-matchevents-svc"
+                - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/matchevents-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"

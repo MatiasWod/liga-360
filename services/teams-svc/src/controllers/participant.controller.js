@@ -42,29 +42,3 @@ export async function listByProfile(req, res, next) {
     next(e);
   }
 }
-
-export async function linkByDni(req, res, next) {
-  try {
-    const dni = req.query.dni;
-    const { personProfileId } = req.body || {};
-    if (!dni || !personProfileId) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'dni (query) and personProfileId (body) required' } });
-    }
-    res.json(await participantService.linkByDni(String(dni), Number(personProfileId)));
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function unlink(req, res, next) {
-  try {
-    const participantId = Number(req.params.id);
-    const { personProfileId } = req.body || {};
-    if (!participantId || !personProfileId) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'participantId and personProfileId required' } });
-    }
-    res.json(await participantService.unlinkFromProfile(participantId, Number(personProfileId)));
-  } catch (e) {
-    next(e);
-  }
-}

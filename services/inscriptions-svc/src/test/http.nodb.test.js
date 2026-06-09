@@ -67,9 +67,4 @@ describe('inscriptions-svc HTTP (sin DB)', () => {
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
-
-  test('POST /matches/:id/events sin token → 401', async () => {
-    const r = await req('POST', '/matches/m1/events', { event_type: 'goal', tournament_id: 't1', display_name: 'X' });
-    assert.equal(r.status, 401);
-  });
 });

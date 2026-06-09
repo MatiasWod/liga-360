@@ -60,18 +60,3 @@ export async function getStages(driver, competitionId) {
     await session.close();
   }
 }
-
-export async function updateMaxSlots(driver, id, maxSlots) {
-  const parsed = maxSlots == null ? null : Number(maxSlots);
-  if (parsed != null && (!Number.isInteger(parsed) || parsed <= 0)) {
-    throw new Error('BAD_REQUEST: maxSlots debe ser entero positivo o null');
-  }
-  const session = driver.session();
-  try {
-    const updated = await competitionRepo.updateMaxSlots(session, id, parsed);
-    if (!updated) throw new Error('NOT_FOUND: competition no existe');
-    return updated;
-  } finally {
-    await session.close();
-  }
-}

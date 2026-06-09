@@ -12,24 +12,6 @@ export async function findByStage(session, stageId) {
   });
 }
 
-export async function create(session, { stageId, id, name, order }) {
-  await session.run(
-    `MATCH (s:Stage {id:$stageId})
-     CREATE (s)-[:HAS_KEY {order:$order}]->(k:Key {id:$id, name:$name, order:$order})
-     RETURN k`,
-    { stageId, id, name, order }
-  );
-  return { id, name, order };
-}
-
-export async function linkGroup(session, keyId, groupId) {
-  await session.run(
-    `MATCH (k:Key {id:$keyId}), (g:Group {id:$groupId})
-     MERGE (k)-[:HAS_GROUP]->(g)`,
-    { keyId, groupId }
-  );
-}
-
 export async function groupIds(session, keyId) {
   const res = await session.run(
     `MATCH (k:Key {id:$id})-[:HAS_GROUP]->(g:Group)

@@ -115,7 +115,7 @@ export async function getMyTeamInviteCode() {
 
 export async function resolveTeamByInviteCode(code: string) {
   const safeCode = String(code || '').trim().toUpperCase();
-  const res = await fetch(`${TEAMS_BASE}/resolve-by-invite-code/${encodeURIComponent(safeCode)}`, {
+  const res = await fetch(`${TEAMS_BASE}?inviteCode=${encodeURIComponent(safeCode)}`, {
     headers: authHeaders(),
   });
   const json = await parseJsonResponse(res, 'No se pudo resolver equipo por codigo');

@@ -59,18 +59,6 @@ export async function hasCycle(session, fromStageId, toStageId) {
   return Boolean(cycleCheck.records[0]?.get('hasCycle'));
 }
 
-export async function createTopN(session, { id, fromStageId, toStageId, topN }) {
-  await session.run(
-    `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})
-     CREATE (a)-[:EMITS]->(tr:Transition {id:$id, type:'top', label:'avance', selectionKind:'top', topN:$n})-[:TO]->(b)
-     CREATE (a)-[:HAS_TRANSITION]->(tr)
-     CREATE (tr)-[:TO_STAGE]->(b)
-     CREATE (a)-[:ADVANCES_TO]->(b)
-     RETURN tr`,
-    { from: fromStageId, to: toStageId, id, n: topN }
-  );
-}
-
 export async function createGeneric(session, { id, fromStageId, toStageId, label, selectionKind, topN, rangeFrom, rangeTo, bottomN, carryOverJson, timing }) {
   await session.run(
     `MATCH (a:Stage {id:$from}), (b:Stage {id:$to})

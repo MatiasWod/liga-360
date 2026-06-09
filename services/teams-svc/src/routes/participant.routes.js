@@ -4,9 +4,7 @@ import * as participantController from '../controllers/participant.controller.js
 const router = Router();
 
 router.post('/', participantController.create);
-router.get('/', participantController.listByProfile);            // ?personProfileId=
-router.patch('/', participantController.linkByDni);              // ?dni= , body { personProfileId }
-router.delete('/:id/person-profile', participantController.unlink); // body { personProfileId }
+router.get('/', participantController.listByProfile);            // ?personProfileId= (consumido por inscriptions-svc)
 router.patch('/:id', participantController.update);
 
 export default router;

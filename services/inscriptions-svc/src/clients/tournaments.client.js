@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { normalizeTournamentParticipantType } from '../domain/participantType.js';
 
 const URL = env.tournamentsGraphqlUrl;
+const TIMEOUT_MS = Number(process.env.DOWNSTREAM_TIMEOUT_MS || 3000);
 
 async function gql(query, variables, authorization) {
   const response = await fetch(URL, {
@@ -12,6 +13,7 @@ async function gql(query, variables, authorization) {
       ...(authorization ? { Authorization: authorization } : {}),
     },
     body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   const body = await response.json();
   if (!response.ok || body?.errors?.length) {

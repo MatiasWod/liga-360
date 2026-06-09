@@ -72,4 +72,19 @@ describe('teams-svc HTTP (sin DB)', () => {
     const r = await req('POST', '/teams/participants', { lastName: 'X' });
     assert.equal(r.status, 400);
   });
+
+  test('GET /profiles/me sin token → 401 (Person_Profile absorbido)', async () => {
+    const r = await req('GET', '/profiles/me');
+    assert.equal(r.status, 401);
+  });
+
+  test('GET /teams/profiles/me (alias nginx) sin token → 401 (no 404)', async () => {
+    const r = await req('GET', '/teams/profiles/me');
+    assert.equal(r.status, 401);
+  });
+
+  test('GET /profiles (lookup interno) sin token de servicio → 401', async () => {
+    const r = await req('GET', '/profiles?dni=12345678');
+    assert.equal(r.status, 401);
+  });
 });

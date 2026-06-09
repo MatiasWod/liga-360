@@ -29,3 +29,6 @@ images:
   - name: liga360-inscriptions-svc
     newName: bcanevaro/liga360-inscriptions-svc
     newTag: 2b99cf1e557bce5455a0ad1b8f07e8548d0ff030
+  - name: liga360-matchevents-svc
+    newName: bcanevaro/liga360-matchevents-svc
+    newTag: 2b99cf1e557bce5455a0ad1b8f07e8548d0ff030

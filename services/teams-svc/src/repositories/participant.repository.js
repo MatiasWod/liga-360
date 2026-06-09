@@ -1,4 +1,4 @@
-/** Acceso a datos de Participant. person_profile_id es referencia lógica a identity-svc. */
+/** Acceso a datos de Participant. person_profile_id referencia a Person_Profile (misma DB, FK real). */
 
 const PARTICIPANT_COLS =
   'id, name, first_name, last_name, nickname, dni, avatar_url, person_profile_id, created_by_user_id, created_at, updated_at';
@@ -44,11 +44,19 @@ export async function setPersonProfileId(client, participantId, personProfileId,
 
 /** Participantes vinculados a un profile (para /profiles/me). */
 export async function listByProfileId(client, personProfileId) {
+  // Identidad (nombre/dni/avatar) desde el Person_Profile reclamado; nickname propio del roster.
   const r = await client.query(
-    `SELECT id, first_name, last_name, nickname, dni, avatar_url, person_profile_id
-     FROM "Participant"
-     WHERE person_profile_id = $1
-     ORDER BY id`,
+    `SELECT p.id,
+            COALESCE(pp.first_name, p.first_name) AS first_name,
+            COALESCE(pp.last_name, p.last_name)   AS last_name,
+            p.nickname,
+            COALESCE(pp.dni, p.dni)               AS dni,
+            COALESCE(pp.avatar_url, p.avatar_url) AS avatar_url,
+            p.person_profile_id
+     FROM "Participant" p
+     LEFT JOIN "Person_Profile" pp ON pp.id = p.person_profile_id
+     WHERE p.person_profile_id = $1
+     ORDER BY p.id`,
     [personProfileId]
   );
   return r.rows;

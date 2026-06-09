@@ -9,7 +9,6 @@ import * as inscription from '../controllers/inscription.controller.js';
 import * as invite from '../controllers/invite.controller.js';
 import * as teamInvite from '../controllers/teamInvite.controller.js';
 import * as participantInvite from '../controllers/participantInvite.controller.js';
-import * as matchEvent from '../controllers/matchEvent.controller.js';
 
 export function createRouter() {
   const router = Router();
@@ -25,7 +24,7 @@ export function createRouter() {
   // Invites (rutas específicas antes de /:token)
   router.get('/invites', requireOrganizer, invite.list);
   router.post('/invites', requireOrganizer, invite.create);
-  router.post('/invites/code/claim', requireAuthMiddleware, invite.claimByCode);
+  router.post('/invites/claims', requireAuthMiddleware, invite.claimByCode);
   router.get('/invites/:token', invite.getByToken);
   router.post('/invites/:token/use', invite.use);
 
@@ -38,12 +37,6 @@ export function createRouter() {
   router.get('/participants/me/invites', requireParticipantUser, participantInvite.list);
   router.post('/participants/me/invites/:id/accept', requireParticipantUser, participantInvite.accept);
   router.post('/participants/me/invites/:id/reject', requireParticipantUser, participantInvite.reject);
-
-  // Match events
-  router.post('/matches/:matchId/events', requireOrganizer, matchEvent.create);
-  router.get('/matches/:matchId/events', requireAuthMiddleware, matchEvent.list);
-  router.patch('/matches/:matchId/events/:eventId', requireOrganizer, matchEvent.update);
-  router.delete('/matches/:matchId/events/:eventId', requireOrganizer, matchEvent.remove);
 
   return router;
 }

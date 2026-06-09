@@ -2,7 +2,6 @@
  * Lógica de negocio de partidos: creación, reprogramación, asignación de slots, fecha/sede,
  * transición de ganador, y carga de resultado con auto-avance del bracket de eliminación.
  */
-import { genId } from '../domain/shared/ids.js';
 import {
   normalizeInscriptionId,
   isSyntheticSlotInscriptionId,
@@ -39,34 +38,6 @@ import * as stageRepo from '../repositories/stage.repository.js';
 import * as groupRepo from '../repositories/group.repository.js';
 import * as competitorRepo from '../repositories/competitor.repository.js';
 import * as transitionRepo from '../repositories/transition.repository.js';
-
-export async function createMatch(driver, { stageId, groupId, homeTeamId, awayTeamId, round, leg, scheduledAt }) {
-  const id = genId('m');
-  const session = driver.session();
-  try {
-    for (const teamId of [homeTeamId, awayTeamId]) {
-      await competitorRepo.upsertSnapshot(session, {
-        competitorId: teamId,
-        kind: 'team',
-        displayName: `Equipo ${teamId}`,
-        shortName: null,
-        avatarUrl: null,
-        badgeUrl: null,
-      });
-    }
-    await matchRepo.createLegacyMatch(session, { stageId, groupId, id, round, leg, scheduledAt, homeTeamId, awayTeamId });
-    return {
-      id,
-      round: round ?? null,
-      leg: leg ?? null,
-      scheduledAt: scheduledAt ?? null,
-      homeTeamId,
-      awayTeamId,
-    };
-  } finally {
-    await session.close();
-  }
-}
 
 export async function updateMatchScheduling(driver, { stageId, matchId, round, leg, slotIndex }) {
   const session = driver.session();

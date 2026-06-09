@@ -8,16 +8,6 @@ import {
 import { isPlaceholderParticipantLabel } from '../domain/shared/participantLabels.js';
 import * as groupRepo from '../repositories/group.repository.js';
 import * as stageRepo from '../repositories/stage.repository.js';
-import * as competitorRepo from '../repositories/competitor.repository.js';
-
-export async function addGroup(driver, { stageId, name, order }) {
-  const session = driver.session();
-  try {
-    return await groupRepo.create(session, { stageId, id: genId('g'), name, order });
-  } finally {
-    await session.close();
-  }
-}
 
 export async function syncStageGroups(driver, stageId, totalGroups) {
   const safeTotalGroups = Number(totalGroups);
@@ -40,35 +30,6 @@ export async function syncStageGroups(driver, stageId, totalGroups) {
     }
 
     return await groupRepo.findByStage(session, stageId);
-  } finally {
-    await session.close();
-  }
-}
-
-export async function addTeamToGroup(driver, { groupId, teamId }) {
-  const session = driver.session();
-  try {
-    await competitorRepo.upsertSnapshot(session, {
-      competitorId: teamId,
-      kind: 'team',
-      displayName: `Equipo ${teamId}`,
-      shortName: null,
-      avatarUrl: null,
-      badgeUrl: null,
-    });
-    await groupRepo.linkCompetitor(session, groupId, teamId);
-    return true;
-  } finally {
-    await session.close();
-  }
-}
-
-export async function addCompetitorToGroup(driver, { groupId, competitorId, kind, displayName, shortName, avatarUrl, badgeUrl }) {
-  const session = driver.session();
-  try {
-    await competitorRepo.upsertSnapshot(session, { competitorId, kind, displayName, shortName, avatarUrl, badgeUrl });
-    await groupRepo.linkCompetitor(session, groupId, competitorId);
-    return true;
   } finally {
     await session.close();
   }
@@ -106,17 +67,6 @@ export async function assignInscriptionToGroup(driver, { stageId, groupId, inscr
     }
 
     await groupRepo.mergeInscription(session, { stageId, groupId, tournamentId, iid, displayName });
-    return true;
-  } finally {
-    await session.close();
-  }
-}
-
-export async function unassignInscriptionFromGroup(driver, { groupId, inscriptionId, tournamentId }) {
-  const iid = normalizeInscriptionId(inscriptionId);
-  const session = driver.session();
-  try {
-    await groupRepo.unassignInscription(session, groupId, tournamentId, iid);
     return true;
   } finally {
     await session.close();

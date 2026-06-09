@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "migrate": "node-pg-migrate up",
+    "migrate:auth": "node-pg-migrate up --migrations-dir migrations-auth",
     "migrate:teams": "node-pg-migrate up --migrations-dir migrations-teams",
-    "migrate:identity": "node-pg-migrate up --migrations-dir migrations-identity"
+    "migrate:inscriptions": "node-pg-migrate up --migrations-dir migrations-inscriptions",
+    "migrate:matchevents": "node-pg-migrate up --migrations-dir migrations-matchevents"
   },
   "dependencies": {
     "node-pg-migrate": "^8.0.4"

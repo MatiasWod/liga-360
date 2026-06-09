@@ -4,21 +4,6 @@ import { STAGE_CYCLE_ERROR } from '../domain/stage/stageTransitionCycle.js';
 import { normalizeTransitionTiming, isNextEditionTiming } from '../domain/stage/stageTransitionTiming.js';
 import * as transitionRepo from '../repositories/transition.repository.js';
 
-export async function addTopNTransition(driver, fromStageId, toStageId, topN) {
-  const id = genId('tr');
-  const session = driver.session();
-  try {
-    await transitionRepo.pruneOrphanAdvancesToBetweenStages(session, fromStageId, toStageId);
-    if (await transitionRepo.hasCycle(session, fromStageId, toStageId)) {
-      throw new Error(STAGE_CYCLE_ERROR);
-    }
-    await transitionRepo.createTopN(session, { id, fromStageId, toStageId, topN });
-    return { id, type: 'top', label: 'avance', selectionKind: 'top', topN };
-  } finally {
-    await session.close();
-  }
-}
-
 export async function addTransition(driver, args) {
   const {
     fromStageId,

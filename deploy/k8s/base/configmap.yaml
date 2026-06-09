@@ -13,5 +13,4 @@ data:
   TOURNAMENTS_SUBGRAPH_URL: http://tournaments-svc:4001/graphql
   TOURNAMENTS_GRAPHQL_URL: http://gateway:4000/graphql
   TEAMS_SVC_URL: http://teams-svc:4002
-  IDENTITY_SVC_URL: http://identity-svc:4005
   CORS_ORIGINS: "*"

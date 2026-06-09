@@ -111,14 +111,6 @@ export async function capacity(session, groupId, deriveGroupsConfig) {
   return teamsPerGroup > 0 ? teamsPerGroup : null;
 }
 
-export async function linkCompetitor(session, groupId, competitorId) {
-  await session.run(
-    `MATCH (g:Group {id:$groupId}), (c:Competitor {id:$competitorId})
-     MERGE (g)-[:HAS_COMPETITOR]->(c)`,
-    { groupId, competitorId }
-  );
-}
-
 /** Asigna inscripción a un grupo y la quita de los demás grupos de la misma etapa. */
 export async function mergeInscription(session, { stageId, groupId, tournamentId, iid, displayName }) {
   await session.run(
@@ -135,10 +127,3 @@ export async function mergeInscription(session, { stageId, groupId, tournamentId
   );
 }
 
-export async function unassignInscription(session, groupId, tournamentId, iid) {
-  await session.run(
-    `MATCH (:Group {id:$groupId})-[r:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef {tournamentId:$tid, inscriptionId:$iid})
-     DELETE r`,
-    { groupId, tid: tournamentId, iid }
-  );
-}

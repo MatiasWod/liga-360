@@ -40,18 +40,6 @@ export async function update(session, id, { name, order, maxSlots }) {
   return mapCompetition(r.records[0].get('c').properties);
 }
 
-export async function updateMaxSlots(session, id, maxSlots) {
-  const r = await session.run(
-    `MATCH (c:Competition {id:$id})
-     SET c.maxSlots = $maxSlots
-     RETURN c
-     LIMIT 1`,
-    { id, maxSlots }
-  );
-  if (r.records.length === 0) return null;
-  return mapCompetition(r.records[0].get('c').properties);
-}
-
 /**
  * maxSlots efectivo: explícito si está seteado (>0); si no, capacidad derivada de la primera
  * etapa que la defina; si nada, 16 por defecto.

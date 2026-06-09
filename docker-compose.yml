@@ -38,13 +38,40 @@ services:
       retries: 10
       start_period: 10s
 
-  migrate:
+  migrate-auth:
     build:
       context: .
       dockerfile: database/Dockerfile
-    container_name: liga360-migrate
+    container_name: liga360-migrate-auth
+    command: ["npm", "run", "migrate:auth"]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-inscriptions:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    container_name: liga360-migrate-inscriptions
+    command: ["npm", "run", "migrate:inscriptions"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_inscriptions
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-matchevents:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    container_name: liga360-migrate-matchevents
+    command: ["npm", "run", "migrate:matchevents"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_matchevents
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,32 +90,19 @@ services:
         condition: service_healthy
     restart: "no"
 
-  migrate-identity:
-    build:
-      context: .
-      dockerfile: database/Dockerfile
-    container_name: liga360-migrate-identity
-    command: ["npm", "run", "migrate:identity"]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_identity
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
   auth-svc:
     build: ./services/auth-svc
     container_name: liga360-auth-svc
     environment:
       - PORT=4003
       - JWT_SECRET=${JWT_SECRET:-devsecret}
-      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_auth
       - TEAMS_SVC_URL=http://teams-svc:4002
       - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      migrate-auth:
         condition: service_completed_successfully
     ports:
       - '4003:4003'
@@ -127,7 +141,6 @@ services:
       - PORT=4002
       - JWT_SECRET=${JWT_SECRET:-devsecret}
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_teams
-      - IDENTITY_SVC_URL=http://identity-svc:4005
       - NODE_ENV=production
     depends_on:
       postgres:
@@ -143,53 +156,49 @@ services:
       retries: 5
       start_period: 15s
 
-  identity-svc:
-    build: ./services/identity-svc
-    container_name: liga360-identity-svc
-    environment:
-      - PORT=4005
-      - JWT_SECRET=${JWT_SECRET:-devsecret}
-      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_identity
-      - TEAMS_SVC_URL=http://teams-svc:4002
-      - NODE_ENV=production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate-identity:
-        condition: service_completed_successfully
-    ports:
-      - '4005:4005'
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4005/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
   inscriptions-svc:
     build: ./services/inscriptions-svc
     container_name: liga360-inscriptions-svc
     environment:
       - PORT=4004
       - JWT_SECRET=${JWT_SECRET:-devsecret}
-      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/${POSTGRES_DB:-liga360}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_inscriptions
       - TEAMS_SVC_URL=http://teams-svc:4002
-      - IDENTITY_SVC_URL=http://identity-svc:4005
       - TOURNAMENTS_GRAPHQL_URL=http://gateway:4000/graphql
       - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      migrate-inscriptions:
         condition: service_completed_successfully
       teams-svc:
-        condition: service_started
-      identity-svc:
         condition: service_started
     ports:
       - '4004:4004'
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4004/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  matchevents-svc:
+    build: ./services/matchevents-svc
+    container_name: liga360-matchevents-svc
+    environment:
+      - PORT=4006
+      - JWT_SECRET=${JWT_SECRET:-devsecret}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_matchevents
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-matchevents:
+        condition: service_completed_successfully
+    ports:
+      - '4006:4006'
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4006/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -222,9 +231,9 @@ services:
     depends_on:
       - gateway
       - teams-svc
-      - identity-svc
       - auth-svc
       - inscriptions-svc
+      - matchevents-svc
     ports:
       - '5173:80'
     healthcheck:

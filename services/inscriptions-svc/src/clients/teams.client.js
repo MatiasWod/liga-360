@@ -27,3 +27,9 @@ export async function getParticipantsByProfile(profileId) {
   const body = await svcGet(BASE, `/participants?personProfileId=${encodeURIComponent(profileId)}`);
   return body?.participants || [];
 }
+
+/** Person_Profile fue absorbido por teams-svc: el lookup por usuario vive en /profiles. */
+export async function getProfileIdByUser(userId) {
+  const body = await svcGet(BASE, `/profiles?userId=${encodeURIComponent(userId)}`);
+  return body?.profile?.id ?? null;
+}

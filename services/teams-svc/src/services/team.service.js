@@ -3,8 +3,8 @@ import { pool, withTransaction } from '../config/db.js';
 import { nowIso } from '../domain/time.js';
 import { generateTeamCode, hashTeamCode } from '../domain/codes.js';
 import * as teamRepo from '../repositories/team.repository.js';
+import * as profileRepo from '../repositories/profile.repository.js';
 import { canWriteTeam, isTeamOwner, forbidden } from './teamAccess.js';
-import * as identityClient from '../clients/identity.client.js';
 
 function notFound(message) {
   return Object.assign(new Error(message), { statusCode: 404, code: 'NOT_FOUND' });
@@ -14,8 +14,9 @@ export async function listTeams({ onlyMine, userId }) {
   if (!onlyMine) {
     return { teams: await teamRepo.listAll(pool) };
   }
-  const profileId = await identityClient.getProfileIdByUser(userId);
-  return { teams: await teamRepo.listMine(pool, userId, profileId) };
+  // El profileId del usuario es un lookup local (misma DB tras la fusión identity→teams).
+  const profile = await profileRepo.findByUserId(pool, userId);
+  return { teams: await teamRepo.listMine(pool, userId, profile?.id ?? null) };
 }
 
 export async function createTeam({ name, badgeUrl, ownerUserId }) {
@@ -70,14 +71,10 @@ export async function resolveByInviteCode(rawCode) {
   return { team };
 }
 
-// --- Lecturas para consumidores (identity-svc, inscriptions-svc) ---
+// --- Lecturas para inscriptions-svc (?ownerUserId=, ?ids=&names=) ---
 
 export async function listOwnedByUser(userId) {
   return { teams: await teamRepo.listOwnedByUser(pool, userId) };
-}
-
-export async function listByProfile(personProfileId) {
-  return { teams: await teamRepo.listByProfileId(pool, personProfileId) };
 }
 
 export async function resolveTeams({ ids, names }) {
