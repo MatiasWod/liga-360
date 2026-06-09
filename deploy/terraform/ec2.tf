@@ -315,7 +315,7 @@ resource "aws_lb_target_group" "tg_30443" {
   target_type = "instance"
 }
 
-# --- LISTENERS ---
+# -- LISTENERS --
 
 resource "aws_lb_listener" "listener_80" {
   load_balancer_arn = aws_lb.k3s_nlb.arn
