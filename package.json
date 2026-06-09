@@ -11,7 +11,6 @@
     "preview": "vite preview",
     "postinstall": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'pipe'})}catch(e){}\"",
     "hooks:install": "git config core.hooksPath .githooks",
-    "migrate": "node-pg-migrate up --migrations-dir database/migrations",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",

@@ -24,7 +24,7 @@ export async function getMyProfile(): Promise<{ profile: any; participants: Team
 }
 
 export async function claimMyDni(payload: { dni: string; firstName?: string; lastName?: string; avatarUrl?: string }) {
-  const res = await fetch(`${TEAMS_BASE}/profiles/me/claim-by-dni`, {
+  const res = await fetch(`${TEAMS_BASE}/profiles/me/claims`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -35,7 +35,7 @@ export async function claimMyDni(payload: { dni: string; firstName?: string; las
 }
 
 export async function unlinkMyParticipant(participantId: string) {
-  const res = await fetch(`${TEAMS_BASE}/profiles/me/participants/${participantId}/unlink`, {
+  const res = await fetch(`${TEAMS_BASE}/profiles/me/participants/${participantId}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });

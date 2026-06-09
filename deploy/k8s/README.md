@@ -19,7 +19,7 @@ Git (deploy/k8s/overlays/dev) ← Argo CD Application liga360-dev → namespace 
 | Manifiestos | `deploy/k8s/base/` + `deploy/k8s/overlays/dev/` |
 | GitOps | `deploy/argocd/application-dev.yaml` → `path: deploy/k8s/overlays/dev` |
 | Imágenes | Docker Hub `bcanevaro/liga360-*` (CI en `bitbucket-pipelines.yml`) |
-| Migraciones SQL | `database/migrations/` → imagen `database/Dockerfile` → Job `db-migrate` |
+| Migraciones SQL | `database/migrations-{auth,teams,inscriptions}/` → imagen `database/Dockerfile` → Jobs `db-migrate-{auth,teams,inscriptions}` |
 | Dev en máquina (sin K8s) | `docker-compose.yml` — camino aparte, no usa overlays K8s |
 
 No hay overlay `local`: el clúster (kind, minikube o remoto) usa el **mismo** `overlays/dev` y las imágenes del registry.
@@ -125,13 +125,15 @@ kubectl apply -k deploy/k8s/overlays/dev
 
 Preferí **Argo Sync** como operación habitual para no divergir Git ↔ cluster.
 
-Migración manual de emergencia (Postgres ya arriba):
+Migración manual de emergencia (Postgres ya arriba), una por servicio:
 
 ```bash
 kubectl -n liga360 port-forward svc/postgres 55432:5432
-# En otra terminal, desde la raíz del repo:
-export DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360
-npm run migrate
+# En otra terminal, desde database/ (npm ci una vez):
+DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_auth          npm run migrate:auth
+DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_teams         npm run migrate:teams
+DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_inscriptions  npm run migrate:inscriptions
+DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_matchevents   npm run migrate:matchevents
 ```
 
 ## 5. Acceso a la aplicación
@@ -174,7 +176,32 @@ Usar **docker-compose** en la raíz (`docker compose up`). Incluye servicio `mig
 
 ## Checklist de paridad de registro
 
-- Secrets: `JWT_SECRET`, `POSTGRES_URL`, `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `NEO4J_AUTH`.
+- Secrets: `JWT_SECRET`, `POSTGRES_PASSWORD`, `POSTGRES_URL_AUTH`, `POSTGRES_URL_TEAMS`, `POSTGRES_URL_INSCRIPTIONS`, `POSTGRES_URL_MATCHEVENTS`, `NEO4J_PASSWORD`, `NEO4J_AUTH`.
 - ConfigMap: `TOURNAMENTS_SUBGRAPH_URL`, `TOURNAMENTS_GRAPHQL_URL`, `CORS_ORIGINS`.
 - Ingress apunta al frontend y el frontend enruta `/api/*` hacia los servicios.
-- Job `db-migrate` exitoso antes de desplegar apps.
+- Jobs `db-migrate-{auth,teams,inscriptions,matchevents}` exitosos antes de desplegar apps.
+
+## DB-per-service (Postgres)
+
+Cada servicio SQL usa **su propia base**; `tournaments-svc` usa Neo4j (aparte). No hay tablas
+compartidas: las referencias entre servicios son ids planos (sin FKs cross-DB ni datos duplicados).
+
+| Servicio | Base de datos | Migraciones | Tablas |
+|---|---|---|---|
+| auth-svc | `liga360_auth` | `database/migrations-auth` | `Users` |
+| teams-svc | `liga360_teams` | `database/migrations-teams` | `Person_Profile`, `Team`, `Participant`, `Team_Member` |
+| inscriptions-svc | `liga360_inscriptions` | `database/migrations-inscriptions` | `Inscription`, `Invite` |
+| matchevents-svc | `liga360_matchevents` | `database/migrations-matchevents` | `MatchEvent` |
+
+Antes de aplicar los manifiestos hay que provisionar:
+
+1. **Bases de datos** (en el Postgres del clúster): `liga360_auth`, `liga360_teams`, `liga360_inscriptions`, `liga360_matchevents`.
+2. **Secret keys** en `liga360-secrets` (vía external-secrets / Vault), una por servicio:
+   - `POSTGRES_URL_AUTH` → `postgresql://<user>:<pass>@postgres:5432/liga360_auth`
+   - `POSTGRES_URL_TEAMS` → `postgresql://<user>:<pass>@postgres:5432/liga360_teams`
+   - `POSTGRES_URL_INSCRIPTIONS` → `postgresql://<user>:<pass>@postgres:5432/liga360_inscriptions`
+   - `POSTGRES_URL_MATCHEVENTS` → `postgresql://<user>:<pass>@postgres:5432/liga360_matchevents`
+
+Los Jobs `db-migrate-{auth,teams,inscriptions,matchevents}` corren cada `migrate:<svc>` contra su DB (sync-wave 1).
+Cada servicio lee su `POSTGRES_URL` de la key correspondiente. El ruteo `/profiles` lo resuelve el
+nginx del frontend hacia `teams-svc` (no requiere cambios de Ingress).

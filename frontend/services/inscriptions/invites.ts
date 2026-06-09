@@ -32,7 +32,7 @@ export async function createTournamentInvite(tournamentId: string): Promise<Tour
 }
 
 export async function claimCompetitionByInviteCode(code: string) {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/invites/code/claim`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/invites/claims`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ code: String(code || '').trim().toUpperCase() }),

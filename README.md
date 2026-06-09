@@ -8,12 +8,13 @@ Monorepo con frontend React y backend en microservicios para gestión de torneos
 - Backend:
   - gateway (Apollo Gateway): http://localhost:4000
   - tournaments-svc (GraphQL + Neo4j): http://localhost:4001
-  - teams-svc (REST + Postgres): http://localhost:4002
+  - teams-svc (REST + Postgres, incluye Person_Profile): http://localhost:4002
   - auth-svc (REST + Postgres): http://localhost:4003
   - inscriptions-svc (REST + Postgres): http://localhost:4004
+  - matchevents-svc (REST + Postgres): http://localhost:4006
 - Bases:
   - Neo4j: 7474 / 7687
-  - Postgres: host localhost, puerto 55432, db liga360
+  - Postgres: host localhost, puerto 55432. DB-per-service: `liga360_auth`, `liga360_teams`, `liga360_inscriptions`, `liga360_matchevents`
 
 ## Requisitos
 

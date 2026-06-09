@@ -10,7 +10,10 @@ resources:
   - postgres/statefulset.yaml
   - neo4j/service.yaml
   - neo4j/statefulset.yaml
-  - db-migrate/job.yaml
+  - db-migrate-auth/job.yaml
+  - db-migrate-teams/job.yaml
+  - db-migrate-inscriptions/job.yaml
+  - db-migrate-matchevents/job.yaml
   - auth-svc/deployment.yaml
   - auth-svc/service.yaml
   - auth-svc/servicemonitor.yaml
@@ -20,6 +23,8 @@ resources:
   - tournaments-svc/service.yaml
   - inscriptions-svc/deployment.yaml
   - inscriptions-svc/service.yaml
+  - matchevents-svc/deployment.yaml
+  - matchevents-svc/service.yaml
   - gateway/deployment.yaml
   - gateway/service.yaml
   - frontend/deployment.yaml

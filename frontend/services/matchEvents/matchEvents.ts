@@ -12,10 +12,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return json as T;
 }
 
-const base = () => API_ENDPOINTS.inscriptions;
+// matchevents-svc (servicio propio). En prod nginx enruta /api/matches → matchevents-svc.
+const base = () => API_ENDPOINTS.matchEvents;
 
 export async function listMatchEvents(matchId: string): Promise<MatchEvent[]> {
-  const res = await fetch(`${base()}/matches/${encodeURIComponent(matchId)}/events`, {
+  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events`, {
     headers: { ...getAuthHeaders() },
   });
   return handleResponse<MatchEvent[]>(res);
@@ -25,7 +26,7 @@ export async function createMatchEvent(
   matchId: string,
   payload: CreateMatchEventPayload
 ): Promise<MatchEvent> {
-  const res = await fetch(`${base()}/matches/${encodeURIComponent(matchId)}/events`, {
+  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
@@ -39,7 +40,7 @@ export async function updateMatchEvent(
   payload: UpdateMatchEventPayload
 ): Promise<MatchEvent> {
   const res = await fetch(
-    `${base()}/matches/${encodeURIComponent(matchId)}/events/${eventId}`,
+    `${base()}/${encodeURIComponent(matchId)}/events/${eventId}`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -51,7 +52,7 @@ export async function updateMatchEvent(
 
 export async function deleteMatchEvent(matchId: string, eventId: number): Promise<void> {
   const res = await fetch(
-    `${base()}/matches/${encodeURIComponent(matchId)}/events/${eventId}`,
+    `${base()}/${encodeURIComponent(matchId)}/events/${eventId}`,
     {
       method: 'DELETE',
       headers: { ...getAuthHeaders() },
