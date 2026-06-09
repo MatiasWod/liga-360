@@ -10,6 +10,7 @@ import {
   mergeInscriptionNameLookups,
 } from './teamDisplayName';
 import { listMatchEvents } from '../../services/matchEvents/matchEvents';
+import { CompetitionStatsPanel } from './stats/CompetitionStatsPanel';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage, StandingsRow } from './types';
 
 // ---------------------------------------------------------------------------
@@ -355,6 +356,8 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 	const [stageId, setStageId] = React.useState('');
 	// For groups-format stages: navigate by round, show all groups as columns
 	const [groupRoundKey, setGroupRoundKey] = React.useState('');
+	// Toggle Fixture / Estadísticas por Competencia
+	const [detailView, setDetailView] = React.useState<'fixture' | 'stats'>('fixture');
 
 	React.useEffect(() => {
 		async function load() {
@@ -562,8 +565,37 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 								</div>
 							)}
 
+							{/* Toggle Fixture / Estadísticas por Competencia */}
+							<div className="inline-flex rounded-xl bg-surface-0 p-1">
+								{([
+									{ key: 'fixture', label: 'Fixture' },
+									{ key: 'stats', label: 'Estadísticas' },
+								] as const).map((opt) => (
+									<button
+										key={opt.key}
+										type="button"
+										onClick={() => setDetailView(opt.key)}
+										className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+											detailView === opt.key
+												? 'bg-surface-3 text-text-primary shadow-sm'
+												: 'text-text-muted hover:text-text-primary'
+										}`}
+									>
+										{opt.label}
+									</button>
+								))}
+							</div>
+
+							{detailView === 'stats' && (
+								<CompetitionStatsPanel
+									tournamentId={t.id}
+									competition={competition}
+									nameById={inscriptionNameById}
+								/>
+							)}
+
 							{/* Task 1.3 + 1.4: Stage pills — same style as FixturePlanningPanel */}
-							{selectableStages.length > 0 && (
+							{detailView === 'fixture' && selectableStages.length > 0 && (
 								<div className="flex flex-wrap gap-1.5">
 									{selectableStages.map((s) => (
 										<button
@@ -587,7 +619,7 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 							)}
 
 							{/* Selector de fecha — liga y grupos */}
-							{(() => {
+							{detailView === 'fixture' && (() => {
 								const rounds = stage?.format === 'league' ? leagueRounds : stage?.format === 'groups' ? groupRounds : [];
 								if (rounds.length === 0) return null;
 								return (
@@ -601,12 +633,12 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 							})()}
 
 							{/* Stage content */}
-							{stage && !hasMatches && (
+							{detailView === 'fixture' && stage && !hasMatches && (
 								<p className="text-sm text-text-muted py-2">Sin partidos generados aún</p>
 							)}
 
 							{/* League — misma lógica que grupos: fecha seleccionada, partidos en columnas equilibradas */}
-							{stage?.format === 'league' && hasMatches && (() => {
+							{detailView === 'fixture' && stage?.format === 'league' && hasMatches && (() => {
 								const activeKey = groupRoundKey || leagueRounds[0]?.key || '';
 								const activeMatches = groupMatchesByRound(stage.matches || []).find((b) => b.key === activeKey)?.matches ?? [];
 								const chunks = splitBalanced(activeMatches, 4);
@@ -637,12 +669,12 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 							})()}
 
 							{/* Elimination — bracket visual */}
-							{stage?.format === 'elimination' && hasMatches && (
+							{detailView === 'fixture' && stage?.format === 'elimination' && hasMatches && (
 								<ConvergingEliminationBracket stage={stage} nameById={inscriptionNameById} />
 							)}
 
 							{/* Groups: grupos en columnas, cada uno con sub-columnas equilibradas de partidos */}
-							{stage?.format === 'groups' && hasMatches && (() => {
+							{detailView === 'fixture' && stage?.format === 'groups' && hasMatches && (() => {
 								const activeKey = groupRoundKey || groupRounds[0]?.key || '';
 								const activeGroups = sortedGroups.map((g) => ({
 									g,

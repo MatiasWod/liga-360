@@ -6,4 +6,6 @@ export const API_ENDPOINTS = {
   auth: env.VITE_AUTH_API_URL || '/api/auth',
   inscriptions: env.VITE_INSCRIPTIONS_API_URL || '/api/inscriptions',
   matchEvents: env.VITE_MATCHEVENTS_API_URL || '/api/matches',
+  // Rutas generales de matchevents-svc (estadísticas agregadas por torneo/competencia)
+  matchEventsStats: env.VITE_MATCHEVENTS_STATS_API_URL || '/api/matchevents',
 };

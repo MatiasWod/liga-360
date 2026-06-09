@@ -3,10 +3,11 @@ import { pool } from '../config/db.js';
 import * as matchEventRepo from '../repositories/matchEvent.repository.js';
 import { notFound } from './serviceErrors.js';
 
-export async function create({ matchId, tournamentId, eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes, extraJson, createdByUserId }) {
+export async function create({ matchId, tournamentId, competitionId, eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes, extraJson, createdByUserId }) {
   return matchEventRepo.create(pool, {
     matchId,
     tournamentId: String(tournamentId),
+    competitionId: competitionId != null ? String(competitionId) : null,
     eventType,
     inscriptionId: inscriptionId ?? null,
     linkedMemberId: linkedMemberId ?? null,
@@ -23,12 +24,13 @@ export async function listByMatch(matchId) {
   return matchEventRepo.listByMatch(pool, matchId);
 }
 
-export async function update({ matchId, eventId, eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes, extraJson }) {
+export async function update({ matchId, eventId, eventType, competitionId, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes, extraJson }) {
   if (!(await matchEventRepo.existsInMatch(pool, eventId, matchId))) {
     throw notFound('evento no encontrado');
   }
   return matchEventRepo.update(pool, eventId, matchId, {
     eventType: eventType ?? null,
+    competitionId: competitionId != null ? String(competitionId) : null,
     inscriptionId: inscriptionId ?? null,
     linkedMemberId: linkedMemberId ?? null,
     displayName: displayName ?? null,

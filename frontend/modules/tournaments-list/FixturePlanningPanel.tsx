@@ -853,6 +853,9 @@ export const FixturePlanningPanel: React.FC<{
           <MatchEditDrawer
             matchId={matchIdDrawerOpen}
             tournamentId={tournament.id}
+            competitionId={competitionId || null}
+            homeSlot={matchRow?.homeAssignedInscription}
+            awaySlot={matchRow?.awayAssignedInscription}
             teamsResolved={teamsResolved}
             defaultTab={teamsResolved ? (isMatchFinished ? 'schedule' : 'result') : 'schedule'}
             presetTimes={schedApi?.presetTimes}

@@ -47,14 +47,37 @@ describe('matchevents-svc HTTP (sin DB)', () => {
     assert.equal(r.body.status, 'ok');
   });
 
-  test('GET /matches/:id/events sin token → 401', async () => {
+  test('GET /matches/:id/events sin token es público (no 401)', async () => {
     const r = await req('GET', '/matches/m1/events');
-    assert.equal(r.status, 401);
+    // Puede ser 200 o 500 sin DB, pero nunca exige auth
+    assert.notEqual(r.status, 401);
+  });
+
+  test('GET /tournaments/:id/stats/scorers sin token es público (no 401)', async () => {
+    const r = await req('GET', '/tournaments/t1/stats/scorers');
+    assert.notEqual(r.status, 401);
+  });
+
+  test('GET /tournaments/:id/events sin inscriptionId → 400', async () => {
+    const r = await req('GET', '/tournaments/t1/events');
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 
   test('POST /matches/:id/events sin token → 401 (requiere organizer)', async () => {
     const r = await req('POST', '/matches/m1/events', { event_type: 'goal', tournament_id: 't1', display_name: 'X' });
     assert.equal(r.status, 401);
+  });
+
+  test('POST con organizer + sin inscription_id → 400 (atribución obligatoria)', async () => {
+    const r = await req(
+      'POST',
+      '/matches/m1/events',
+      { event_type: 'goal', tournament_id: 't1', display_name: 'X' },
+      { Authorization: `Bearer ${organizerToken}` }
+    );
+    assert.equal(r.status, 400);
+    assert.match(r.body.error.message, /inscription_id/);
   });
 
   test('POST con organizer + event_type inválido → 400', async () => {

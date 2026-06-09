@@ -8,6 +8,8 @@ import {
   updateMatchEvent,
 } from '../../services/matchEvents/matchEvents';
 import type { MatchEvent, MatchEventType } from '../../services/matchEvents/types';
+import { EventAttributionFields } from './EventAttributionFields';
+import { buildAttribution, parseInscriptionSlot, type RosterMember } from './eventAttribution';
 
 // ---------------------------------------------------------------------------
 // updateMatchResult — mutación GraphQL inline (sin servicio propio aún)
@@ -65,6 +67,11 @@ function normalizeStatusForForm(raw: string | null | undefined): string {
 export interface MatchEditDrawerProps {
   matchId: string;
   tournamentId: string;
+  /** Competencia a la que pertenece el partido; viaja en los eventos para stats por Competencia. */
+  competitionId?: string | null;
+  /** Slots de inscripción del partido para atribuir eventos a un equipo. */
+  homeSlot?: { inscriptionId?: string | number | null; displayName?: string | null } | null;
+  awaySlot?: { inscriptionId?: string | number | null; displayName?: string | null } | null;
   initialData?: {
     scheduledAt?: string | null;
     venue?: string | null;
@@ -91,6 +98,9 @@ export interface MatchEditDrawerProps {
 export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
   matchId,
   tournamentId,
+  competitionId,
+  homeSlot,
+  awaySlot,
   initialData,
   presetTimes,
   defaultTab,
@@ -176,7 +186,13 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
             <ResultSection matchId={matchId} initialData={initialData} onSaved={onSaved} />
           )}
           {activeSection === 'events' && (
-            <EventsSection matchId={matchId} tournamentId={tournamentId} />
+            <EventsSection
+              matchId={matchId}
+              tournamentId={tournamentId}
+              competitionId={competitionId}
+              homeSlot={homeSlot}
+              awaySlot={awaySlot}
+            />
           )}
         </div>
       </div>
@@ -422,16 +438,27 @@ function ResultSection({
 function EventsSection({
   matchId,
   tournamentId,
+  competitionId,
+  homeSlot,
+  awaySlot,
 }: {
   matchId: string;
   tournamentId: string;
+  competitionId?: string | null;
+  homeSlot?: MatchEditDrawerProps['homeSlot'];
+  awaySlot?: MatchEditDrawerProps['awaySlot'];
 }) {
   const [events, setEvents] = React.useState<MatchEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
+  const homeOption = parseInscriptionSlot(homeSlot);
+  const awayOption = parseInscriptionSlot(awaySlot);
+
   // Formulario nuevo evento
   const [newType, setNewType] = React.useState<MatchEventType>('goal');
+  const [newInscriptionId, setNewInscriptionId] = React.useState<number | null>(null);
+  const [newMember, setNewMember] = React.useState<RosterMember | null>(null);
   const [newName, setNewName] = React.useState('');
   const [newMinute, setNewMinute] = React.useState('');
   const [newNotes, setNewNotes] = React.useState('');
@@ -458,8 +485,13 @@ function EventsSection({
   }, [matchId]);
 
   async function handleAddEvent() {
-    if (!newName.trim()) {
-      setSaveError('El nombre del jugador/sancionado es requerido');
+    const attribution = buildAttribution({
+      inscriptionId: newInscriptionId,
+      member: newMember,
+      freeText: newName,
+    });
+    if (!attribution.ok) {
+      setSaveError(attribution.error);
       return;
     }
     setSaving(true);
@@ -467,13 +499,17 @@ function EventsSection({
     try {
       await createMatchEvent(matchId, {
         tournament_id: tournamentId,
+        competition_id: competitionId ?? null,
         event_type: newType,
-        display_name: newName.trim(),
+        inscription_id: attribution.inscription_id,
+        linked_member_id: attribution.linked_member_id,
+        display_name: attribution.display_name,
         minute: newMinute !== '' ? parseInt(newMinute, 10) : null,
         notes: newNotes.trim() || null,
         suspension_matches: newSuspensionMatches !== '' ? parseInt(newSuspensionMatches, 10) : null,
       });
       setNewName('');
+      setNewMember(null);
       setNewMinute('');
       setNewNotes('');
       setNewSuspensionMatches('');
@@ -554,16 +590,17 @@ function EventsSection({
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label className="block text-xs text-text-muted">Jugador / nombre</label>
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nombre del jugador o sancionado"
-            className="w-full rounded-lg border border-border-subtle bg-surface-1 px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
-          />
-        </div>
+        <EventAttributionFields
+          tournamentId={tournamentId}
+          homeOption={homeOption}
+          awayOption={awayOption}
+          selectedInscriptionId={newInscriptionId}
+          selectedMember={newMember}
+          freeText={newName}
+          onTeamChange={setNewInscriptionId}
+          onMemberChange={setNewMember}
+          onFreeTextChange={setNewName}
+        />
 
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">

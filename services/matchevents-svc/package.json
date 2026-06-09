@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "npm run test:unit",
-    "test:unit": "cross-env NODE_ENV=test node --test src/test/domain/matchEvent.test.js src/test/http.nodb.test.js"
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "cross-env NODE_ENV=test node --test src/test/domain/matchEvent.test.js src/test/http.nodb.test.js",
+    "test:integration": "cross-env NODE_ENV=test node --test src/test/http.integration.test.js"
   },
   "dependencies": {
     "body-parser": "^1.20.3",
