@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  labels:
+    app: db-init
+    app.kubernetes.io/component: migrator
+    app.kubernetes.io/part-of: liga360
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: db-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init-db
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Postgres to be ready..."
+              until pg_isready -h postgres -U liga 2>/dev/null; do
+                sleep 2
+              done
+              echo "Postgres is ready. Creating databases..."
+              export PGPASSWORD=$POSTGRES_PASSWORD
+              for db in liga360_auth liga360_teams liga360_inscriptions liga360_matchevents; do
+                echo "Creating database: $db"
+                psql -h postgres -U liga -d liga360 -tAc \
+                  "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 && continue
+                createdb -h postgres -U liga "$db"
+              done
+              echo "All databases created successfully"
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: liga360-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 200m

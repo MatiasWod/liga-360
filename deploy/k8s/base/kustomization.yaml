@@ -10,6 +10,7 @@ resources:
   - postgres/statefulset.yaml
   - neo4j/service.yaml
   - neo4j/statefulset.yaml
+  - db-init/job.yaml
   - db-migrate-auth/job.yaml
   - db-migrate-teams/job.yaml
   - db-migrate-inscriptions/job.yaml
