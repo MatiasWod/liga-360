@@ -16,6 +16,7 @@ resources:
   - db-migrate-matchevents/job.yaml
   - auth-svc/deployment.yaml
   - auth-svc/service.yaml
+  - auth-svc/servicemonitor.yaml
   - teams-svc/deployment.yaml
   - teams-svc/service.yaml
   - tournaments-svc/deployment.yaml

@@ -184,27 +184,27 @@ spec:
         property: password
 EOF_ES
 
-cat << 'EOF_APP' > /tmp/argocd-application.yaml
+cat << 'EOF_APP' > /tmp/argocd-bootstrap.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: liga360
+  name: liga360-bootstrap
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://bitbucket.org/itba/pf-2025b-liga360.git
     targetRevision: main
-    path: deploy/k8s/overlays/dev
+    path: deploy/argocd/apps
   destination:
     server: https://kubernetes.default.svc
-    namespace: liga360
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
 EOF_APP
 
 cat << 'EOF_ISSUER' > /tmp/cluster-issuer.yaml
@@ -232,8 +232,8 @@ for i in $(seq 1 10); do
   if kubectl apply -f /tmp/cluster-issuer.yaml && \
       kubectl apply --server-side -f /tmp/cluster-secret-store.yaml && \
      kubectl apply --server-side -f /tmp/argocd-external-secret.yaml && \
-     kubectl apply --server-side -f /tmp/argocd-application.yaml; then
-    echo "Bootstrap applied successfully!"
+     kubectl apply --server-side -f /tmp/argocd-bootstrap.yaml; then
+    echo "Bootstrap applied successfully!!"
     break
   fi
 

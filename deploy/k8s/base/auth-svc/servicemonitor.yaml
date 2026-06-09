@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: auth-svc-monitor
+  namespace: liga360
+  labels:
+    app.kubernetes.io/part-of: liga360
+spec:
+  selector:
+    matchLabels:
+      app: auth-svc
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 15s
