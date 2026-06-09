@@ -20,20 +20,20 @@ spec:
         prometheus:
           prometheusSpec:
             serviceMonitorSelectorNilUsesHelmValues: false
-      grafana:
-        ingress:
-          enabled: true
-          ingressClassName: nginx
-          annotations:
-            cert-manager.io/cluster-issuer: letsencrypt-prod
-          hosts:
-            - grafana.liga360.com.ar
-          path: /
-          pathType: Prefix
-          tls:
-            - secretName: grafana-tls-secret
-              hosts:
-                - grafana.liga360.com.ar
+        grafana:
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+            hosts:
+              - grafana.liga360.com.ar
+            path: /
+            pathType: Prefix
+            tls:
+              - secretName: grafana-tls-secret
+                hosts:
+                  - grafana.liga360.com.ar
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
