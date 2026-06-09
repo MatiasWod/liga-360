@@ -20,7 +20,7 @@ spec:
       containers:
         - name: gateway
           image: liga360-gateway:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 4000
           env:

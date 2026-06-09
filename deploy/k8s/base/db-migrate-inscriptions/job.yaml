@@ -21,7 +21,7 @@ spec:
       containers:
         - name: migrate
           image: liga360-migrator
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["npm", "run", "migrate:inscriptions"]
           env:
             # Requiere la key POSTGRES_URL_INSCRIPTIONS en liga360-secrets (DB liga360_inscriptions).

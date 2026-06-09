@@ -21,7 +21,7 @@ spec:
       containers:
         - name: migrate
           image: liga360-migrator
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["npm", "run", "migrate:teams"]
           env:
             # Requiere la key POSTGRES_URL_TEAMS en liga360-secrets (DB liga360_teams).
