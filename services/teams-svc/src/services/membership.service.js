@@ -12,6 +12,9 @@ export async function addMember({ teamId, participantId, teamCode, userId }) {
 
 export async function removeMember({ teamId, participantId, teamCode, userId }) {
   if (!(await canWriteTeam(pool, teamId, userId, teamCode))) throw forbidden();
-  await membershipRepo.remove(pool, teamId, participantId);
+  const removed = await membershipRepo.remove(pool, teamId, participantId);
+  if (removed === 0) {
+    throw Object.assign(new Error('participant is not member of this team'), { statusCode: 404, code: 'NOT_FOUND' });
+  }
   return { ok: true };
 }

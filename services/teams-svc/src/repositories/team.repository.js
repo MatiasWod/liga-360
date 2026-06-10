@@ -2,6 +2,7 @@
 import { buildInviteCodeCandidate } from '../domain/invite.js';
 
 const TEAM_COLS = 'id, name, owner_user_id, badge_url, invite_code, created_at, updated_at';
+const TEAM_COLS_T = 't.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.created_at, t.updated_at';
 
 export async function listAll(client) {
   const r = await client.query(`SELECT ${TEAM_COLS} FROM "Team" ORDER BY id DESC`);
@@ -12,10 +13,10 @@ export async function listAll(client) {
 export async function listMine(client, userId, profileId) {
   const r = await client.query(
     `WITH owned AS (
-       SELECT ${TEAM_COLS} FROM "Team" t WHERE t.owner_user_id = $1
+       SELECT ${TEAM_COLS_T} FROM "Team" t WHERE t.owner_user_id = $1
      ),
      linked AS (
-       SELECT DISTINCT ${TEAM_COLS}
+       SELECT DISTINCT ${TEAM_COLS_T}
        FROM "Team" t
        JOIN "Team_Member" tm ON tm.team_id = t.id
        JOIN "Participant" p ON p.id = tm.participant_id

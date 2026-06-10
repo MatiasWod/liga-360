@@ -10,10 +10,11 @@ export async function add(client, teamId, participantId, now) {
 }
 
 export async function remove(client, teamId, participantId) {
-  await client.query(
+  const r = await client.query(
     `DELETE FROM "Team_Member" WHERE team_id = $1 AND participant_id = $2`,
     [teamId, participantId]
   );
+  return r.rowCount;
 }
 
 export async function exists(client, teamId, participantId) {
