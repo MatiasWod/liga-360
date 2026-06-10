@@ -54,9 +54,22 @@ export async function updateParticipant({ participantId, firstName, lastName, ni
 
   const participant = await withTransaction(async (client) => {
     const profileId = await profileIdByDni(client, normalizedDni);
-    if (!(await canWriteTeam(client, Number(teamId), userId, teamCode))) throw forbidden();
-    if (!(await membershipRepo.exists(client, Number(teamId), participantId))) {
-      throw notFound('participant is not member of this team');
+    if (teamId) {
+      // Autorización por equipo: owner del team o teamCode válido, y participante en su roster.
+      if (!(await canWriteTeam(client, Number(teamId), userId, teamCode))) throw forbidden();
+      if (!(await membershipRepo.exists(client, Number(teamId), participantId))) {
+        throw notFound('participant is not member of this team');
+      }
+    } else {
+      // Sin teamId: solo el creador del participante o el dueño del profile vinculado.
+      if (!userId) throw forbidden();
+      const existing = await participantRepo.findById(client, participantId);
+      if (!existing) throw notFound('participant not found');
+      const callerProfile = await profileRepo.findByUserId(client, userId);
+      const owns =
+        existing.created_by_user_id === userId ||
+        (callerProfile != null && existing.person_profile_id === callerProfile.id);
+      if (!owns) throw forbidden();
     }
     const updated = await participantRepo.update(client, participantId, {
       firstName: firstName?.trim() || null,
