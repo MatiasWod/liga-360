@@ -41,6 +41,6 @@ describe('dedupeCompetitionsByName', () => {
     };
     const result = dedupeCompetitionsByName([stale, fresh] as any);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('c-new');
+    expect((result[0] as unknown as { id: string }).id).toBe('c-new');
   });
 });

@@ -288,10 +288,18 @@ export const MyStatsSection: React.FC<MyStatsSectionProps> = ({ participants, te
     [teamFilter, tournamentFilter, yearFilter, searchQuery]
   );
 
-  const displayBlocks = React.useMemo(
-    () => filterMyStatsBlocks(teamScopedBlocks, viewFilters),
-    [teamScopedBlocks, viewFilters]
-  );
+  const displayBlocks = React.useMemo(() => {
+    const filtered = filterMyStatsBlocks(teamScopedBlocks, viewFilters);
+    return filtered
+      .map((fb) => {
+        const full = teamScopedBlocks.find(
+          (b) => b.tournamentId === fb.tournamentId && b.teamId === fb.teamId
+        );
+        if (!full) return null;
+        return { ...full, matches: fb.matches };
+      })
+      .filter((b): b is TeamTournamentBlock => b != null && b.matches.length > 0);
+  }, [teamScopedBlocks, viewFilters]);
 
   const visibleMatchCount = countMyStatsMatches(displayBlocks);
   const filtersActive = hasActiveMyStatsFilters(viewFilters);

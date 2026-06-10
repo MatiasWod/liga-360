@@ -74,6 +74,8 @@ export function matchFixtureKey(m: {
   id: string;
   round?: number | null;
   leg?: number | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
   homeAssignedInscription?: { inscriptionId?: string | number | null } | null;
   awayAssignedInscription?: { inscriptionId?: string | number | null } | null;
 }): string {
