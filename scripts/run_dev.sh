@@ -140,6 +140,13 @@ if [[ "$MODE" == "svc" ]]; then
         POSTGRES_URL=postgresql://liga:liga@localhost:55432/liga360 \
         TOURNAMENTS_GRAPHQL_URL=http://localhost:4000/graphql
       ;;
+    matchevents-svc)
+      start_backend matchevents-svc \
+        PORT=4006 JWT_SECRET=devsecret NODE_ENV=development \
+        POSTGRES_URL=postgresql://liga:liga@localhost:55432/liga360_matchevents \
+        INSCRIPTIONS_SVC_URL=http://localhost:4004 \
+        TEAMS_SVC_URL=http://localhost:4002
+      ;;
     gateway)
       start_backend gateway \
         PORT=4000 NODE_ENV=development \
@@ -147,7 +154,7 @@ if [[ "$MODE" == "svc" ]]; then
       ;;
     *)
       echo "Servicio desconocido: $TARGET_SVC"
-      echo "Opciones: auth-svc | tournaments-svc | teams-svc | inscriptions-svc | gateway"
+      echo "Opciones: auth-svc | tournaments-svc | teams-svc | inscriptions-svc | matchevents-svc | gateway"
       exit 1
       ;;
   esac
@@ -175,7 +182,7 @@ ensure_deps() {
     (cd "$dir" && npm install --silent) || warn "npm install en $svc falló — continuando de todas formas"
   fi
 }
-for svc in auth-svc tournaments-svc teams-svc inscriptions-svc gateway; do
+for svc in auth-svc tournaments-svc teams-svc inscriptions-svc matchevents-svc gateway; do
   ensure_deps "$svc"
 done
 
@@ -205,6 +212,12 @@ start_backend inscriptions-svc \
   POSTGRES_URL=postgresql://liga:liga@localhost:55432/liga360 \
   TOURNAMENTS_GRAPHQL_URL=http://localhost:4000/graphql
 
+start_backend matchevents-svc \
+  PORT=4006 JWT_SECRET=devsecret NODE_ENV=development \
+  POSTGRES_URL=postgresql://liga:liga@localhost:55432/liga360_matchevents \
+  INSCRIPTIONS_SVC_URL=http://localhost:4004 \
+  TEAMS_SVC_URL=http://localhost:4002
+
 # Gateway depende de tournaments-svc — le damos 2 segundos
 sleep 2
 # El gateway (Apollo IntrospectAndCompose) toma el schema del subgraph sólo AL ARRANCAR.
@@ -219,6 +232,7 @@ wait_for_url "http://localhost:4001/health" "tournaments-svc (4001)"
 wait_for_url "http://localhost:4002/health" "teams-svc (4002)"
 wait_for_url "http://localhost:4003/health" "auth-svc (4003)"
 wait_for_url "http://localhost:4004/health" "inscriptions-svc (4004)"
+wait_for_url "http://localhost:4006/health" "matchevents-svc (4006)"
 wait_for_url "http://localhost:4000/health" "gateway (4000)"
 
 if [[ "$MODE" == "backend" ]]; then

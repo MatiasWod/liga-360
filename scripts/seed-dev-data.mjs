@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
 /**
  * Carga datos de demo en auth, teams-svc y tournaments (GraphQL vía gateway).
  *
@@ -17,6 +21,8 @@ const AUTH_URL = (process.env.AUTH_URL || 'http://localhost:4003').replace(/\/$/
 const TEAMS_URL = (process.env.TEAMS_URL || 'http://localhost:4002').replace(/\/$/, '');
 const INSCRIPTIONS_URL = (process.env.INSCRIPTIONS_URL || 'http://localhost:4004').replace(/\/$/, '');
 const GRAPHQL_URL = process.env.GRAPHQL_URL || 'http://localhost:4000/graphql';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SEED_TEAM_TOURNAMENT = 'Liga Demo Liga360';
 const SEED_INDIV_TOURNAMENT = 'Torneo individual demo';
@@ -87,6 +93,35 @@ async function loginWithUser(username) {
   });
   if (!data?.token) throw new Error(`login sin token: ${username}`);
   return { token: data.token, user: data.user };
+}
+
+/** Resuelve Participant.id creado al registrarse (auth → teams-svc). Solo dev local con Docker. */
+function participantIdForUserId(userId) {
+  try {
+    const out = execSync(
+      `docker compose exec -T postgres psql -U liga -d liga360_teams -tAc 'SELECT id FROM "Participant" WHERE created_by_user_id = ${Number(userId)} ORDER BY id LIMIT 1'`,
+      { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ).trim();
+    const id = Number(out);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function setParticipantDni(participantId, dni) {
+  execSync(
+    `docker compose exec -T postgres psql -U liga -d liga360_teams -c "UPDATE \\"Participant\\" SET dni = '${String(dni).replace(/'/g, "''")}' WHERE id = ${Number(participantId)}"`,
+    { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+  );
+}
+
+async function claimParticipantProfile(token, { dni, firstName, lastName }) {
+  await httpJson(`${TEAMS_URL}/profiles/me/claims`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: { dni, firstName, lastName },
+  });
 }
 
 async function addTeamMember(ownerToken, teamId, participantId) {
@@ -197,8 +232,13 @@ async function createApprovedParticipantInscription(orgToken, { tournamentId, co
 
 async function seedTeamsTournament(orgToken, teamNameToTeamId) {
   const existingId = await findTournamentIdByName(orgToken, SEED_TEAM_TOURNAMENT);
-  if (existingId) {
+  if (existingId && inscriptionCountForTournament(existingId) > 0) {
     console.log(`  torneo equipos ya existe: ${existingId} — omitiendo creación`);
+    return;
+  }
+  if (existingId) {
+    console.log(`  torneo en Neo4j sin inscripciones Postgres (${existingId}) — completando fixture`);
+    await populateTeamsTournament(orgToken, teamNameToTeamId, existingId);
     return;
   }
 
@@ -214,56 +254,130 @@ async function seedTeamsTournament(orgToken, teamNameToTeamId) {
   });
   const tournamentId = d1.t.id;
   console.log(`  torneo equipos: ${tournamentId} (${d1.t.name})`);
+  await populateTeamsTournament(orgToken, teamNameToTeamId, tournamentId);
+}
 
-  const comp = await gql(orgToken, MUT_CREATE_COMPETITION, {
-    tournamentId,
-    name: 'Primera división',
-    order: 1,
-    maxSlots: 16,
-  });
-  const competitionId = comp.c.id;
-
-  const stage = await gql(orgToken, MUT_ADD_STAGE_LEAGUE, {
-    competitionId,
-    name: 'Fase regular',
-    order: 1,
-    configJson: '{"numParticipants":4}',
-  });
-  const stageId = stage.s.id;
-  console.log(`  etapa liga: ${stageId}`);
-
-  const teamSeedRows = [
-    { name: 'Equipo Alpha', display: 'Equipo Alpha' },
-    { name: 'Equipo Beta', display: 'Equipo Beta' },
-    { name: 'Equipo Gamma', display: 'Equipo Gamma' },
-    { name: 'Equipo Delta', display: 'Equipo Delta' },
-  ];
-  for (const row of teamSeedRows) {
-    const linkedTeamId = teamNameToTeamId.get(row.name);
-    if (linkedTeamId == null) {
-      throw new Error(`seed: no hay teamId en teams-svc para "${row.name}" (¿faltó crear equipos?)`);
-    }
-    const inscriptionId = await createApprovedTeamInscription(orgToken, {
-      tournamentId,
-      competitionId,
-      linkedTeamId,
-      displayName: row.display,
-    });
-    await gql(orgToken, MUT_ASSIGN_INSCRIPTION, {
-      stageId,
-      inscriptionId: String(inscriptionId),
-      tournamentId,
-      displayName: row.display,
-    });
+function inscriptionCountForTournament(tournamentId) {
+  try {
+    const out = execSync(
+      `docker compose exec -T postgres psql -U liga -d liga360_inscriptions -tAc "SELECT COUNT(*) FROM \\"Inscription\\" WHERE tournament_id = '${String(tournamentId).replace(/'/g, "''")}'"`,
+      { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ).trim();
+    return Number(out) || 0;
+  } catch {
+    return 0;
   }
-  console.log('  inscripciones Postgres + asignación a etapa (4 equipos)');
+}
 
-  const gen = await gql(orgToken, MUT_GEN_RR, { stageId, doubleRound: false });
-  const matches = gen.matches || [];
-  console.log(`  partidos generados: ${matches.length}`);
+const TOURNAMENT_DETAIL = `
+query ($id: ID!) {
+  tournament(id: $id) {
+    id name
+    competitions {
+      id name order
+      stages {
+        id name format order
+        matches { id status round }
+      }
+    }
+  }
+}`;
 
-  const toFinish = matches.slice(0, 3);
-  for (const m of toFinish) {
+function countStageMatches(tournament) {
+  let n = 0;
+  for (const c of tournament?.competitions || []) {
+    for (const s of c.stages || []) {
+      n += (s.matches || []).length;
+    }
+  }
+  return n;
+}
+
+async function populateTeamsTournament(orgToken, teamNameToTeamId, tournamentId) {
+  const detail = await gql(orgToken, TOURNAMENT_DETAIL, { id: tournamentId });
+  const tournament = detail.tournament;
+
+  let competitionId;
+  let stageId;
+  const existingComp = (tournament?.competitions || []).find((c) => c.name === 'Primera división');
+  if (existingComp) {
+    competitionId = existingComp.id;
+    const existingStage = (existingComp.stages || []).find(
+      (s) => s.name === 'Fase regular' || s.format === 'league'
+    );
+    stageId = existingStage?.id;
+    console.log(`  reutilizando competición ${competitionId}${stageId ? `, etapa ${stageId}` : ''}`);
+  }
+
+  if (!competitionId) {
+    const comp = await gql(orgToken, MUT_CREATE_COMPETITION, {
+      tournamentId,
+      name: 'Primera división',
+      order: 1,
+      maxSlots: 16,
+    });
+    competitionId = comp.c.id;
+  }
+
+  if (!stageId) {
+    const stage = await gql(orgToken, MUT_ADD_STAGE_LEAGUE, {
+      competitionId,
+      name: 'Fase regular',
+      order: 1,
+      configJson: '{"numParticipants":4}',
+    });
+    stageId = stage.s.id;
+    console.log(`  etapa liga: ${stageId}`);
+  }
+
+  const existingCount = inscriptionCountForTournament(tournamentId);
+  if (existingCount >= 4) {
+    console.log(`  inscripciones ya existen (${existingCount}) — omitiendo alta`);
+  } else {
+    const teamSeedRows = [
+      { name: 'Equipo Alpha', display: 'Equipo Alpha' },
+      { name: 'Equipo Beta', display: 'Equipo Beta' },
+      { name: 'Equipo Gamma', display: 'Equipo Gamma' },
+      { name: 'Equipo Delta', display: 'Equipo Delta' },
+    ];
+    for (const row of teamSeedRows) {
+      const linkedTeamId = teamNameToTeamId.get(row.name);
+      if (linkedTeamId == null) {
+        throw new Error(`seed: no hay teamId en teams-svc para "${row.name}" (¿faltó crear equipos?)`);
+      }
+      const inscriptionId = await createApprovedTeamInscription(orgToken, {
+        tournamentId,
+        competitionId,
+        linkedTeamId,
+        displayName: row.display,
+      });
+      await gql(orgToken, MUT_ASSIGN_INSCRIPTION, {
+        stageId,
+        inscriptionId: String(inscriptionId),
+        tournamentId,
+        displayName: row.display,
+      });
+    }
+    console.log('  inscripciones Postgres + asignación a etapa (4 equipos)');
+  }
+
+  const afterDetail = await gql(orgToken, TOURNAMENT_DETAIL, { id: tournamentId });
+  let matches = [];
+  if (countStageMatches(afterDetail.tournament) > 0) {
+    console.log(`  fixture ya generado (${countStageMatches(afterDetail.tournament)} partidos)`);
+    for (const c of afterDetail.tournament?.competitions || []) {
+      for (const s of c.stages || []) {
+        matches.push(...(s.matches || []));
+      }
+    }
+  } else {
+    const gen = await gql(orgToken, MUT_GEN_RR, { stageId, doubleRound: false });
+    matches = gen.matches || [];
+    console.log(`  partidos generados: ${matches.length}`);
+  }
+
+  const unfinished = matches.filter((m) => String(m.status || '').toLowerCase() !== 'finished').slice(0, 3);
+  for (const m of unfinished) {
     await gql(orgToken, MUT_UPDATE_RESULT, {
       matchId: m.id,
       homeScore: 2,
@@ -271,7 +385,9 @@ async function seedTeamsTournament(orgToken, teamNameToTeamId) {
       status: 'finished',
     });
   }
-  console.log(`  resultados cargados: ${toFinish.length} partidos`);
+  if (unfinished.length) {
+    console.log(`  resultados cargados: ${unfinished.length} partidos`);
+  }
 }
 
 /**
@@ -446,13 +562,22 @@ Ejemplo:
 
   console.log('\n2b) Jugadores (participantes como miembros de equipo)...');
   const participantUsernames = ['participante_ana', 'participante_luis', 'participante_mia'];
+  const PARTICIPANT_PROFILES = [
+    { username: 'participante_ana', dni: '30123456', firstName: 'Ana', lastName: 'García' },
+    { username: 'participante_luis', dni: '31234567', firstName: 'Luis', lastName: 'Pérez' },
+    { username: 'participante_mia', dni: '32345678', firstName: 'Mia', lastName: 'Rodríguez' },
+  ];
   const participantIds = [];
   for (const pu of participantUsernames) {
     const { user } = await loginWithUser(pu);
-    if (user?.type !== 'participant' || user.type_id == null) {
-      throw new Error(`usuario ${pu} no es participante o sin type_id`);
+    if (user?.type !== 'participant') {
+      throw new Error(`usuario ${pu} no es participante`);
     }
-    participantIds.push(Number(user.type_id));
+    const pid = participantIdForUserId(user.id);
+    if (pid == null) {
+      throw new Error(`usuario ${pu} sin Participant en teams-svc (¿Docker/Postgres arriba?)`);
+    }
+    participantIds.push(pid);
   }
   const assignCycle = [participantIds[0], participantIds[1], participantIds[2], participantIds[0]];
   for (let i = 0; i < teamRows.length; i += 1) {
@@ -464,6 +589,27 @@ Ejemplo:
     } else {
       await addTeamMember(token, teamId, pid);
       console.log(`  miembro agregado a "${name}" (participant_id=${pid})`);
+    }
+  }
+
+  console.log('\n2c) Perfiles participantes (DNI + claim para Mis stats)...');
+  for (const profile of PARTICIPANT_PROFILES) {
+    const { user } = await loginWithUser(profile.username);
+    const pid = participantIdForUserId(user.id);
+    if (pid == null) {
+      throw new Error(`seed: sin Participant para ${profile.username}`);
+    }
+    setParticipantDni(pid, profile.dni);
+    const token = await login(profile.username);
+    try {
+      await claimParticipantProfile(token, profile);
+      console.log(`  perfil reclamado: ${profile.username} (DNI ${profile.dni})`);
+    } catch (e) {
+      if (e.status === 409) {
+        console.log(`  perfil ya reclamado: ${profile.username}`);
+      } else {
+        throw e;
+      }
     }
   }
 
