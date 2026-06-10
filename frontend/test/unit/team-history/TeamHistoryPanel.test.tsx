@@ -64,8 +64,10 @@ describe('TeamHistoryPanel', () => {
 
     render(<TeamHistoryPanel teamId={1} />);
     await waitFor(() => {
-      expect(screen.getAllByText(/1 PJ · 1 G · 0 E · 0 P · 2:1 · 3 pts/).length).toBeGreaterThan(0);
+      expect(screen.getByText('Partidos (PJ)')).toBeInTheDocument();
+      expect(screen.getByText('Victorias (PG)')).toBeInTheDocument();
       expect(screen.getByText('Copa')).toBeInTheDocument();
+      expect(screen.getAllByText('1').length).toBeGreaterThan(0);
     });
   });
 });

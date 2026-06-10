@@ -3,6 +3,7 @@
  * Solo cuentan partidos finalizados; excluyen inscripciones sintéticas (pos:, liga360-slot:).
  */
 import type { HistoricalMatchRow } from '../../services/tournaments/matchesByInscriptions';
+import { dedupeHistoricalMatches, matchFixtureKey } from '../../modules/team-presences/matchDedupe';
 
 export interface InscriptionRef {
   id: number;
@@ -87,7 +88,7 @@ function accumulateRow(
   }
 }
 
-/** Totales acumulados + desglose por torneo/competencia desde partidos finalizados. */
+/** Totales acumulados + desglose por torneo desde partidos finalizados (deduplicados). */
 export function computeHistoricalTotals(
   matches: HistoricalMatchRow[],
   inscriptionIds: number[],
@@ -96,7 +97,7 @@ export function computeHistoricalTotals(
   const idSet = new Set(inscriptionIds.map(Number).filter((n) => n > 0));
   const byKey = new Map<string, TournamentBreakdownRow>();
 
-  for (const m of matches) {
+  for (const m of dedupeHistoricalMatches(matches)) {
     if (!isFinished(m.status)) continue;
     const homeId = sideInscriptionId(m, 'home');
     const awayId = sideInscriptionId(m, 'away');
@@ -112,13 +113,12 @@ export function computeHistoricalTotals(
     const gc = teamSide === 'home' ? as : hs;
     const myId = teamSide === 'home' ? homeId! : awayId!;
     const tid = String(m.tournamentId || '');
-    const cid = m.competitionId ?? null;
-    const key = `${tid}|${cid ?? ''}`;
     const ins = inscriptions.find((i) => Number(i.id) === myId);
+    const key = tid;
     const row = byKey.get(key) ?? {
       tournamentId: tid,
       tournamentName: m.tournamentName || tid,
-      competitionId: cid,
+      competitionId: m.competitionId ?? null,
       displayName: ins?.display_name || assignedName(m, teamSide),
       ...{ ...EMPTY },
     };
@@ -157,12 +157,18 @@ export function filterHeadToHeadMatches(
 ): HistoricalMatchRow[] {
   const mine = new Set(myIds.map(Number));
   const rivals = new Set(rivalIds.map(Number));
-  return matches.filter((m) => {
+  const seen = new Set<string>();
+  return dedupeHistoricalMatches(matches).filter((m) => {
     if (!isFinished(m.status)) return false;
     const h = sideInscriptionId(m, 'home');
     const a = sideInscriptionId(m, 'away');
     if (h == null || a == null) return false;
-    return (mine.has(h) && rivals.has(a)) || (mine.has(a) && rivals.has(h));
+    const ok = (mine.has(h) && rivals.has(a)) || (mine.has(a) && rivals.has(h));
+    if (!ok) return false;
+    const key = matchFixtureKey(m);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }
 

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { HeadToHeadPanel } from '../../../components/team-history/HeadToHeadPanel';
 import * as teamInscriptions from '../../../services/inscriptions/teamInscriptions';
 import * as matchesApi from '../../../services/tournaments/matchesByInscriptions';
@@ -57,12 +56,11 @@ describe('HeadToHeadPanel', () => {
 
     render(<HeadToHeadPanel teamId={1} />);
     await waitFor(() => {
-      expect(screen.getByText(/sin enfrentamientos previos/i)).toBeInTheDocument();
+      expect(screen.getByText(/sin rivales vinculados/i)).toBeInTheDocument();
     });
   });
 
   it('permite elegir rival y muestra resumen mano a mano', async () => {
-    const user = userEvent.setup();
     vi.mocked(teamInscriptions.listTeamInscriptions).mockImplementation(async (teamId) => {
       if (Number(teamId) === 1) {
         return [
@@ -115,12 +113,13 @@ describe('HeadToHeadPanel', () => {
 
     render(<HeadToHeadPanel teamId={1} />);
     await waitFor(() => {
-      expect(screen.getByLabelText(/elegí un rival/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^rival$/i)).toBeInTheDocument();
     });
-    await user.selectOptions(screen.getByLabelText(/elegí un rival/i), '2');
-    await waitFor(() => {
-      expect(screen.getByText(/Copa · Final/)).toBeInTheDocument();
-      expect(screen.getByText('2–1')).toBeInTheDocument();
-    });
+    // Con un solo rival el panel lo preselecciona automáticamente.
+    expect(await screen.findByText('Partidos (PJ)')).toBeInTheDocument();
+    expect(screen.getAllByText('Rival FC').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Copa')).toBeInTheDocument();
+    expect(screen.getByText('Final')).toBeInTheDocument();
+    expect(screen.getByText('2–1')).toBeInTheDocument();
   });
 });
