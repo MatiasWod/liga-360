@@ -26,7 +26,17 @@ export async function parseJsonResponse(res: Response, fallbackError: string) {
     }
   }
   if (!res.ok) {
-    throw new Error(json?.error || `${fallbackError} (HTTP ${res.status})`);
+    const err = json?.error;
+    if (typeof err === 'string') {
+      throw new Error(err);
+    }
+    if (err?.message) {
+      const details = Array.isArray(err.details)
+        ? err.details.map((d: any) => d?.message || d?.field).filter(Boolean).join('; ')
+        : '';
+      throw new Error(details ? `${err.message}: ${details}` : err.message);
+    }
+    throw new Error(`${fallbackError} (HTTP ${res.status})`);
   }
   if (!json) {
     if (raw.trim().startsWith('<!DOCTYPE') || raw.trim().startsWith('<html')) {

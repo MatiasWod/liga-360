@@ -17,11 +17,12 @@ export async function list(req, res, next) {
     if (ids !== undefined || names !== undefined) {
       return res.json(await teamService.resolveTeams({ ids: parseCsv(ids), names: parseCsv(names) }));
     }
+    // El invite code es en sí el secreto: el lookup no exige token (devuelve solo id/name/badge).
+    if (inviteCode !== undefined) return res.json(await teamService.resolveByInviteCode(String(inviteCode)));
     // Resto requiere token.
     if (!req.user) {
       return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
     }
-    if (inviteCode !== undefined) return res.json(await teamService.resolveByInviteCode(String(inviteCode)));
     return res.json(await teamService.listTeams({ onlyMine: String(mine || '').toLowerCase() === 'true', userId: req.user.sub }));
   } catch (e) {
     next(e);

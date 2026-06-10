@@ -17,10 +17,9 @@ export function validateCreateParticipant(body) {
 
 export function validateUpdateParticipant(body) {
   const errors = [];
-  const { teamId, dni } = body || {};
-  if (!teamId) {
-    errors.push({ field: 'teamId', message: 'teamId required for participant update' });
-  }
+  const { dni } = body || {};
+  // teamId es opcional: con teamId autoriza por equipo (owner/teamCode); sin él,
+  // autoriza por creador o vínculo al profile del caller (ver participant.service).
   if (dni !== undefined && dni !== '' && !normalizeDni(dni)) {
     errors.push({ field: 'dni', message: 'invalid dni (AR expected 7-8 digits)' });
   }

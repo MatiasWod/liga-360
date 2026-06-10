@@ -35,6 +35,14 @@ export async function update(client, participantId, { firstName, lastName, nickn
   return r.rows[0] || null;
 }
 
+export async function findById(client, participantId) {
+  const r = await client.query(
+    `SELECT ${PARTICIPANT_COLS} FROM "Participant" WHERE id = $1 LIMIT 1`,
+    [participantId]
+  );
+  return r.rows[0] || null;
+}
+
 export async function setPersonProfileId(client, participantId, personProfileId, now) {
   await client.query(
     `UPDATE "Participant" SET person_profile_id = $1, updated_at = $2 WHERE id = $3`,
