@@ -11,6 +11,11 @@ export default defineConfig({
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api\/graphql/, '/graphql'),
 			},
+			'/api/participants': {
+				target: 'http://localhost:4002',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/participants/, '/participants'),
+			},
 			'/api/teams': {
 				target: 'http://localhost:4002',
 				changeOrigin: true,
