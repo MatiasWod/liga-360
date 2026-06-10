@@ -37,6 +37,8 @@ spec:
               value: 512m
             - name: NEO4J_dbms_memory_heap_max__size
               value: 512m
+            - name: NEO4J_server_memory_pagecache_size
+              value: 512m
           volumeMounts:
             - name: data
               mountPath: /data
@@ -61,7 +63,7 @@ spec:
               memory: 512Mi
               cpu: 250m
             limits:
-              memory: 1Gi
+              memory: 2Gi
               cpu: "1"
   volumeClaimTemplates:
     - metadata:
