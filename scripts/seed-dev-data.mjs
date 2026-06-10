@@ -39,11 +39,26 @@ const USERS = [
 ];
 
 async function httpJson(url, { method = 'GET', headers = {}, body } = {}) {
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    const code = err?.cause?.code || err?.code || '';
+    if (code === 'ECONNREFUSED' || String(err?.message || '').includes('fetch failed')) {
+      throw new Error(
+        `No se pudo conectar a ${url}\n` +
+          '  → Levantá el stack antes del seed:\n' +
+          '     npm run dev:bootstrap\n' +
+          '  o: docker compose up -d && npm run seed:all\n' +
+          '  (requiere Docker Desktop corriendo)'
+      );
+    }
+    throw err;
+  }
   const text = await res.text();
   let json;
   try {
@@ -376,8 +391,16 @@ async function populateTeamsTournament(orgToken, teamNameToTeamId, tournamentId)
     console.log(`  partidos generados: ${matches.length}`);
   }
 
-  const unfinished = matches.filter((m) => String(m.status || '').toLowerCase() !== 'finished').slice(0, 3);
-  for (const m of unfinished) {
+  const unfinished = matches.filter((m) => {
+    const s = String(m.status || '').toLowerCase();
+    return s !== 'finished' && s !== 'completed';
+  });
+  if (unfinished.length === 0) {
+    console.log(`  todos los partidos ya tienen resultado (${matches.length}) — omitiendo`);
+    return;
+  }
+  const toFinish = unfinished.slice(0, 3);
+  for (const m of toFinish) {
     await gql(orgToken, MUT_UPDATE_RESULT, {
       matchId: m.id,
       homeScore: 2,
@@ -385,9 +408,7 @@ async function populateTeamsTournament(orgToken, teamNameToTeamId, tournamentId)
       status: 'finished',
     });
   }
-  if (unfinished.length) {
-    console.log(`  resultados cargados: ${unfinished.length} partidos`);
-  }
+  console.log(`  resultados cargados: ${toFinish.length} partidos (${unfinished.length - toFinish.length} pendientes para seed:stats-demo)`);
 }
 
 /**

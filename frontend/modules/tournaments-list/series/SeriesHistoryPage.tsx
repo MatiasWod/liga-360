@@ -1,0 +1,175 @@
+import React from 'react';
+import {
+  getSeriesAggregates,
+  type CompetitionSeries,
+  type SeriesAggregates,
+  type SeriesRollOfHonorRow,
+} from '../../../services/tournaments/series';
+import { formatKpiNames, topScorersFromSeriesRows, topTitlesFromRows } from './seriesKpis';
+
+const NOT_AVAILABLE = '—';
+
+function entryLabel(entry: { displayName?: string } | null | undefined): string {
+  return entry?.displayName?.trim() || NOT_AVAILABLE;
+}
+
+function KpiCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-xl border border-slate-200 p-3 ${accent ? 'bg-green-50' : 'bg-slate-50'}`}>
+      <p className="text-[11px] font-medium text-slate-500">{label}</p>
+      <p className={`mt-1 text-lg font-semibold leading-snug ${accent ? 'text-[#2E7D32]' : 'text-[#0F2A33]'}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RollOfHonorTable({ rows }: { rows: SeriesRollOfHonorRow[] }) {
+  if (!rows.length) {
+    return <p className="text-sm text-slate-600">Todavía no hay ediciones finalizadas en esta serie.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <table className="min-w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs text-slate-500">
+          <tr>
+            <th className="px-3 py-2">Edición</th>
+            <th className="px-3 py-2">Campeón</th>
+            <th className="px-3 py-2">Subcampeón</th>
+            <th className="px-3 py-2">3.er puesto</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.tournamentId}>
+              <td className="px-3 py-2 font-medium">{row.editionLabel || row.tournamentName}</td>
+              <td className="px-3 py-2">{entryLabel(row.champion)}</td>
+              <td className="px-3 py-2">{entryLabel(row.runnerUp)}</td>
+              <td className="px-3 py-2">{entryLabel(row.thirdPlace)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export interface SeriesHistoryPageProps {
+  series: CompetitionSeries;
+  onBack: () => void;
+  onOpenEdition: (tournamentId: string) => void;
+}
+
+export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({ series, onBack, onOpenEdition }) => {
+  const [aggregates, setAggregates] = React.useState<SeriesAggregates | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    getSeriesAggregates(series.id)
+      .then((data) => {
+        if (!cancelled) setAggregates(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Error al cargar histórico');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [series.id]);
+
+  const topScorers = topScorersFromSeriesRows(aggregates?.topScorers ?? []);
+  const topTitles = topTitlesFromRows(aggregates?.titlesByTeam ?? []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={onBack} className="text-sm text-[#2E7D32] hover:underline">
+          ← Volver al histórico
+        </button>
+        <div>
+          <h3 className="text-lg font-semibold text-[#0F2A33]">{series.name}</h3>
+          <p className="text-xs text-slate-500">Histórico agregado cross-edición</p>
+        </div>
+      </div>
+
+      {loading ? <p className="text-sm text-slate-600">Cargando palmarés y récords…</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      {aggregates ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <KpiCard
+              label={topTitles.names.length > 1 ? 'Más títulos' : 'Más títulos'}
+              value={formatKpiNames(topTitles.names, topTitles.titles, topTitles.titles === 1 ? 'título' : 'títulos')}
+              accent
+            />
+            <KpiCard
+              label={topScorers.names.length > 1 ? 'Goleadores históricos' : 'Goleador histórico'}
+              value={formatKpiNames(topScorers.names, topScorers.goals, 'goles')}
+            />
+            <KpiCard
+              label="Ediciones finalizadas"
+              value={String(aggregates.rollOfHonor.length || NOT_AVAILABLE)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500">Palmarés</p>
+            <RollOfHonorTable rows={aggregates.rollOfHonor} />
+          </div>
+
+          {aggregates.editionsInProgress.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-500">Ediciones en curso</p>
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {aggregates.editionsInProgress.map((e) => (
+                  <li key={e.tournamentId}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenEdition(e.tournamentId)}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white hover:text-[#0F2A33]"
+                    >
+                      <span>
+                        {e.editionLabel ? `Edición ${e.editionLabel}` : e.name}
+                        <span className="ml-2 text-xs text-slate-400">{e.status}</span>
+                      </span>
+                      <span className="text-[#2E7D32]">Ver →</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500">Ediciones finalizadas</p>
+            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {aggregates.rollOfHonor.map((row) => (
+                <li key={row.tournamentId}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenEdition(row.tournamentId)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white hover:text-[#0F2A33]"
+                  >
+                    <span>
+                      {row.editionLabel ? `Edición ${row.editionLabel}` : row.tournamentName}
+                      {row.champion ? ` · 🏆 ${row.champion.displayName}` : ''}
+                    </span>
+                    <span className="text-[#2E7D32]">Detalle →</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+};

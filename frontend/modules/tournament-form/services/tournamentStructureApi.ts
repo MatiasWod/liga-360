@@ -1,18 +1,24 @@
 import { gql } from './tournamentGraphql';
 import { TOURNAMENT_FOR_EDIT_QUERY } from './tournamentMapping';
 
+export type TournamentStatusValue = 'draft' | 'published' | 'finished';
+
 export interface TournamentGeneralPayload {
   name: string;
   sport: string;
   venue: string;
   participantType: 'teams' | 'individuals';
   inscriptionMode: 'public' | 'invitation';
+  /** Solo aplica al editar: preserva/cambia el estado. La creación siempre arranca en draft. */
+  status?: TournamentStatusValue;
+  seriesId?: string | null;
+  editionLabel?: string | null;
 }
 
 export async function createTournamentDraft(general: TournamentGeneralPayload) {
   return gql(
-    `mutation CreateTournament($name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!) {
-        createTournament(name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status) { id name season }
+    `mutation CreateTournament($name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String) {
+        createTournament(name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel) { id name season seriesId editionLabel }
     }`,
     {
       name: general.name,
@@ -22,14 +28,16 @@ export async function createTournamentDraft(general: TournamentGeneralPayload) {
       pt: general.participantType,
       inscriptionMode: general.inscriptionMode,
       status: 'draft',
+      seriesId: general.seriesId || null,
+      editionLabel: general.editionLabel || null,
     }
   ).then((response: any) => response.createTournament);
 }
 
 export async function updateTournamentDraft(tournamentId: string, general: TournamentGeneralPayload) {
   return gql(
-    `mutation UpdateTournament($id: ID!, $name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!) {
-        updateTournament(id: $id, name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status) { id name season }
+    `mutation UpdateTournament($id: ID!, $name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String) {
+        updateTournament(id: $id, name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel) { id name season seriesId editionLabel }
     }`,
     {
       id: tournamentId,
@@ -39,7 +47,9 @@ export async function updateTournamentDraft(tournamentId: string, general: Tourn
       venue: general.venue || null,
       pt: general.participantType,
       inscriptionMode: general.inscriptionMode,
-      status: 'draft',
+      status: general.status ?? 'draft',
+      seriesId: general.seriesId ?? null,
+      editionLabel: general.editionLabel || null,
     }
   ).then((response: any) => response.updateTournament);
 }

@@ -90,6 +90,8 @@ export const TOURNAMENT_FOR_EDIT_QUERY = `
             participantType
             inscriptionMode
             status
+            seriesId
+            editionLabel
             competitions {
                 id
                 name
@@ -124,6 +126,11 @@ export const TOURNAMENT_FOR_EDIT_QUERY = `
     }
 `;
 
+function normalizeTournamentStatus(raw: unknown): 'draft' | 'published' | 'finished' {
+  const s = String(raw ?? '').trim().toLowerCase();
+  return s === 'published' || s === 'finished' ? s : 'draft';
+}
+
 export function deriveFormStateFromGraphqlTournament(t: any): {
   general: {
     name: string;
@@ -131,6 +138,9 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
     venue: string;
     participantType: string;
     inscriptionMode: string;
+    status: 'draft' | 'published' | 'finished';
+    seriesId: string | null;
+    editionLabel: string;
   };
   competitions: CompetitionMeta[];
   existingCompetitionIds: Set<string>;
@@ -174,6 +184,9 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
       venue: String(t.venue || ''),
       participantType: String(t.participantType || 'teams'),
       inscriptionMode: String(t.inscriptionMode || 'public'),
+      status: normalizeTournamentStatus(t.status),
+      seriesId: t.seriesId ? String(t.seriesId) : null,
+      editionLabel: String(t.editionLabel || ''),
     },
     competitions:
       nextCompetitions.length > 0

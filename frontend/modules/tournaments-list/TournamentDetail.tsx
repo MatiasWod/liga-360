@@ -11,6 +11,7 @@ import {
 } from './teamDisplayName';
 import { listMatchEvents } from '../../services/matchEvents/matchEvents';
 import { CompetitionStatsPanel } from './stats/CompetitionStatsPanel';
+import { CompetitionHistoryPanel } from './history/CompetitionHistoryPanel';
 import { dedupeCompetitionsByName } from '../team-presences/matchDedupe';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage, StandingsRow } from './types';
 
@@ -234,7 +235,7 @@ function GroupMatchBlock({ name, matches, goalsByMatchId }: {
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-function CompactStandingsTable({ rows, zones = [] }: { rows: StandingsRow[]; zones?: ClassificationZone[] }) {
+export function CompactStandingsTable({ rows, zones = [] }: { rows: StandingsRow[]; zones?: ClassificationZone[] }) {
 	if (rows.length === 0) return null;
 
 	function rowZone(pos: number): ClassificationZone | undefined {
@@ -346,7 +347,14 @@ function firstGroupRoundKey(groups: { matches?: TournamentMatchRow[] }[]): strin
 // Main component
 // ---------------------------------------------------------------------------
 
-export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConfig?: () => void }> = ({ id, onBack, onConfig }) => {
+export const TournamentDetail: React.FC<{
+	id: string;
+	onBack: () => void;
+	onConfig?: () => void;
+	/** Vista inicial al abrir (p. ej. desde pestaña Finalizados en vista pública). */
+	defaultDetailView?: 'fixture' | 'stats' | 'history';
+	onViewSeries?: (seriesId: string) => void;
+}> = ({ id, onBack, onConfig, defaultDetailView = 'fixture', onViewSeries }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [t, setT] = React.useState<TournamentEntity | null>(null);
@@ -358,7 +366,11 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 	// For groups-format stages: navigate by round, show all groups as columns
 	const [groupRoundKey, setGroupRoundKey] = React.useState('');
 	// Toggle Fixture / Estadísticas por Competencia
-	const [detailView, setDetailView] = React.useState<'fixture' | 'stats'>('fixture');
+	const [detailView, setDetailView] = React.useState<'fixture' | 'stats' | 'history'>(defaultDetailView);
+
+	React.useEffect(() => {
+		setDetailView(defaultDetailView);
+	}, [id, defaultDetailView]);
 
 	React.useEffect(() => {
 		async function load() {
@@ -371,6 +383,13 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 				]);
 				const entity = (tournament || null) as TournamentEntity | null;
 				setT(entity);
+				if (
+					defaultDetailView === 'history' &&
+					entity &&
+					String(entity.status || '').toLowerCase() === 'finished'
+				) {
+					setDetailView('history');
+				}
 				const fromApi = new Map(
 					inscriptions.map((item) => [String(item.id), String(item.display_name || '').trim()])
 				);
@@ -567,11 +586,14 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 								</div>
 							)}
 
-							{/* Toggle Fixture / Estadísticas por Competencia */}
+							{/* Toggle Fixture / Estadísticas / Detalle (solo torneo finalizado) por Competencia */}
 							<div className="inline-flex rounded-xl bg-surface-0 p-1">
 								{([
 									{ key: 'fixture', label: 'Fixture' },
 									{ key: 'stats', label: 'Estadísticas' },
+									...(String(t.status || '').toLowerCase() === 'finished'
+										? ([{ key: 'history', label: 'Detalle' }] as const)
+										: []),
 								] as const).map((opt) => (
 									<button
 										key={opt.key}
@@ -579,8 +601,8 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 										onClick={() => setDetailView(opt.key)}
 										className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
 											detailView === opt.key
-												? 'bg-surface-3 text-text-primary shadow-sm'
-												: 'text-text-muted hover:text-text-primary'
+												? 'bg-surface-3 text-text-primary shadow-sm hover:bg-surface-3 hover:text-text-primary'
+												: 'text-text-muted hover:bg-surface-2 hover:text-text-primary'
 										}`}
 									>
 										{opt.label}
@@ -593,6 +615,17 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 									tournamentId={t.id}
 									competition={competition}
 									nameById={inscriptionNameById}
+								/>
+							)}
+
+							{detailView === 'history' && (
+								<CompetitionHistoryPanel
+									tournamentId={t.id}
+									competition={competition}
+									nameById={inscriptionNameById}
+									seriesId={t.seriesId}
+									editionLabel={t.editionLabel}
+									onViewSeries={onViewSeries}
 								/>
 							)}
 

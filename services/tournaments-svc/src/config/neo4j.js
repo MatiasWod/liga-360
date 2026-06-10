@@ -29,7 +29,7 @@ export async function waitForNeo4j(maxAttempts = 20, delayMs = 500) {
 }
 
 // Labels cuyos nodos llevan un `id` propio (UUID generado por la app).
-const NODE_ID_LABELS = ['Tournament', 'Competition', 'Stage', 'Group', 'Match', 'Transition', 'Key'];
+const NODE_ID_LABELS = ['Tournament', 'Competition', 'CompetitionSeries', 'Stage', 'Group', 'Match', 'Transition', 'Key'];
 
 /**
  * Crea (idempotente) las constraints de unicidad por `id` y el índice de InscriptionRef.
@@ -53,6 +53,10 @@ export async function ensureConstraints() {
     await session.run(
       `CREATE INDEX inscriptionref_key IF NOT EXISTS
        FOR (n:InscriptionRef) ON (n.tournamentId, n.inscriptionId)`
+    );
+    await session.run(
+      `CREATE CONSTRAINT competition_series_slug_unique IF NOT EXISTS
+       FOR (s:CompetitionSeries) REQUIRE s.slug IS UNIQUE`
     );
     logger.info('neo4j constraints ensured');
   } finally {

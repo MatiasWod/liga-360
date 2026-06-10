@@ -6,6 +6,16 @@ type Query {
   competition(id: ID!): Competition
   """Partidos donde participa cualquiera de las inscripciones (historial cross-torneo)."""
   matchesByInscriptionIds(ids: [ID!]!): [Match!]!
+  """Serie de competición por id o slug (público)."""
+  competitionSeries(id: ID, slug: String): CompetitionSeries
+  """Series con al menos una edición publicada o finalizada (público)."""
+  competitionSeriesList: [CompetitionSeries!]!
+  """Series del organizador autenticado (incluye sin ediciones)."""
+  myCompetitionSeries: [CompetitionSeries!]!
+  """Palmarés derivado de ediciones finished de la serie."""
+  seriesRollOfHonor(seriesId: ID!): [SeriesRollOfHonorRow!]!
+  """Histórico agregado: palmarés, títulos, goleadores cross-edición."""
+  seriesAggregates(seriesId: ID!): SeriesAggregates!
 }
 
 enum TournamentStatus {
@@ -29,6 +39,8 @@ type Mutation {
     maxSlots: Int
     inscriptionMode: InscriptionMode!
     status: TournamentStatus!
+    seriesId: ID
+    editionLabel: String
   ): Tournament!
   updateTournament(
     id: ID!
@@ -39,8 +51,12 @@ type Mutation {
     participantType: String
     inscriptionMode: InscriptionMode!
     status: TournamentStatus!
+    seriesId: ID
+    editionLabel: String
   ): Tournament!
   deleteTournament(id: ID!): Boolean!
+  createCompetitionSeries(name: String!, slug: String!, sport: String!): CompetitionSeries!
+  updateCompetitionSeries(id: ID!, name: String!, sport: String!): CompetitionSeries!
   createCompetition(tournamentId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
   updateCompetition(competitionId: ID!, name: String!, order: Int!, maxSlots: Int): Competition!
   addStage(
@@ -165,7 +181,67 @@ type Tournament {
   maxSlots: Int!
   inscriptionMode: InscriptionMode!
   status: TournamentStatus!
+  """Serie a la que pertenece esta edición (opcional)."""
+  seriesId: ID
+  editionLabel: String
   competitions: [Competition!]!
+}
+
+type CompetitionSeries {
+  id: ID!
+  name: String!
+  slug: String!
+  sport: String!
+  organizer: String
+  editions: [SeriesEdition!]!
+}
+
+type SeriesEdition {
+  tournamentId: ID!
+  name: String!
+  status: TournamentStatus!
+  editionLabel: String
+  season: String
+}
+
+type SeriesPodiumEntry {
+  inscriptionId: ID!
+  displayName: String!
+  linkedTeamId: ID
+}
+
+type SeriesRollOfHonorRow {
+  editionLabel: String
+  tournamentId: ID!
+  tournamentName: String!
+  champion: SeriesPodiumEntry
+  runnerUp: SeriesPodiumEntry
+  thirdPlace: SeriesPodiumEntry
+}
+
+type SeriesTitleEntry {
+  teamKey: String!
+  displayName: String!
+  linkedTeamId: ID
+  titles: Int!
+  identityApproximate: Boolean!
+}
+
+type SeriesScorerEntry {
+  playerKey: String!
+  displayName: String!
+  goals: Int!
+  linkedMemberId: ID
+  identityApproximate: Boolean!
+}
+
+type SeriesAggregates {
+  seriesId: ID!
+  rollOfHonor: [SeriesRollOfHonorRow!]!
+  editionsInProgress: [SeriesEdition!]!
+  titlesByTeam: [SeriesTitleEntry!]!
+  topScorers: [SeriesScorerEntry!]!
+  finishedTournamentIds: [ID!]!
 }
 
 enum StageFormat {

@@ -59,6 +59,38 @@ export async function scorers(client, { tournamentId, competitionId = null, limi
   return r.rows;
 }
 
+/** Goleadores agregados cross-torneo (sin filtro por competencia). */
+export async function scorersMulti(client, { tournamentIds = [], limit = 50 }) {
+  const ids = [...new Set(tournamentIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const params = [ids];
+  params.push(Number(limit) || 50);
+  const r = await client.query(
+    `WITH presences AS (
+       SELECT ${PLAYER_KEY_SQL} AS player_key, COUNT(*)::int AS matches_played
+       FROM "MatchPresence"
+       WHERE tournament_id = ANY($1::text[])
+       GROUP BY 1
+     ),
+     ev AS (
+       SELECT ${PLAYER_KEY_SQL} AS player_key,
+              (array_agg(display_name ORDER BY created_at DESC))[1] AS display_name,
+              MIN(inscription_id) AS inscription_id,
+              MIN(linked_member_id) AS linked_member_id,
+              COUNT(*)::int AS goals
+       FROM "MatchEvent"
+       WHERE tournament_id = ANY($1::text[]) AND event_type = 'goal'
+       GROUP BY 1
+     )
+     SELECT ev.*, presences.matches_played
+     FROM ev LEFT JOIN presences USING (player_key)
+     ORDER BY ev.goals DESC, ev.display_name ASC
+     LIMIT $2`,
+    params
+  );
+  return r.rows;
+}
+
 export async function cards(client, { tournamentId, competitionId = null }) {
   const params = [tournamentId];
   const compFilter = competitionFilter(competitionId, params);

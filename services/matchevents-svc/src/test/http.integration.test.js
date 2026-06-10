@@ -13,6 +13,7 @@ import { pool, closePool } from '../config/db.js';
 
 const organizerToken = jwt.sign({ sub: 1, type: 'organizer' }, 'devsecret');
 const TID = `t-itest-${Date.now()}`;
+const TID2 = `t-itest-b-${Date.now()}`;
 const CID = `c-itest-${Date.now()}`;
 const MATCH_A = `m-itest-a-${Date.now()}`;
 const MATCH_B = `m-itest-b-${Date.now()}`;
@@ -64,6 +65,8 @@ async function seed() {
   await pool.query(insertPresence, [MATCH_A, TID, CID, 10, 100, 'Juan Pérez', false]);
   await pool.query(insertPresence, [MATCH_B, TID, CID, 10, 100, 'Juan Pérez', false]);
   await pool.query(insertPresence, [MATCH_A, TID, CID, 10, null, 'Invitado X', true]);
+  // Segundo torneo: mismo jugador anota 1 gol más (cross-edición)
+  await pool.query(insert, [MATCH_A, TID2, CID, 'goal', 10, 100, 'Juan Pérez', 12, null]);
 }
 
 describe('matchevents-svc HTTP (integración con DB)', () => {
@@ -86,6 +89,8 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
     if (dbAvailable) {
       await pool.query('DELETE FROM "MatchEvent" WHERE tournament_id = $1', [TID]);
       await pool.query('DELETE FROM "MatchPresence" WHERE tournament_id = $1', [TID]);
+      await pool.query('DELETE FROM "MatchEvent" WHERE tournament_id = $1', [TID2]);
+      await pool.query('DELETE FROM "MatchPresence" WHERE tournament_id = $1', [TID2]);
       await new Promise((resolve) => server.close(resolve));
     }
     await closePool();
@@ -118,6 +123,16 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
       assert.equal(r.status, 200);
       assert.equal(r.body.some((s) => s.displayName === 'Sin Atribuir'), false);
       assert.equal(r.body.find((s) => s.playerKey === 'member:100').goals, 2);
+    })();
+  });
+
+  test('GET /tournaments/stats/scorers agrega goles cross-torneo', (t) => {
+    if (!dbAvailable) return t.skip('sin DB');
+    return (async () => {
+      const r = await req('GET', `/tournaments/stats/scorers?tournamentIds=${TID},${TID2}`);
+      assert.equal(r.status, 200);
+      const juan = r.body.find((s) => s.playerKey === 'member:100');
+      assert.equal(juan.goals, 3);
     })();
   });
 

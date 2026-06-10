@@ -20,6 +20,7 @@ export function createRouter() {
   router.delete('/matches/:matchId/presences/:presenceId', requireAuthMiddleware, presence.remove);
 
   // Estadísticas agregadas por Competencia/Torneo (públicas, ADR-0001)
+  router.get('/tournaments/stats/scorers', stats.scorersMulti);
   router.get('/tournaments/:tournamentId/stats/scorers', stats.scorers);
   router.get('/tournaments/:tournamentId/stats/cards', stats.cards);
   router.get('/tournaments/:tournamentId/stats/teams', stats.teams);

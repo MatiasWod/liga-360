@@ -58,6 +58,21 @@ export async function getScorerStats(
   return getJson(statsUrl(tournamentId, '/stats/scorers', competitionId, extra), 'No se pudieron cargar los goleadores');
 }
 
+/** Goleadores agregados cross-torneo (matchevents multi-edición). */
+export async function getMultiScorerStats(
+  tournamentIds: string[],
+  limit = 50
+): Promise<ScorerStatsRow[]> {
+  const params = new URLSearchParams({
+    tournamentIds: tournamentIds.join(','),
+    limit: String(limit),
+  });
+  return getJson(
+    `${base()}/tournaments/stats/scorers?${params}`,
+    'No se pudieron cargar los goleadores históricos'
+  );
+}
+
 export async function getCardStats(tournamentId: string, competitionId?: string | null): Promise<CardStatsRow[]> {
   return getJson(statsUrl(tournamentId, '/stats/cards', competitionId), 'No se pudieron cargar los amonestados');
 }
