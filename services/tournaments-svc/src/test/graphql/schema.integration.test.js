@@ -191,3 +191,30 @@ test('Query expone matchesByInscriptionIds y Match incluye contexto historico', 
     assert.equal(matchFields.has(f), true, `Match.${f}`);
   }
 });
+
+test('schema incluye CompetitionSeries y queries de histórico agregado', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+
+  const queryType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Query'
+  );
+  const queryFields = new Set(queryType.fields?.map((field) => field.name.value) || []);
+  for (const q of ['competitionSeries', 'competitionSeriesList', 'seriesRollOfHonor', 'seriesAggregates', 'myCompetitionSeries']) {
+    assert.equal(queryFields.has(q), true, `Query.${q}`);
+  }
+
+  const mutationType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Mutation'
+  );
+  const mutationFields = new Set(mutationType.fields?.map((field) => field.name.value) || []);
+  assert.equal(mutationFields.has('createCompetitionSeries'), true);
+  assert.equal(mutationFields.has('updateCompetitionSeries'), true);
+
+  const tournamentType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Tournament'
+  );
+  const tournamentFields = new Set(tournamentType.fields?.map((field) => field.name.value) || []);
+  assert.equal(tournamentFields.has('seriesId'), true);
+  assert.equal(tournamentFields.has('editionLabel'), true);
+});

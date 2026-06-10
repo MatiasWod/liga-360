@@ -22,15 +22,19 @@ export interface TeamStatsTableRow {
 
 /**
  * Suma los standings de todas las etapas (liga y grupos) de la Competencia por
- * inscripción. Para una Competencia de una sola etapa equivale a su tabla.
+ * inscripción. En etapas `groups` solo cuenta tablas por grupo (stage.standings
+ * agrega los mismos PJ otra vez porque los partidos cuelgan del stage y del grupo).
  */
 export function aggregateCompetitionStandings(competition: TournamentCompetition | null): Map<string, Omit<TeamStatsTableRow, 'yellowCards' | 'redCards'>> {
   const acc = new Map<string, Omit<TeamStatsTableRow, 'yellowCards' | 'redCards'>>();
   if (!competition) return acc;
   const allStandings: StandingsRow[] = [];
   for (const stage of competition.stages || []) {
-    allStandings.push(...(stage.standings || []));
-    for (const g of stage.groups || []) allStandings.push(...(g.standings || []));
+    if (stage.format === 'groups') {
+      for (const g of stage.groups || []) allStandings.push(...(g.standings || []));
+    } else if (stage.format === 'league') {
+      allStandings.push(...(stage.standings || []));
+    }
   }
   for (const row of allStandings) {
     const key = String(row.inscriptionId);
@@ -119,13 +123,23 @@ export function collectCompetitionMatchesForInscription(
   if (!competition) return [];
   const target = String(inscriptionId);
   const out: TournamentMatchRow[] = [];
+  const seen = new Set<string>();
   const playsHere = (m: TournamentMatchRow) =>
     String(m.homeAssignedInscription?.inscriptionId ?? '') === target ||
     String(m.awayAssignedInscription?.inscriptionId ?? '') === target;
+  const push = (m: TournamentMatchRow) => {
+    const id = String(m.id || '');
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(m);
+  };
   for (const stage of competition.stages || []) {
-    for (const m of stage.matches || []) if (playsHere(m)) out.push(m);
-    for (const g of stage.groups || []) {
-      for (const m of g.matches || []) if (playsHere(m)) out.push(m);
+    if (stage.format === 'groups') {
+      for (const g of stage.groups || []) {
+        for (const m of g.matches || []) if (playsHere(m)) push(m);
+      }
+    } else {
+      for (const m of stage.matches || []) if (playsHere(m)) push(m);
     }
   }
   return out;

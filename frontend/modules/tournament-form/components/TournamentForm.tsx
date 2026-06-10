@@ -23,6 +23,7 @@ import {
     updateTournamentDraft,
 } from '../services/tournamentStructureApi';
 import { trimEliminationBracketAfterRound } from '../../../services/tournaments/configuration';
+import { listOrganizerSeries, type CompetitionSeries } from '../../../services/tournaments/series';
 
 interface TournamentFormProps {
     organizerName: string;
@@ -36,6 +37,7 @@ interface TournamentFormProps {
 export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, onCreated, onUpdated, mode = 'create', tournamentId, initialCompetitions }) => {
     type ParticipantType = 'teams' | 'individuals';
     type InscriptionMode = 'public' | 'invitation';
+    type TournamentStatus = 'draft' | 'published' | 'finished';
 
     interface GeneralInfo {
         name: string;
@@ -43,6 +45,9 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         venue: string;
         participantType: ParticipantType;
         inscriptionMode: InscriptionMode;
+        status: TournamentStatus;
+        seriesId: string;
+        editionLabel: string;
     }
 
     interface FormErrors {
@@ -58,7 +63,11 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         venue: '',
         participantType: 'teams',
         inscriptionMode: 'public',
+        status: 'draft',
+        seriesId: '',
+        editionLabel: '',
     });
+    const [seriesOptions, setSeriesOptions] = React.useState<CompetitionSeries[]>([]);
     const [competitions, setCompetitions] = React.useState<CompetitionMeta[]>(
         initialCompetitions ?? [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }]
     );
@@ -81,6 +90,20 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
             if (parsed?.competitions && parsed.competitions.length > 0) setCompetitions(parsed.competitions);
         } catch {}
     }, [mode]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        listOrganizerSeries()
+            .then((rows) => {
+                if (!cancelled) setSeriesOptions(rows);
+            })
+            .catch(() => {
+                if (!cancelled) setSeriesOptions([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [organizerName]);
 
     React.useEffect(() => {
         if (mode !== 'create') return;
@@ -106,6 +129,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     ...derived.general,
                     participantType: derived.general.participantType as ParticipantType,
                     inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
+                    seriesId: derived.general.seriesId || '',
+                    editionLabel: derived.general.editionLabel || '',
                 });
                 setCompetitions(derived.competitions);
                 existingCompetitionIdsRef.current = derived.existingCompetitionIds;
@@ -147,6 +172,9 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     venue: general.venue,
                     participantType: general.participantType,
                     inscriptionMode: general.inscriptionMode,
+                    status: general.status,
+                    seriesId: general.seriesId || null,
+                    editionLabel: general.editionLabel || null,
                 })
                 : await createTournamentDraft({
                     name: general.name,
@@ -154,6 +182,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     venue: general.venue,
                     participantType: general.participantType,
                     inscriptionMode: general.inscriptionMode,
+                    seriesId: general.seriesId || null,
+                    editionLabel: general.editionLabel || null,
                 });
 
             const competitionIdMap = new Map<string, string>();
@@ -291,6 +321,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         ...derived.general,
                         participantType: derived.general.participantType as ParticipantType,
                         inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
+                        seriesId: derived.general.seriesId || '',
+                        editionLabel: derived.general.editionLabel || '',
                     });
                     setCompetitions(derived.competitions);
                     existingCompetitionIdsRef.current = derived.existingCompetitionIds;
@@ -351,6 +383,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                                 ...derived.general,
                                 participantType: derived.general.participantType as ParticipantType,
                                 inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
+                                seriesId: derived.general.seriesId || '',
+                                editionLabel: derived.general.editionLabel || '',
                             });
                             setCompetitions(derived.competitions);
                             existingCompetitionIdsRef.current = derived.existingCompetitionIds;
@@ -441,6 +475,45 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         }}
                         options={[{ label: 'Pública', value: 'public' }, { label: 'Por invitación', value: 'invitation' }]}
                     />
+                    <SelectField
+                        label="Serie de competición (opcional)"
+                        name="seriesId"
+                        value={general.seriesId}
+                        onChange={(value) => {
+                            setGeneral((g) => ({ ...g, seriesId: value || '' }));
+                        }}
+                        options={[
+                            { label: 'Sin serie', value: '' },
+                            ...seriesOptions.map((s) => ({ label: s.name, value: s.id })),
+                        ]}
+                    />
+                    <TextField
+                        label="Etiqueta de edición"
+                        placeholder='Ej: "2022"'
+                        name="editionLabel"
+                        value={general.editionLabel}
+                        onChange={(e) => {
+                            const target = e?.currentTarget;
+                            if (!target) return;
+                            setGeneral((g) => ({ ...g, editionLabel: target.value ?? '' }));
+                        }}
+                    />
+                    {mode === 'edit' && (
+                        <SelectField
+                            label="Estado del torneo"
+                            name="status"
+                            value={general.status}
+                            onChange={(value) => {
+                                const v = (value || 'draft') as TournamentStatus;
+                                setGeneral((g) => ({ ...g, status: v }));
+                            }}
+                            options={[
+                                { label: 'Borrador', value: 'draft' },
+                                { label: 'Publicado', value: 'published' },
+                                { label: 'Finalizado', value: 'finished' },
+                            ]}
+                        />
+                    )}
                 </div>
             </Section>
 

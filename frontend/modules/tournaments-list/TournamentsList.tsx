@@ -14,7 +14,9 @@ export const TournamentsList: React.FC<{
 	idsFilter?: string[];
 	excludeIdsFilter?: string[];
 	hideFinished?: boolean;
-}> = ({ onOpen, onInscribe, onConfig, organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter, hideFinished }) => {
+	/** Si true, solo torneos con status finished/closed (pestaña Finalizados). */
+	onlyFinished?: boolean;
+}> = ({ onOpen, onInscribe, onConfig, organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter, hideFinished, onlyFinished }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [items, setItems] = React.useState<TournamentEntity[]>([]);
@@ -54,7 +56,9 @@ export const TournamentsList: React.FC<{
 		try {
 			const all = await listTournamentsGraphql() as TournamentEntity[];
 			let filtered = all;
-			if (hideFinished) {
+			if (onlyFinished) {
+				filtered = filtered.filter((t) => t.status === 'finished' || t.status === 'closed');
+			} else if (hideFinished) {
 				filtered = filtered.filter((t) => t.status !== 'finished' && t.status !== 'closed');
 			}
 			if (organizerFilter?.trim()) {
@@ -97,13 +101,18 @@ export const TournamentsList: React.FC<{
 
 	React.useEffect(() => {
 		load();
-	}, [organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter, hideFinished]);
+	}, [organizerFilter, inscriptionModeFilter, participantTypeFilter, searchTerm, idsFilter, excludeIdsFilter, hideFinished, onlyFinished]);
 
 	if (loading) return <div className="text-sm opacity-80">Cargando torneos…</div>;
 	if (error) return <div className="text-sm text-red-300">{error}</div>;
 
 	if (items.length === 0) {
-		return <div className="text-sm opacity-80">Aún no hay torneos creados.</div>;
+		const emptyMsg = onlyFinished
+			? 'No hay torneos finalizados publicados.'
+			: hideFinished
+				? 'No hay torneos activos publicados.'
+				: 'Aún no hay torneos creados.';
+		return <div className="text-sm opacity-80">{emptyMsg}</div>;
 	}
 
 	return (

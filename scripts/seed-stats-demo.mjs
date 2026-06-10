@@ -1,99 +1,31 @@
 #!/usr/bin/env node
 /**
- * Extiende seed:dev con eventos, presencias y un segundo torneo para probar
- * stats por competencia, presencias, perfil y mano a mano / historial.
+ * Extiende seed:dev con eventos, presencias, torneos finalizados y Copa Demo
+ * para probar stats, presencias, perfil, historial y pestaña Histórico.
  *
  * Uso (servicios arriba):
  *   npm run seed:dev && npm run seed:stats-demo
  */
-const DEFAULT_PASSWORD = process.env.SEED_PASSWORD || 'SeedLiga360!';
-const AUTH_URL = (process.env.AUTH_URL || 'http://localhost:4003').replace(/\/$/, '');
-const TEAMS_URL = (process.env.TEAMS_URL || 'http://localhost:4002').replace(/\/$/, '');
-const INSCRIPTIONS_URL = (process.env.INSCRIPTIONS_URL || 'http://localhost:4004').replace(/\/$/, '');
-const MATCHES_URL = (process.env.MATCHES_URL || 'http://localhost:4006/matches').replace(/\/$/, '');
-const GRAPHQL_URL = process.env.GRAPHQL_URL || 'http://localhost:4000/graphql';
+import {
+  DEFAULT_PASSWORD,
+  MATCHES_URL,
+  TEAMS_URL,
+  INSCRIPTIONS_URL,
+  TOURNAMENT_DETAIL,
+  collectStageMatches,
+  finishAllUnfinishedMatches,
+  finishMatch,
+  gql,
+  httpJson,
+  isFinishedStatus,
+  login,
+  markStagesFinished,
+  markTournamentFinished,
+  findTournamentIdByName,
+} from './seed-lib.mjs';
 
 const LIGA_DEMO = 'Liga Demo Liga360';
 const COPA_DEMO = 'Copa Demo Liga360';
-
-async function httpJson(url, { method = 'GET', headers = {}, body } = {}) {
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  let json;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error(`${method} ${url} → ${res.status} (no JSON): ${text.slice(0, 200)}`);
-  }
-  if (!res.ok) {
-    const msg = json?.error || json?.message || JSON.stringify(json);
-    const err = new Error(`${method} ${url} → ${res.status}: ${msg}`);
-    err.status = res.status;
-    throw err;
-  }
-  return json;
-}
-
-async function login(username) {
-  const data = await httpJson(`${AUTH_URL}/login`, {
-    method: 'POST',
-    body: { username, password: DEFAULT_PASSWORD },
-  });
-  return data.token;
-}
-
-async function gql(token, query, variables = {}) {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json();
-  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '));
-  return json.data;
-}
-
-async function findTournamentId(token, name) {
-  const data = await gql(token, `query { tournaments { id name } }`);
-  return (data.tournaments || []).find((t) => t.name === name)?.id || null;
-}
-
-const TOURNAMENT_DETAIL = `
-query ($id: ID!) {
-  tournament(id: $id) {
-    id name
-    competitions {
-      id name
-      stages {
-        id name
-        matches {
-          id status homeScore awayScore round
-          homeAssignedInscription { inscriptionId displayName }
-          awayAssignedInscription { inscriptionId displayName }
-        }
-      }
-    }
-  }
-}`;
-
-function collectMatches(tournament) {
-  const rows = [];
-  for (const c of tournament?.competitions || []) {
-    for (const s of c.stages || []) {
-      for (const m of s.matches || []) {
-        rows.push({ ...m, competitionId: c.id, competitionName: c.name, stageName: s.name });
-      }
-    }
-  }
-  return rows;
-}
 
 function parseInsId(side) {
   const raw = side?.inscriptionId;
@@ -140,17 +72,17 @@ async function replacePresences(teamToken, matchId, payload) {
   });
 }
 
-async function finishMatch(orgToken, matchId, homeScore, awayScore) {
-  await gql(orgToken, MUT_UPDATE_RESULT, {
-    matchId,
-    homeScore,
-    awayScore,
-    status: 'finished',
-  });
+async function listMatchEvents(matchId) {
+  try {
+    const data = await httpJson(`${MATCHES_URL}/${encodeURIComponent(matchId)}/events`);
+    return data.events || [];
+  } catch {
+    return [];
+  }
 }
 
 async function seedEventsAndPresences(orgToken, alphaToken, tournament, alphaInsId, alphaTeamId) {
-  const matches = collectMatches(tournament);
+  const matches = collectStageMatches(tournament);
   const members = await listTeamMembers(alphaTeamId);
   const member = members[0];
   if (!member) {
@@ -159,9 +91,16 @@ async function seedEventsAndPresences(orgToken, alphaToken, tournament, alphaIns
 
   let eventsAdded = 0;
   let presencesAdded = 0;
+  let skippedEvents = 0;
   for (const m of matches) {
-    if (String(m.status).toLowerCase() !== 'finished') continue;
+    if (!isFinishedStatus(m.status)) continue;
     if (!matchHasInscriptions(m, [alphaInsId])) continue;
+
+    const existingEvents = await listMatchEvents(m.id);
+    if (existingEvents.length > 0) {
+      skippedEvents += 1;
+      continue;
+    }
 
     const myHome = parseInsId(m.homeAssignedInscription) === alphaInsId;
     const myIns = alphaInsId;
@@ -212,20 +151,46 @@ async function seedEventsAndPresences(orgToken, alphaToken, tournament, alphaIns
       }
     }
   }
-  console.log(`  ${tournament.name}: ${eventsAdded} eventos, ${presencesAdded} presencias`);
+  console.log(`  ${tournament.name}: ${eventsAdded} eventos, ${presencesAdded} presencias${skippedEvents ? ` (${skippedEvents} partidos ya tenían eventos)` : ''}`);
+}
+
+async function ensureDemoFinished(orgToken, tournament) {
+  const pending = collectStageMatches(tournament).filter((m) => !isFinishedStatus(m.status)).length;
+  if (pending > 0) {
+    const n = await finishAllUnfinishedMatches(orgToken, tournament);
+    console.log(`  ${tournament.name}: ${n} partidos finalizados`);
+    const refreshed = await gql(orgToken, TOURNAMENT_DETAIL, { id: tournament.id });
+    tournament = refreshed.tournament;
+  } else {
+    console.log(`  ${tournament.name}: todos los partidos ya finalizados`);
+  }
+  await markStagesFinished(orgToken, tournament);
+  if (String(tournament.status).toLowerCase() !== 'finished') {
+    await markTournamentFinished(orgToken, tournament.id, tournament);
+    console.log(`  ${tournament.name}: marcado como finalizado`);
+  } else {
+    console.log(`  ${tournament.name}: ya estaba finalizado`);
+  }
+  return (await gql(orgToken, TOURNAMENT_DETAIL, { id: tournament.id })).tournament;
 }
 
 async function ensureCopaDemo(orgToken, teamNameToTeamId) {
-  const existingId = await findTournamentId(orgToken, COPA_DEMO);
+  const existingId = await findTournamentIdByName(orgToken, COPA_DEMO);
   if (existingId) {
-    console.log(`  ${COPA_DEMO} ya existe (${existingId})`);
     const detail = await gql(orgToken, TOURNAMENT_DETAIL, { id: existingId });
-    return detail.tournament;
+    const matches = collectStageMatches(detail.tournament);
+    const finished = matches.filter((m) => isFinishedStatus(m.status)).length;
+    if (matches.length > 0 && finished === matches.length) {
+      console.log(`  ${COPA_DEMO} ya existe y está completa (${existingId})`);
+      return detail.tournament;
+    }
+    if (matches.length > 0) {
+      console.log(`  ${COPA_DEMO} existente incompleta — finalizando partidos pendientes`);
+      return detail.tournament;
+    }
+    console.log(`  ${COPA_DEMO} existente sin fixture — completando estructura`);
+    return await populateCopaDemo(orgToken, teamNameToTeamId, existingId);
   }
-
-  const alphaId = teamNameToTeamId.get('Equipo Alpha');
-  const betaId = teamNameToTeamId.get('Equipo Beta');
-  if (!alphaId || !betaId) throw new Error('Faltan Equipo Alpha/Beta en teams-svc');
 
   const d1 = await gql(orgToken, MUT_CREATE_TOURNAMENT, {
     name: COPA_DEMO,
@@ -237,7 +202,14 @@ async function ensureCopaDemo(orgToken, teamNameToTeamId) {
     inscriptionMode: 'public',
     status: 'published',
   });
-  const tournamentId = d1.t.id;
+  return populateCopaDemo(orgToken, teamNameToTeamId, d1.t.id);
+}
+
+async function populateCopaDemo(orgToken, teamNameToTeamId, tournamentId) {
+  const alphaId = teamNameToTeamId.get('Equipo Alpha');
+  const betaId = teamNameToTeamId.get('Equipo Beta');
+  if (!alphaId || !betaId) throw new Error('Faltan Equipo Alpha/Beta en teams-svc');
+
   const comp = await gql(orgToken, MUT_CREATE_COMPETITION, {
     tournamentId,
     name: 'Eliminatoria',
@@ -332,11 +304,6 @@ mutation ($stageId: ID!, $doubleRound: Boolean!) {
   matches: generateLeagueRoundRobin(stageId: $stageId, doubleRound: $doubleRound) { id round }
 }`;
 
-const MUT_UPDATE_RESULT = `
-mutation ($matchId: ID!, $homeScore: Int, $awayScore: Int, $status: String) {
-  updateMatchResult(matchId: $matchId, homeScore: $homeScore, awayScore: $awayScore, status: $status) { id status }
-}`;
-
 async function main() {
   console.log('Seed stats demo — requiere npm run seed:dev previo\n');
 
@@ -359,7 +326,7 @@ async function main() {
     if (t) teamNameToTeamId.set(t.name, Number(t.id));
   }
 
-  const ligaId = await findTournamentId(orgToken, LIGA_DEMO);
+  const ligaId = await findTournamentIdByName(orgToken, LIGA_DEMO);
   if (!ligaId) {
     throw new Error(`No existe "${LIGA_DEMO}". Ejecutá: npm run seed:dev`);
   }
@@ -369,12 +336,16 @@ async function main() {
   const alphaInsId = ligaAlphaIns ? Number(ligaAlphaIns.id) : null;
   if (!alphaInsId) throw new Error('Equipo Alpha sin inscripción en Liga Demo');
 
-  console.log('1) Eventos y presencias en Liga Demo...');
-  const ligaDetail = await gql(orgToken, TOURNAMENT_DETAIL, { id: ligaId });
+  console.log('1) Completar y finalizar Liga Demo...');
+  let ligaDetail = await gql(orgToken, TOURNAMENT_DETAIL, { id: ligaId });
+  ligaDetail.tournament = await ensureDemoFinished(orgToken, ligaDetail.tournament);
+
+  console.log('\n2) Eventos y presencias en Liga Demo...');
   await seedEventsAndPresences(orgToken, alphaToken, ligaDetail.tournament, alphaInsId, alphaTeamId);
 
-  console.log('\n2) Copa Demo (segundo torneo Alpha vs Beta para historial / H2H)...');
-  const copa = await ensureCopaDemo(orgToken, teamNameToTeamId);
+  console.log('\n3) Copa Demo (segundo torneo Alpha vs Beta para historial / H2H)...');
+  let copa = await ensureCopaDemo(orgToken, teamNameToTeamId);
+  copa = await ensureDemoFinished(orgToken, copa);
   const copaAlphaIns = alphaInsRows.find((r) => r.tournament_id === copa.id) || (await listTeamInscriptions(alphaTeamId)).find((r) => r.tournament_id === copa.id);
   const copaAlphaInsId = copaAlphaIns ? Number(copaAlphaIns.id) : null;
   if (copaAlphaInsId) {
@@ -383,9 +354,11 @@ async function main() {
 
   console.log('\nListo para probar:');
   console.log('  Login equipo: equipo_alpha /', DEFAULT_PASSWORD);
-  console.log('  Home equipo → Historia (2 torneos) + Mano a mano vs Equipo Beta');
-  console.log('  Torneo "Liga Demo Liga360" → stats competencia + presencias');
+  console.log('  Home equipo → Historia (2 torneos finalizados) + Mano a mano vs Equipo Beta');
+  console.log('  Torneo "Liga Demo Liga360" → stats + presencias + pestaña Histórico');
+  console.log('  Torneo "Copa Demo Liga360" → finalizado (campeón Alpha)');
   console.log('  Perfil participante_ana → Mis stats');
+  console.log('  Opcional: npm run seed:world-cup-2022 → Mundial Qatar 2022 finalizado');
 }
 
 main().catch((err) => {

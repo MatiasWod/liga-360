@@ -12,6 +12,7 @@ function mapTournament(t) {
     maxSlots: Number(t.maxSlots) || 16,
     inscriptionMode: t.inscriptionMode ?? 'public',
     status: t.status ?? 'draft',
+    editionLabel: t.editionLabel ?? null,
   };
 }
 

@@ -5,6 +5,8 @@
 import { requireOrganizerFromAuthHeader } from '../middleware/auth.js';
 import * as tournamentService from '../services/tournament.service.js';
 import * as competitionService from '../services/competition.service.js';
+import * as seriesService from '../services/competition-series.service.js';
+import * as seriesHistoryService from '../services/series-history.service.js';
 import * as stageService from '../services/stage.service.js';
 import * as groupService from '../services/group.service.js';
 import * as keyService from '../services/key.service.js';
@@ -26,6 +28,19 @@ const resolvers = {
     competition: (_p, { id }, { driver }) => competitionService.getById(driver, id),
     matchesByInscriptionIds: (_p, { ids }, { driver }) =>
       matchService.getMatchesByInscriptionIds(driver, ids),
+    competitionSeries: async (_p, { id, slug }, { driver }) => {
+      if (id) return seriesService.getById(driver, id);
+      if (slug) return seriesService.getBySlug(driver, slug);
+      return null;
+    },
+    competitionSeriesList: (_p, _args, { driver }) => seriesService.listPublic(driver),
+    myCompetitionSeries: (_p, _args, context) => {
+      const user = requireOrganizer(context);
+      const organizer = String(user?.username || '').trim();
+      return seriesService.listByOrganizer(context.driver, organizer);
+    },
+    seriesRollOfHonor: (_p, { seriesId }, { driver }) => seriesHistoryService.seriesRollOfHonor(driver, seriesId),
+    seriesAggregates: (_p, { seriesId }, { driver }) => seriesHistoryService.seriesAggregates(driver, seriesId),
   },
   Mutation: {
     createTournament: (_p, args, context) => {
@@ -40,6 +55,15 @@ const resolvers = {
     deleteTournament: (_p, { id }, context) => {
       const user = requireOrganizer(context);
       return tournamentService.remove(context.driver, id, user);
+    },
+    createCompetitionSeries: (_p, args, context) => {
+      const user = requireOrganizer(context);
+      const organizer = String(user?.username || '').trim() || `organizer-${String(user?.sub || '')}`;
+      return seriesService.create(context.driver, { ...args, organizer });
+    },
+    updateCompetitionSeries: (_p, args, context) => {
+      requireOrganizer(context);
+      return seriesService.update(context.driver, args.id, { name: args.name, sport: args.sport });
     },
 
     createCompetition: (_p, { tournamentId, name, order, maxSlots }, { driver }) =>
@@ -135,7 +159,19 @@ const resolvers = {
   },
 
   Tournament: {
+    seriesId: (parent, _args, { driver }) =>
+      parent.seriesId != null
+        ? parent.seriesId
+        : seriesService.getSeriesForTournament(driver, parent.id).then((s) => s?.id ?? null),
+    editionLabel: (parent, _args, { driver }) =>
+      parent.editionLabel != null
+        ? parent.editionLabel
+        : seriesService.getEditionLabel(driver, parent.id),
     competitions: (parent, _args, { driver }) => tournamentService.getCompetitions(driver, parent.id),
+  },
+
+  CompetitionSeries: {
+    editions: (parent, _args, { driver }) => seriesService.getEditions(driver, parent.id),
   },
 
   Competition: {

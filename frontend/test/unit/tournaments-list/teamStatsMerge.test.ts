@@ -80,6 +80,33 @@ describe('aggregateCompetitionStandings', () => {
     expect(agg.get('11')!.points).toBe(4);
   });
 
+  it('etapa grupos: no duplica PJ si stage.standings repite los mismos equipos', () => {
+    const groupsOnly: TournamentCompetition = {
+      id: 'c-2',
+      name: 'Mundial',
+      order: 1,
+      stages: [
+        {
+          id: 's-g',
+          name: 'Grupos',
+          order: 1,
+          format: 'groups',
+          standings: [standingsRow()],
+          groups: [
+            {
+              id: 'g-1',
+              name: 'Grupo A',
+              order: 1,
+              standings: [standingsRow()],
+              matches: [],
+            },
+          ],
+        },
+      ],
+    };
+    expect(aggregateCompetitionStandings(groupsOnly).get('10')!.played).toBe(3);
+  });
+
   it('devuelve mapa vacío sin competencia', () => {
     expect(aggregateCompetitionStandings(null).size).toBe(0);
   });
@@ -131,6 +158,30 @@ describe('collectCompetitionMatchesForInscription', () => {
   it('junta partidos de liga y grupos donde juega la inscripción', () => {
     const matches = collectCompetitionMatchesForInscription(competition, '10');
     expect(matches.map((m) => m.id)).toEqual(['m-1', 'm-2']);
+  });
+
+  it('no duplica partidos de grupos presentes en stage.matches y group.matches', () => {
+    const dupMatch = {
+      id: 'm-dup',
+      homeAssignedInscription: { inscriptionId: '10', displayName: 'Boca Norte' },
+      awayAssignedInscription: { inscriptionId: '11', displayName: 'River Sur' },
+    };
+    const dupCompetition: TournamentCompetition = {
+      id: 'c-dup',
+      name: 'Grupos',
+      order: 1,
+      stages: [
+        {
+          id: 's-g',
+          name: 'Grupos',
+          order: 1,
+          format: 'groups',
+          matches: [dupMatch],
+          groups: [{ id: 'g-1', name: 'Grupo A', order: 1, standings: [], matches: [dupMatch] }],
+        },
+      ],
+    };
+    expect(collectCompetitionMatchesForInscription(dupCompetition, '10')).toHaveLength(1);
   });
 
   it('inscripción sin partidos devuelve vacío', () => {

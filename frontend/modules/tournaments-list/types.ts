@@ -98,5 +98,7 @@ export type TournamentEntity = {
   participantType?: string | null;
   inscriptionMode?: 'public' | 'invitation' | null;
   status?: string | null;
+  seriesId?: string | null;
+  editionLabel?: string | null;
   competitions: TournamentCompetition[];
 };

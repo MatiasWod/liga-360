@@ -21,6 +21,7 @@ export type TournamentListItem = {
   organizer?: string | null;
   participantType?: string | null;
   inscriptionMode?: 'public' | 'invitation' | null;
+  status?: string | null;
   competitions: TournamentCompetition[];
 };
 
@@ -143,6 +144,8 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
           organizer
           participantType
           status
+          seriesId
+          editionLabel
           competitions {
             id
             name

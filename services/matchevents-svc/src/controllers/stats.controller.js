@@ -16,6 +16,19 @@ export async function scorers(req, res, next) {
   }
 }
 
+/** Goleadores agregados cross-torneo: ?tournamentIds=t1,t2&limit=50 */
+export async function scorersMulti(req, res, next) {
+  try {
+    const raw = String(req.query?.tournamentIds || '').trim();
+    const tournamentIds = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    if (!tournamentIds.length) return validationError(res, 'tournamentIds requerido');
+    const { limit } = req.query;
+    res.json(await statsService.getScorersMulti({ tournamentIds, limit }));
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function cards(req, res, next) {
   try {
     const { tournamentId } = req.params;

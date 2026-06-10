@@ -28,6 +28,15 @@ export async function getScorers({ tournamentId, competitionId, limit }) {
   return rows.map((r) => ({ ...toPlayerRow(r), goals: r.goals }));
 }
 
+export async function getScorersMulti({ tournamentIds, limit }) {
+  const rows = await statsRepo.scorersMulti(pool, { tournamentIds, limit });
+  return rows.map((r) => ({
+    ...toPlayerRow(r),
+    goals: r.goals,
+    identityApproximate: r.linked_member_id == null,
+  }));
+}
+
 export async function getCards({ tournamentId, competitionId }) {
   const rows = await statsRepo.cards(pool, { tournamentId, competitionId });
   return rows.map((r) => ({
