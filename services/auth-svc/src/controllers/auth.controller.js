@@ -11,10 +11,10 @@ export async function register(req, res, next) {
       });
     }
 
-    const { mode, username, password, name } = req.body;
+    const { mode, username, password, name, firstName, lastName, nickname, dni } = req.body;
     logger.info({ mode, username }, 'register request');
 
-    const result = await authService.register({ mode, username, password, name });
+    const result = await authService.register({ mode, username, password, name, firstName, lastName, nickname, dni });
     return res.status(201).json(result);
   } catch (err) {
     next(err);

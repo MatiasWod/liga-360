@@ -16,6 +16,16 @@ export function validateRegisterInput(body) {
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     errors.push({ field: 'name', message: 'name is required' });
   }
+  // Campos opcionales del registro de participante (se persisten en teams-svc).
+  const { firstName, lastName, nickname, dni } = body || {};
+  for (const [field, value] of [['firstName', firstName], ['lastName', lastName], ['nickname', nickname]]) {
+    if (value !== undefined && value !== null && typeof value !== 'string') {
+      errors.push({ field, message: `${field} must be a string` });
+    }
+  }
+  if (dni !== undefined && dni !== null && dni !== '' && !/^\d{7,8}$/.test(String(dni).replace(/\D/g, ''))) {
+    errors.push({ field: 'dni', message: 'dni must have 7-8 digits' });
+  }
   return errors;
 }
 

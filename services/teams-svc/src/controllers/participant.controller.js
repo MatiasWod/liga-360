@@ -9,9 +9,10 @@ export async function create(req, res, next) {
   try {
     const errors = validateCreateParticipant(req.body);
     if (errors.length > 0) return validationError(res, errors);
-    const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode } = req.body;
+    const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, selfProfile } = req.body;
     res.status(201).json(await participantService.createParticipant({
-      firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, userId: req.user?.sub,
+      firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode,
+      userId: req.user?.sub, selfProfile: selfProfile === true,
     }));
   } catch (e) {
     next(e);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { TeamNameLink } from '../../components/team/TeamNameLink';
 import type { GoalRecord } from '../../components/tournament-schedule/MatchCard';
 import { bracketPublicTeamName } from '../../components/tournament-schedule/matchParticipantUtils';
 import { isTwoLeggedSeries } from '../../components/tournament-schedule/eliminationSeriesUtils';
@@ -46,7 +47,7 @@ function BracketTeamRow({ name, score, isWinner, isCompleted }: {
 	return (
 		<div className="flex items-center gap-1 px-2 py-1 min-h-[26px]">
 			<span className={`flex-1 min-w-0 truncate text-xs ${hasName ? (isWinner ? 'font-semibold text-text-primary' : 'text-text-muted') : 'text-transparent select-none'}`}>
-				{hasName ? name : '\u00a0'}
+				{hasName ? <TeamNameLink teamName={name} className="max-w-full truncate align-bottom" /> : '\u00a0'}
 			</span>
 			<span className={`flex-none w-5 text-right tabular-nums text-xs ${hasName && isCompleted ? (isWinner ? 'font-bold text-text-primary' : 'text-text-muted') : 'text-transparent select-none'}`}>
 				{hasName && isCompleted ? (score ?? 0) : ''}

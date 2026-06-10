@@ -14,7 +14,9 @@ router.get('/me/invite-code', requireAuthMiddleware, teamController.getMyInviteC
 router.post('/:id/access-code/rotate', requireAuthMiddleware, teamController.rotateAccessCode);
 router.post('/:id/members', membershipController.add);
 router.delete('/:id/members/:participantId', membershipController.remove);
-router.get('/:id', teamController.getById);
+// Roster visible para cualquier usuario logueado (no anónimo); las llamadas
+// service-to-service llegan con token de servicio y también pasan.
+router.get('/:id', requireAuthMiddleware, teamController.getById);
 router.patch('/:id', teamController.update);
 
 export default router;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { TeamNameLink } from '../team/TeamNameLink';
 import type { ClassificationZone, StandingsRow } from './types';
 
 const ZONE_STYLES = [
@@ -75,7 +76,9 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                   ].join(' ')}
                 >
                   <td className="px-3 py-2">{row.position}</td>
-                  <td className="px-3 py-2 font-medium">{row.displayName}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <TeamNameLink teamName={row.displayName} />
+                  </td>
                   <td className="px-3 py-2 text-center">{row.played}</td>
                   <td className="px-3 py-2 text-center">{row.won}</td>
                   <td className="px-3 py-2 text-center">{row.drawn}</td>

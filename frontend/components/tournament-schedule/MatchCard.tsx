@@ -1,4 +1,5 @@
 import React from 'react';
+import { TeamNameLink } from '../team/TeamNameLink';
 import { bothMatchTeamsResolved, isByeMatchRecord, isByeMatchTeam } from './matchParticipantUtils';
 import type { MatchRecord, MatchStatus, TeamRef } from './types';
 
@@ -621,7 +622,7 @@ function TeamName({
       {/* Avatar */}
       {!isByeSide ? <TeamAvatar team={team} side={side} isDark={isDark} /> : null}
 
-      {/* Nombre */}
+      {/* Nombre (clickeable para usuarios logueados → roster + stats del equipo) */}
       <span
         className={`w-full truncate text-sm leading-tight transition-all ${
           isByeSide
@@ -637,7 +638,7 @@ function TeamName({
               : 'font-normal text-slate-600'
         } ${hasEditButton ? 'pr-7' : ''}`}
       >
-        {team.name}
+        {isByeSide ? team.name : <TeamNameLink teamName={team.name} className="max-w-full truncate align-bottom" />}
       </span>
     </div>
   );

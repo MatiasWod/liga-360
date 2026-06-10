@@ -1,5 +1,6 @@
 import React from 'react';
 import type { LinkedTeam } from '../../types/domain';
+import { TeamNameLink } from '../team/TeamNameLink';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
@@ -18,7 +19,9 @@ export const LinkedTeamsSection: React.FC<LinkedTeamsSectionProps> = ({ teams })
             <div className="flex items-center gap-3">
               <Avatar name={team.name} imageUrl={team.badgeUrl} size="sm" />
               <div>
-                <h3 className="font-medium text-slate-800">{team.name}</h3>
+                <h3 className="font-medium text-slate-800">
+                  <TeamNameLink teamId={team.id} teamName={team.name} />
+                </h3>
                 <p className="text-xs text-slate-500">ID: {team.id}</p>
               </div>
             </div>

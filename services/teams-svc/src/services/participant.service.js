@@ -17,7 +17,7 @@ function notFound(message) {
   return Object.assign(new Error(message), { statusCode: 404, code: 'NOT_FOUND' });
 }
 
-export async function createParticipant({ firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, userId }) {
+export async function createParticipant({ firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, userId, selfProfile }) {
   const normalizedDni = normalizeDni(dni);
   const displayName = `${String(firstName).trim()} ${String(lastName).trim()}`.trim();
 
@@ -25,8 +25,29 @@ export async function createParticipant({ firstName, lastName, nickname, avatarU
     if (teamId) {
       if (!(await canWriteTeam(client, Number(teamId), userId, teamCode))) throw forbidden();
     }
-    // Auto-link al profile por DNI (JOIN local en la misma DB).
-    const profileId = await profileIdByDni(client, normalizedDni);
+    let profileId;
+    if (selfProfile && userId) {
+      // Registro de un usuario participante: crea/actualiza su identidad (Person_Profile)
+      // y vincula este participante a ella. El dni se asigna al profile solo si está libre
+      // (Person_Profile.dni es UNIQUE); el Participant conserva su propio dni igualmente.
+      let profileDni = normalizedDni;
+      if (profileDni) {
+        const owner = await profileRepo.findByDni(client, profileDni);
+        if (owner && Number(owner.user_id) !== Number(userId)) profileDni = null;
+      }
+      const profile = await profileRepo.upsertByUser(client, {
+        userId,
+        dni: profileDni,
+        firstName: String(firstName).trim() || null,
+        lastName: String(lastName).trim() || null,
+        avatarUrl: avatarUrl || null,
+        now: nowIso(),
+      });
+      profileId = profile.id;
+    } else {
+      // Auto-link al profile por DNI (JOIN local en la misma DB).
+      profileId = await profileIdByDni(client, normalizedDni);
+    }
     const created = await participantRepo.create(client, {
       displayName,
       firstName: String(firstName).trim(),
