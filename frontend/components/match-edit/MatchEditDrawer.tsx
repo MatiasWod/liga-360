@@ -592,6 +592,7 @@ function EventsSection({
 
         <EventAttributionFields
           tournamentId={tournamentId}
+          matchId={matchId}
           homeOption={homeOption}
           awayOption={awayOption}
           selectedInscriptionId={newInscriptionId}

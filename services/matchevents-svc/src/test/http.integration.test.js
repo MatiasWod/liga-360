@@ -58,6 +58,12 @@ async function seed() {
      VALUES ($1,$2,$3,'other_sanction',10,'Equipo A','observación interna')`,
     [MATCH_A, TID, CID]
   );
+  // Presencias: snapshot de texto (Juan vinculado + invitado) para PJ y lectura pública
+  const insertPresence = `INSERT INTO "MatchPresence"(match_id, tournament_id, competition_id, inscription_id, linked_member_id, display_name, is_guest)
+                          VALUES ($1,$2,$3,$4,$5,$6,$7)`;
+  await pool.query(insertPresence, [MATCH_A, TID, CID, 10, 100, 'Juan Pérez', false]);
+  await pool.query(insertPresence, [MATCH_B, TID, CID, 10, 100, 'Juan Pérez', false]);
+  await pool.query(insertPresence, [MATCH_A, TID, CID, 10, null, 'Invitado X', true]);
 }
 
 describe('matchevents-svc HTTP (integración con DB)', () => {
@@ -79,6 +85,7 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
   after(async () => {
     if (dbAvailable) {
       await pool.query('DELETE FROM "MatchEvent" WHERE tournament_id = $1', [TID]);
+      await pool.query('DELETE FROM "MatchPresence" WHERE tournament_id = $1', [TID]);
       await new Promise((resolve) => server.close(resolve));
     }
     await closePool();
@@ -92,6 +99,9 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
       const juan = r.body.find((s) => s.playerKey === 'member:100');
       assert.equal(juan.goals, 2);
       assert.equal(juan.inscriptionId, 10);
+      // PJ desde presencias: Juan tiene 2; Carlos no tiene → null
+      assert.equal(juan.matchesPlayed, 2);
+      assert.equal(r.body.find((s) => s.displayName === 'Carlos Gómez').matchesPlayed, null);
       const carlos = r.body.find((s) => s.displayName === 'Carlos Gómez');
       assert.equal(carlos.goals, 1);
       // Legacy sin inscripción agrega igual, con inscriptionId null
@@ -161,6 +171,36 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
       assert.equal(org.status, 200);
       const sanction = org.body.find((e) => e.event_type === 'other_sanction');
       assert.equal(sanction.notes, 'observación interna');
+    })();
+  });
+
+  test('GET /participants/:memberId/stats devuelve totales y desglose por torneo', (t) => {
+    if (!dbAvailable) return t.skip('sin DB');
+    return (async () => {
+      const r = await req('GET', '/participants/100/stats');
+      assert.equal(r.status, 200);
+      assert.equal(r.body.memberId, 100);
+      assert.equal(r.body.totals.goals >= 2, true);
+      assert.equal(r.body.totals.matchesPlayed >= 2, true);
+      const row = r.body.byTournament.find((x) => x.tournamentId === TID);
+      assert.equal(row.goals, 2);
+      assert.equal(row.yellowCards, 1);
+      assert.equal(row.matchesPlayed, 2);
+    })();
+  });
+
+  test('GET /matches/:id/presences público devuelve snapshot (plantilla + invitado)', (t) => {
+    if (!dbAvailable) return t.skip('sin DB');
+    return (async () => {
+      const r = await req('GET', `/matches/${MATCH_A}/presences`);
+      assert.equal(r.status, 200);
+      assert.equal(r.body.length, 2);
+      const juan = r.body.find((p) => p.linked_member_id === 100);
+      assert.equal(juan.display_name, 'Juan Pérez');
+      assert.equal(juan.is_guest, false);
+      const guest = r.body.find((p) => p.is_guest);
+      assert.equal(guest.display_name, 'Invitado X');
+      assert.equal(guest.linked_member_id, null);
     })();
   });
 

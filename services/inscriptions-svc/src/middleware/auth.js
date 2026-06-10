@@ -46,3 +46,10 @@ export function requireParticipantUser(req, _res, next) {
   if (req.user.type !== 'participant') return next(forbidden('usuario participant requerido'));
   return next();
 }
+
+/** Endpoints internos service-to-service: solo tokens con type 'service' (mismo patrón que teams-svc). */
+export function requireServiceToken(req, _res, next) {
+  if (!req.user) return next(unauthorized());
+  if (req.user.type !== 'service') return next(forbidden('endpoint interno'));
+  return next();
+}

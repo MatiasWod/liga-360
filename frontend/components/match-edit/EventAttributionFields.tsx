@@ -1,12 +1,22 @@
 import React from 'react';
 import { listTournamentInscriptions } from '../../services/inscriptions/inscriptions';
 import { getTeamDetail } from '../../services/teams/teams';
-import { rosterMemberName, type EventTeamOption, type RosterMember } from './eventAttribution';
+import { listMatchPresences } from '../../services/matchEvents/presences';
+import {
+  buildPlayerPickerOptions,
+  playerOptionValue,
+  rosterMemberName,
+  type EventTeamOption,
+  type PresenceLike,
+  type RosterMember,
+} from './eventAttribution';
 
 const FREE_TEXT_VALUE = '__free_text__';
 
 export interface EventAttributionFieldsProps {
   tournamentId: string;
+  /** Partido en edición: si tiene presencias cargadas, son la fuente del picker (ADR-0002). */
+  matchId?: string;
   homeOption: EventTeamOption | null;
   awayOption: EventTeamOption | null;
   selectedInscriptionId: number | null;
@@ -23,6 +33,7 @@ export interface EventAttributionFieldsProps {
  */
 export const EventAttributionFields: React.FC<EventAttributionFieldsProps> = ({
   tournamentId,
+  matchId,
   homeOption,
   awayOption,
   selectedInscriptionId,
@@ -39,6 +50,24 @@ export const EventAttributionFields: React.FC<EventAttributionFieldsProps> = ({
   // Cache inscriptionId → plantilla
   const [rosters, setRosters] = React.useState<Record<number, RosterMember[]>>({});
   const [loadingRoster, setLoadingRoster] = React.useState(false);
+  // Presencias del partido (primera fuente de la cascada)
+  const [presences, setPresences] = React.useState<PresenceLike[]>([]);
+
+  React.useEffect(() => {
+    if (!matchId) return;
+    let cancelled = false;
+    listMatchPresences(matchId)
+      .then((data) => {
+        if (!cancelled) setPresences(data);
+      })
+      .catch(() => {
+        // Sin presencias resolubles: la cascada sigue con plantilla → texto libre
+        if (!cancelled) setPresences([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -90,6 +119,14 @@ export const EventAttributionFields: React.FC<EventAttributionFieldsProps> = ({
 
   const roster = selectedInscriptionId != null ? rosters[selectedInscriptionId] ?? [] : [];
 
+  // Cascada: presencias del partido → plantilla → texto libre (siempre disponible)
+  const picker = buildPlayerPickerOptions({ inscriptionId: selectedInscriptionId, presences, roster });
+  const selectedValue = selectedMember
+    ? playerOptionValue(selectedMember.id, selectedMember.name)
+    : picker.options.some((o) => o.memberId == null && o.name === freeText)
+      ? playerOptionValue(null, freeText)
+      : FREE_TEXT_VALUE;
+
   return (
     <>
       <div className="space-y-1">
@@ -113,24 +150,33 @@ export const EventAttributionFields: React.FC<EventAttributionFieldsProps> = ({
       </div>
 
       <div className="space-y-1">
-        <label className="block text-xs text-text-muted">Jugador</label>
-        {roster.length > 0 ? (
+        <label className="block text-xs text-text-muted">
+          Jugador{picker.source === 'presences' ? ' (presentes del partido)' : ''}
+        </label>
+        {picker.options.length > 0 ? (
           <select
-            value={selectedMember ? String(selectedMember.id) : FREE_TEXT_VALUE}
+            value={selectedValue}
             onChange={(e) => {
               const v = e.target.value;
               if (v === FREE_TEXT_VALUE) {
                 onMemberChange(null);
+                onFreeTextChange('');
+                return;
+              }
+              const opt = picker.options.find((o) => o.value === v) || null;
+              if (opt && opt.memberId != null) {
+                onMemberChange({ id: opt.memberId, name: opt.name });
               } else {
-                const m = roster.find((r) => String(r.id) === v) || null;
-                onMemberChange(m);
+                // Presencia de texto (p. ej. invitado sin vincular): atribución por nombre
+                onMemberChange(null);
+                onFreeTextChange(opt?.name ?? '');
               }
             }}
             className="w-full rounded-lg border border-border-subtle bg-surface-1 px-3 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
           >
-            {roster.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
+            {picker.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.isGuest ? `${o.name} (invitado)` : o.name}
               </option>
             ))}
             <option value={FREE_TEXT_VALUE}>Otro (escribir nombre)…</option>
@@ -138,7 +184,7 @@ export const EventAttributionFields: React.FC<EventAttributionFieldsProps> = ({
         ) : loadingRoster ? (
           <p className="text-xs text-text-muted">Cargando plantilla…</p>
         ) : null}
-        {selectedMember == null ? (
+        {selectedMember == null && selectedValue === FREE_TEXT_VALUE ? (
           <input
             type="text"
             value={freeText}

@@ -69,6 +69,48 @@ describe('matchevents-svc HTTP (sin DB)', () => {
     assert.equal(r.status, 401);
   });
 
+  test('GET /matches/:id/presences sin token es público (no 401)', async () => {
+    const r = await req('GET', '/matches/m1/presences');
+    assert.notEqual(r.status, 401);
+  });
+
+  test('PUT /matches/:id/presences sin token → 401', async () => {
+    const r = await req('PUT', '/matches/m1/presences', { inscription_id: 10, tournament_id: 't1', entries: [] });
+    assert.equal(r.status, 401);
+  });
+
+  test('PUT presences con organizer → 403 sin tocar red (solo dueños)', async () => {
+    const r = await req(
+      'PUT',
+      '/matches/m1/presences',
+      { inscription_id: 10, tournament_id: 't1', entries: [] },
+      { Authorization: `Bearer ${organizerToken}` }
+    );
+    assert.equal(r.status, 403);
+  });
+
+  test('PUT presences con entries inválidas → 400', async () => {
+    const teamToken = jwt.sign({ sub: 42, type: 'team' }, 'devsecret');
+    const r = await req(
+      'PUT',
+      '/matches/m1/presences',
+      { inscription_id: 10, tournament_id: 't1', entries: [{ display_name: '' }] },
+      { Authorization: `Bearer ${teamToken}` }
+    );
+    assert.equal(r.status, 400);
+  });
+
+  test('PUT presences con team y servicios caídos → 503 (nunca permite por degradación)', async () => {
+    const teamToken = jwt.sign({ sub: 42, type: 'team' }, 'devsecret');
+    const r = await req(
+      'PUT',
+      '/matches/m1/presences',
+      { inscription_id: 10, tournament_id: 't1', entries: [{ display_name: 'Juan' }] },
+      { Authorization: `Bearer ${teamToken}` }
+    );
+    assert.equal(r.status, 503);
+  });
+
   test('POST con organizer + sin inscription_id → 400 (atribución obligatoria)', async () => {
     const r = await req(
       'POST',

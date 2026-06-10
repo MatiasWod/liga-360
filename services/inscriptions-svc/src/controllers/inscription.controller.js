@@ -94,3 +94,14 @@ export async function listByCompetition(req, res, next) {
     next(e);
   }
 }
+
+/** Lookup interno por id (solo token de servicio): lo consume matchevents-svc para resolver propiedad. */
+export async function getById(req, res, next) {
+  try {
+    const inscriptionId = Number(req.params.id);
+    if (!inscriptionId) return validationError(res, [{ field: 'id', message: 'inscriptionId invalido' }]);
+    res.json(await inscriptionService.getById({ inscriptionId }));
+  } catch (e) {
+    next(e);
+  }
+}

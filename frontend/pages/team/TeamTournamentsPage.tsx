@@ -4,6 +4,7 @@ import { TournamentDetail, TournamentsList } from '../../modules/tournaments-lis
 import { claimCompetitionByInviteCode, createPublicTeamInscription } from '../../services/inscriptionsApi';
 import { listTournamentIdsByInscriptionPredicate } from '../../services/tournamentsApi';
 import { useTournamentRoute } from '../../hooks/useTournamentRoute';
+import { TeamPresencesPanel } from '../../modules/team-presences/TeamPresencesPanel';
 
 interface TeamTournamentsPageProps {
   activeTeamId?: string | null;
@@ -186,7 +187,13 @@ export const TeamTournamentsPage: React.FC<TeamTournamentsPageProps> = ({ active
           loadingMyTournaments ? (
             <p className="text-sm text-slate-500">Cargando torneos del equipo...</p>
           ) : selectedId ? (
-            <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
+            <div className="space-y-4">
+              <TournamentDetail id={selectedId} onBack={() => setSelectedId(null)} />
+              {/* Presencias (ADR-0002): solo si hay equipo activo inscripto en el torneo */}
+              {activeTeamId ? (
+                <TeamPresencesPanel tournamentId={selectedId} teamId={Number(activeTeamId)} />
+              ) : null}
+            </div>
           ) : (
             <TournamentsList
               participantTypeFilter="teams"

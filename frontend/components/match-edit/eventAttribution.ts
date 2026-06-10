@@ -63,3 +63,72 @@ export function rosterMemberName(p: { firstName?: string; lastName?: string; nic
   const full = [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
   return p.nickname?.trim() || full || 'Sin nombre';
 }
+
+// ---------------------------------------------------------------------------
+// Cascada del picker (ADR-0002): presencias del partido → plantilla → texto libre
+// ---------------------------------------------------------------------------
+
+export interface PresenceLike {
+  inscription_id: number;
+  linked_member_id: number | null;
+  display_name: string;
+  is_guest: boolean;
+}
+
+export interface PlayerPickerOption {
+  /** Valor estable del <option>: member:<id> o text:<nombre>. */
+  value: string;
+  name: string;
+  memberId: number | null;
+  isGuest: boolean;
+}
+
+export function playerOptionValue(memberId: number | null, name: string): string {
+  return memberId != null ? `member:${memberId}` : `text:${name}`;
+}
+
+/**
+ * Opciones del picker de jugador para una inscripción:
+ * - si hay presencias cargadas del partido para esa inscripción, son la fuente
+ *   (plantilla presente primero, invitados al final);
+ * - si no, la plantilla completa;
+ * - el texto libre lo agrega la UI como opción fija.
+ */
+export function buildPlayerPickerOptions({
+  inscriptionId,
+  presences,
+  roster,
+}: {
+  inscriptionId: number | null;
+  presences: PresenceLike[];
+  roster: RosterMember[];
+}): { options: PlayerPickerOption[]; source: 'presences' | 'roster' | 'none' } {
+  if (inscriptionId == null) return { options: [], source: 'none' };
+  const forInscription = presences.filter((p) => Number(p.inscription_id) === Number(inscriptionId));
+  if (forInscription.length > 0) {
+    const sorted = [...forInscription].sort((a, b) =>
+      a.is_guest !== b.is_guest ? Number(a.is_guest) - Number(b.is_guest) : a.display_name.localeCompare(b.display_name)
+    );
+    return {
+      source: 'presences',
+      options: sorted.map((p) => ({
+        value: playerOptionValue(p.linked_member_id, p.display_name),
+        name: p.display_name,
+        memberId: p.linked_member_id,
+        isGuest: p.is_guest,
+      })),
+    };
+  }
+  if (roster.length > 0) {
+    return {
+      source: 'roster',
+      options: roster.map((m) => ({
+        value: playerOptionValue(m.id, m.name),
+        name: m.name,
+        memberId: m.id,
+        isGuest: false,
+      })),
+    };
+  }
+  return { options: [], source: 'none' };
+}

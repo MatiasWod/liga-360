@@ -202,3 +202,10 @@ export async function listByCompetition({ competitionId }) {
   const rows = await inscriptionRepo.listByCompetition(pool, competitionId);
   return { competitionId, inscriptions: await hydrateInscriptionsWithTeams(rows) };
 }
+
+/** Lookup interno por id (endpoint service-to-service, sin hidratación de equipos). */
+export async function getById({ inscriptionId }) {
+  const row = await inscriptionRepo.findById(pool, inscriptionId);
+  if (!row) throw notFound('inscripcion no encontrada');
+  return { inscription: row };
+}

@@ -18,6 +18,7 @@ export const CardsTable: React.FC<CardsTableProps> = ({ rows, nameById, onSelect
           <tr className="text-text-muted border-b border-border-subtle">
             <th className="px-2 py-1 text-left font-medium">Jugador</th>
             <th className="px-2 py-1 text-left font-medium">Equipo</th>
+            <th className="px-2 py-1 text-center font-medium w-10" title="Partidos jugados (solo con presencias cargadas)">PJ</th>
             <th className="px-2 py-1 text-center font-medium w-10" title="Tarjetas amarillas">
               <span className="inline-block h-2.5 w-2 rounded-[2px] bg-amber-400 align-middle" />
             </th>
@@ -47,6 +48,7 @@ export const CardsTable: React.FC<CardsTableProps> = ({ rows, nameById, onSelect
                     <span className="text-text-muted">{teamName}</span>
                   )}
                 </td>
+                <td className="px-2 py-1 text-center tabular-nums text-text-muted">{row.matchesPlayed ?? '—'}</td>
                 <td className="px-2 py-1 text-center tabular-nums">{row.yellowCards || ''}</td>
                 <td className="px-2 py-1 text-center tabular-nums">{row.redCards || ''}</td>
                 <td className="px-2 py-1 text-center tabular-nums text-text-muted">

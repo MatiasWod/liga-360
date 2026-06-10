@@ -1,6 +1,7 @@
 /** Lógica de estadísticas agregadas por Competencia/Torneo (lecturas públicas). */
 import { pool } from '../config/db.js';
 import * as statsRepo from '../repositories/stats.repository.js';
+import { mergeParticipantTotals } from '../domain/presence.js';
 
 function toPlayerRow(row) {
   return {
@@ -8,6 +9,8 @@ function toPlayerRow(row) {
     displayName: row.display_name,
     inscriptionId: row.inscription_id != null ? Number(row.inscription_id) : null,
     linkedMemberId: row.linked_member_id != null ? Number(row.linked_member_id) : null,
+    // PJ solo desde presencias: null = sin datos (la UI muestra "—")
+    matchesPlayed: row.matches_played != null ? Number(row.matches_played) : null,
   };
 }
 
@@ -24,6 +27,16 @@ export async function getCards({ tournamentId, competitionId }) {
     redCards: r.red_cards,
     suspensionMatches: r.suspension_matches,
   }));
+}
+
+/** Stats de un Participant: totales + desglose por torneo/competencia. */
+export async function getParticipantStats({ memberId }) {
+  const [eventRows, presenceRows] = await Promise.all([
+    statsRepo.participantEventTotals(pool, memberId),
+    statsRepo.participantPresenceTotals(pool, memberId),
+  ]);
+  const { totals, byTournament } = mergeParticipantTotals(eventRows, presenceRows);
+  return { memberId: Number(memberId), totals, byTournament };
 }
 
 export async function getTeamStats({ tournamentId, competitionId }) {

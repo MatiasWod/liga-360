@@ -4,6 +4,7 @@ import {
   requireOrganizer,
   requireTeamUser,
   requireParticipantUser,
+  requireServiceToken,
 } from '../middleware/auth.js';
 import * as inscription from '../controllers/inscription.controller.js';
 import * as invite from '../controllers/invite.controller.js';
@@ -18,6 +19,8 @@ export function createRouter() {
   router.patch('/inscriptions/:id/status', requireOrganizer, inscription.updateStatus);
   router.patch('/inscriptions/:id/competition', requireOrganizer, inscription.moveCompetition);
   router.post('/inscriptions/:id/associate', requireTeamUser, inscription.associate);
+  // Endpoint interno service-to-service (matchevents-svc resuelve inscription → linked_team_id)
+  router.get('/inscriptions/:id', requireServiceToken, inscription.getById);
   router.get('/tournaments/:id/inscriptions', requireAuthMiddleware, inscription.listByTournament);
   router.get('/competitions/:id/inscriptions', requireAuthMiddleware, inscription.listByCompetition);
 

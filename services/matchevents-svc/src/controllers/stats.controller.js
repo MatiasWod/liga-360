@@ -38,6 +38,16 @@ export async function teams(req, res, next) {
   }
 }
 
+export async function participantStats(req, res, next) {
+  try {
+    const memberId = Number(req.params.memberId);
+    if (!memberId) return validationError(res, 'memberId invalido');
+    res.json(await statsService.getParticipantStats({ memberId }));
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function eventsByInscription(req, res, next) {
   try {
     const { tournamentId } = req.params;

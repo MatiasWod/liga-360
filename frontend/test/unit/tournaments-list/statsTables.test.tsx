@@ -15,7 +15,7 @@ describe('ScorersTable', () => {
     render(
       <ScorersTable
         rows={[
-          { playerKey: 'member:100', displayName: 'Juan Pérez', inscriptionId: 10, linkedMemberId: 100, goals: 5 },
+          { playerKey: 'member:100', displayName: 'Juan Pérez', inscriptionId: 10, linkedMemberId: 100, goals: 5, matchesPlayed: 4 },
           { playerKey: 'name:-:sin atribuir', displayName: 'Sin Atribuir', inscriptionId: null, linkedMemberId: null, goals: 1 },
         ]}
         nameById={nameById}
@@ -23,7 +23,9 @@ describe('ScorersTable', () => {
     );
     expect(screen.getByText('Juan Pérez')).toBeTruthy();
     expect(screen.getByText('Boca Norte')).toBeTruthy();
-    expect(screen.getByText('—')).toBeTruthy();
+    // PJ con presencias (4) y "—" para equipo legacy / PJ sin presencias
+    expect(screen.getByText('4')).toBeTruthy();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.getByText('5')).toBeTruthy();
   });
 

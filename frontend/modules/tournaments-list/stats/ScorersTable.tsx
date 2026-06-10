@@ -20,6 +20,7 @@ export const ScorersTable: React.FC<ScorersTableProps> = ({ rows, nameById, onSe
             <th className="px-2 py-1 text-left font-medium w-6">#</th>
             <th className="px-2 py-1 text-left font-medium">Jugador</th>
             <th className="px-2 py-1 text-left font-medium">Equipo</th>
+            <th className="px-2 py-1 text-center font-medium w-10" title="Partidos jugados (solo con presencias cargadas)">PJ</th>
             <th className="px-2 py-1 text-center font-semibold w-12">Goles</th>
           </tr>
         </thead>
@@ -44,6 +45,7 @@ export const ScorersTable: React.FC<ScorersTableProps> = ({ rows, nameById, onSe
                     <span className="text-text-muted">{teamName}</span>
                   )}
                 </td>
+                <td className="px-2 py-1 text-center tabular-nums text-text-muted">{row.matchesPlayed ?? '—'}</td>
                 <td className="px-2 py-1 text-center font-bold tabular-nums">{row.goals}</td>
               </tr>
             );

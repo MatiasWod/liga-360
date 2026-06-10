@@ -8,6 +8,8 @@ export interface ScorerStatsRow {
   inscriptionId: number | null;
   linkedMemberId: number | null;
   goals: number;
+  /** PJ desde presencias (ADR-0002): null = sin datos, la UI muestra "—". */
+  matchesPlayed?: number | null;
 }
 
 export interface CardStatsRow {
@@ -18,6 +20,8 @@ export interface CardStatsRow {
   yellowCards: number;
   redCards: number;
   suspensionMatches: number;
+  /** PJ desde presencias (ADR-0002): null = sin datos, la UI muestra "—". */
+  matchesPlayed?: number | null;
 }
 
 export interface TeamStatsRow {
