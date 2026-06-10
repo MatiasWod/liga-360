@@ -216,6 +216,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              minLength={mode === 'register' ? 3 : undefined}
             />
           </label>
           <label className="block">
@@ -226,6 +227,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={mode === 'register' ? 6 : undefined}
             />
           </label>
 
