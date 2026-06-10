@@ -1,15 +1,15 @@
 /** Acceso a datos de MatchEvent (goles, tarjetas, suspensiones, sanciones). */
 
 export async function create(client, {
-  matchId, tournamentId, eventType, inscriptionId = null, linkedMemberId = null,
+  matchId, tournamentId, competitionId = null, eventType, inscriptionId = null, linkedMemberId = null,
   displayName = '', minute = null, suspensionMatches = null, notes = null, extraJson = null, createdByUserId = null,
 }) {
   const r = await client.query(
-    `INSERT INTO "MatchEvent"(match_id, tournament_id, event_type, inscription_id, linked_member_id, display_name,
+    `INSERT INTO "MatchEvent"(match_id, tournament_id, competition_id, event_type, inscription_id, linked_member_id, display_name,
        minute, suspension_matches, notes, extra_json, created_by_user_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
      RETURNING *`,
-    [matchId, tournamentId, eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches,
+    [matchId, tournamentId, competitionId, eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches,
       notes, extraJson ? JSON.stringify(extraJson) : null, createdByUserId]
   );
   return r.rows[0];
@@ -34,7 +34,7 @@ export async function existsInMatch(client, eventId, matchId) {
 }
 
 export async function update(client, eventId, matchId, {
-  eventType = null, inscriptionId = null, linkedMemberId = null, displayName = null,
+  eventType = null, competitionId = null, inscriptionId = null, linkedMemberId = null, displayName = null,
   minute = null, suspensionMatches = null, notes = null, extraJson = null,
 }) {
   const r = await client.query(
@@ -47,11 +47,12 @@ export async function update(client, eventId, matchId, {
          suspension_matches = COALESCE($6, suspension_matches),
          notes              = COALESCE($7, notes),
          extra_json         = COALESCE($8, extra_json),
+         competition_id     = COALESCE($11, competition_id),
          updated_at         = NOW()
      WHERE id = $9 AND match_id = $10
      RETURNING *`,
     [eventType, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes,
-      extraJson ? JSON.stringify(extraJson) : null, Number(eventId), matchId]
+      extraJson ? JSON.stringify(extraJson) : null, Number(eventId), matchId, competitionId]
   );
   return r.rows[0] || null;
 }

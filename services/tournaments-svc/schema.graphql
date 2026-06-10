@@ -4,6 +4,8 @@ type Query {
   tournaments: [Tournament!]!
   tournament(id: ID!): Tournament
   competition(id: ID!): Competition
+  """Partidos donde participa cualquiera de las inscripciones (historial cross-torneo)."""
+  matchesByInscriptionIds(ids: [ID!]!): [Match!]!
 }
 
 enum TournamentStatus {
@@ -268,6 +270,13 @@ type Match {
   status: String
   winnerAdvancementTransitionId: ID
   matchKind: String
+  """Contexto histórico (populated por matchesByInscriptionIds)."""
+  tournamentId: ID
+  tournamentName: String
+  competitionId: ID
+  competitionName: String
+  stageId: ID
+  stageName: String
 }
 
 type Key {

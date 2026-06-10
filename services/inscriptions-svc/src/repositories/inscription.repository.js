@@ -192,3 +192,27 @@ export async function listByCompetition(client, competitionId) {
   );
   return r.rows;
 }
+
+/** Todas las inscripciones históricas de un equipo (incluye rechazadas). */
+export async function listByTeam(client, teamId) {
+  const r = await client.query(
+    `SELECT ${LIST_COLS} FROM "Inscription" i
+     WHERE i.linked_team_id = $1
+     ORDER BY i.created_at DESC`,
+    [Number(teamId)]
+  );
+  return r.rows;
+}
+
+/** Lookup público por ids (frontend compone mano a mano: inscription → linked_team_id). */
+export async function findByIds(client, ids) {
+  const numericIds = (ids || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (numericIds.length === 0) return [];
+  const r = await client.query(
+    `SELECT id, tournament_id, competition_id, display_name, linked_team_id, status
+     FROM "Inscription" WHERE id = ANY($1::int[])
+     ORDER BY created_at DESC`,
+    [numericIds]
+  );
+  return r.rows;
+}

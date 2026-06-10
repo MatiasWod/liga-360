@@ -355,3 +355,24 @@ export async function getMatchCompetitor(driver, matchId, role, inscriptionId) {
     await session.close();
   }
 }
+
+const MAX_INSCRIPTION_IDS = 200;
+
+/** Partidos públicos por lote de inscripciones físicas (historial / calendario). */
+export async function getMatchesByInscriptionIds(driver, ids) {
+  const physicalIds = [...new Set(
+    (ids || []).map(String).filter((id) => isPhysicalInscriptionId(id))
+  )];
+  if (physicalIds.length === 0) return [];
+  if (physicalIds.length > MAX_INSCRIPTION_IDS) {
+    throw new Error(`BAD_REQUEST: maximo ${MAX_INSCRIPTION_IDS} inscripciones por consulta`);
+  }
+  const session = driver.session();
+  try {
+    const matches = await matchRepo.findByInscriptionIds(session, physicalIds);
+    await Promise.all(matches.map((mm) => resolveMatchRefs(mm, driver)));
+    return matches;
+  } finally {
+    await session.close();
+  }
+}

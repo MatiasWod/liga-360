@@ -31,6 +31,16 @@ export default defineConfig({
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api\/inscriptions/, ''),
 			},
+			'/api/matchevents': {
+				target: 'http://localhost:4006',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/matchevents/, ''),
+			},
+			'/api/matches': {
+				target: 'http://localhost:4006',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/matches/, '/matches'),
+			},
 		},
 	},
 });

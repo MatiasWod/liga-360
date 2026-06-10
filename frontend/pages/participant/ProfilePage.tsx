@@ -4,6 +4,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { LinkedTeamsSection } from '../../components/profile/LinkedTeamsSection';
+import { MyStatsSection } from '../../components/profile/MyStatsSection';
 import { Modal } from '../../components/ui/Modal';
 
 const DEFAULT_AVATAR_SRC = '/predeterminado.png';
@@ -31,6 +32,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   nickname,
   dni,
   avatarUrl,
+  participants,
   teams,
   onSaveProfile,
   loading = false,
@@ -105,6 +107,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         </div>
       </Card>
       {error && <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      <MyStatsSection participants={participants} teams={teams} />
       <LinkedTeamsSection teams={teams} />
 
       <Modal open={editOpen} title="Editar datos personales" onClose={() => setEditOpen(false)}>

@@ -16,6 +16,9 @@ export const env = {
   port: parseInt(process.env.PORT || '4006', 10),
   jwtSecret: process.env.JWT_SECRET || 'devsecret',
   postgresUrl: process.env.POSTGRES_URL || 'postgresql://liga:liga@localhost:55432/liga360_matchevents',
+  // Servicios downstream para resolver propiedad de presencias (inscription → team → owner)
+  inscriptionsSvcUrl: process.env.INSCRIPTIONS_SVC_URL || 'http://localhost:4004',
+  teamsSvcUrl: process.env.TEAMS_SVC_URL || 'http://localhost:4002',
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
