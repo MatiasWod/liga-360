@@ -1,4 +1,5 @@
 import React from 'react';
+import { TeamNameLink } from '../../components/team/TeamNameLink';
 import type { GoalRecord } from '../../components/tournament-schedule/MatchCard';
 import { RoundSelector } from '../../components/tournament-schedule/RoundSelector';
 import type { ClassificationZone } from '../../components/standings';
@@ -147,11 +148,15 @@ function CompactMatchRow({ match, goals }: { match: TournamentMatchRow; goals?: 
 	return (
 		<div className="px-3 py-1.5">
 			<div className="flex items-center gap-1 text-xs">
-				<span className="flex-1 min-w-0 text-right truncate text-text-primary">{homeName}</span>
+				<span className="flex-1 min-w-0 text-right truncate text-text-primary">
+					{match.homeAssignedInscription ? <TeamNameLink teamName={homeName} className="max-w-full truncate align-bottom" /> : homeName}
+				</span>
 				<span className={`flex-none w-11 text-center font-bold tabular-nums ${isLive ? 'text-emerald-400' : isCompleted ? 'text-text-primary' : 'text-text-muted font-normal'}`}>
 					{isCompleted || isLive ? `${match.homeScore ?? 0}–${match.awayScore ?? 0}` : 'vs'}
 				</span>
-				<span className="flex-1 min-w-0 text-left truncate text-text-primary">{awayName}</span>
+				<span className="flex-1 min-w-0 text-left truncate text-text-primary">
+					{match.awayAssignedInscription ? <TeamNameLink teamName={awayName} className="max-w-full truncate align-bottom" /> : awayName}
+				</span>
 			</div>
 			{match.scheduledAt && !isCompleted && !isLive && (
 				<p className="text-center text-[10px] text-text-muted mt-0.5">{formatScheduledAt(match.scheduledAt)}</p>
@@ -289,7 +294,9 @@ function CompactStandingsTable({ rows, zones = [] }: { rows: StandingsRow[]; zon
 									].join(' ')}
 								>
 									<td className="px-2 py-1 text-text-muted">{row.position}</td>
-									<td className="px-2 py-1 font-medium truncate">{row.displayName}</td>
+									<td className="px-2 py-1 font-medium truncate">
+										<TeamNameLink teamName={row.displayName} className="max-w-full truncate align-bottom" />
+									</td>
 									<td className="px-2 py-1 text-center">{row.played}</td>
 									<td className="px-2 py-1 text-center">{row.won}</td>
 									<td className="px-2 py-1 text-center">{row.drawn}</td>

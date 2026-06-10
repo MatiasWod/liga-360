@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
 import type { LinkedTeam, TeamInfo, TeamParticipant } from '../../types/domain';
 import { createParticipant, getTeamDetail, removeTeamMember, updateParticipant } from '../../services/teamsApi';
+import { openTeamById } from '../../services/teams/teamNav';
 
 const DEFAULT_SHIELD_SRC = '/predeterminado.png';
 
@@ -197,7 +198,20 @@ export const ParticipantTeamsPage: React.FC<ParticipantTeamsPageProps> = ({ link
                     }}
                   />
                   <span
-                    className={`text-center text-base font-semibold ${
+                    role="link"
+                    tabIndex={0}
+                    title={`Ver plantel y estadísticas de ${team.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTeamById(team.id, team.name);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.stopPropagation();
+                        openTeamById(team.id, team.name);
+                      }
+                    }}
+                    className={`cursor-pointer text-center text-base font-semibold underline-offset-2 hover:underline ${
                       selectedTeamId === team.id ? 'text-[#2E7D32]' : 'text-slate-700'
                     }`}
                   >

@@ -11,6 +11,8 @@ import { ParticipantTeamsPage } from './pages/participant/ParticipantTeamsPage';
 import { ParticipantTournamentsPage } from './pages/participant/ParticipantTournamentsPage';
 import { PublicViewerPage } from './pages/shared/PublicViewerPage';
 import { PlaceholderPage } from './pages/shared/PlaceholderPage';
+import { TeamPublicViewPage } from './pages/shared/TeamPublicViewPage';
+import { subscribeOpenTeam } from './services/teams/teamNav';
 import { TeamHomePage } from './pages/team/TeamHomePage';
 import { TeamParticipantsPage } from './pages/team/TeamParticipantsPage';
 import { TeamTournamentsPage } from './pages/team/TeamTournamentsPage';
@@ -39,9 +41,15 @@ export const App: React.FC = () => {
     const seg = window.location.pathname.replace(/^\//, '').split('/')[0] as NavItemId;
     return NAV_IDS.includes(seg) ? seg : 'inicio';
   });
+  // Vista de equipo ajena (roster + stats), accesible desde cualquier nombre de equipo.
+  const [viewTeamId, setViewTeamId] = React.useState<string | null>(() => {
+    const match = window.location.pathname.match(/^\/equipo\/(\d+)$/);
+    return match ? match[1] : null;
+  });
 
   function navigate(id: NavItemId) {
     setActiveNav(id);
+    setViewTeamId(null);
     const path = id === 'inicio' ? '/' : `/${id}`;
     if (window.location.pathname !== path) {
       window.history.pushState({ nav: id }, '', path);
@@ -50,12 +58,26 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     function onPop(e: PopStateEvent) {
+      const teamMatch = window.location.pathname.match(/^\/equipo\/(\d+)$/);
+      setViewTeamId(teamMatch ? teamMatch[1] : null);
       const id = (e.state?.nav as NavItemId) || 'inicio';
       setActiveNav(NAV_IDS.includes(id) ? id : 'inicio');
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  React.useEffect(() => {
+    // Cualquier componente puede abrir un equipo (evento global de teamNav).
+    return subscribeOpenTeam(({ teamId }) => {
+      setViewTeamId(teamId);
+      const path = `/equipo/${teamId}`;
+      if (window.location.pathname !== path) {
+        window.history.pushState({ nav: activeNav, teamView: teamId }, '', path);
+      }
+      window.scrollTo({ top: 0 });
+    });
+  }, [activeNav]);
   const [teams, setTeams] = React.useState<TeamInfo[]>([]);
   const [activeTeamId, setActiveTeamId] = React.useState<string | null>(null);
   const [teamParticipants, setTeamParticipants] = React.useState<TeamParticipant[]>([]);
@@ -378,6 +400,17 @@ export const App: React.FC = () => {
   }
 
   function renderPage() {
+    if (viewTeamId) {
+      return (
+        <TeamPublicViewPage
+          teamId={viewTeamId}
+          onBack={() => {
+            setViewTeamId(null);
+            window.history.back();
+          }}
+        />
+      );
+    }
     if (currentRole === 'organizer') {
       if (activeNav === 'torneos') {
         return <OrganizerTournamentsPage organizerName={currentUser.username || currentUser.fullName} />;

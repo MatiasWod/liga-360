@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { TeamNameLink } from '../../components/team/TeamNameLink';
 import { CompetitionPhaseFilter } from '../../components/CompetitionPhaseFilter';
 import {
   createTournamentInvite,
@@ -1008,7 +1009,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
               {pendingRequests.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
                   <div>
-                    <p className="font-medium text-slate-800">{item.display_name}</p>
+                    <p className="font-medium text-slate-800">{isTeamsTournament ? <TeamNameLink teamId={item.linked_team_id ?? undefined} teamName={item.display_name} /> : item.display_name}</p>
                     <p className="text-xs text-slate-500">
                       {competitionNameById.get(String(item.competition_id || '')) || 'Sin competencia'}
                     </p>
@@ -1037,7 +1038,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   return (
                     <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
                       <div>
-                        <p className="font-medium text-slate-800">{item.display_name}</p>
+                        <p className="font-medium text-slate-800">{isTeamsTournament ? <TeamNameLink teamId={item.linked_team_id ?? undefined} teamName={item.display_name} /> : item.display_name}</p>
                         <p className="text-xs text-slate-500">
                           {competitionNameById.get(String(item.competition_id || '')) || 'Sin competencia'}
                         </p>
@@ -1077,7 +1078,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                       <div className="flex items-center gap-2">
                         {renderEntryAvatar(item, 'h-9 w-9')}
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-800">{item.display_name}</p>
+                          <p className="truncate font-medium text-slate-800">{isTeamsTournament ? <TeamNameLink teamId={item.linked_team_id ?? undefined} teamName={item.display_name} className="max-w-full truncate align-bottom" /> : item.display_name}</p>
                           <p className="text-[11px] text-emerald-700">ACEPTADO</p>
                         </div>
                       </div>
