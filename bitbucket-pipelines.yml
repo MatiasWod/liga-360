@@ -93,12 +93,12 @@ definitions:
     - step: &docker-build-push
         runs-on:
           - self.hosted
-        image: docker:29.5.3-cli
         services:
           - docker
         caches:
           - docker
         script:
+          - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
           - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
           - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" $BUILD_CONTEXT $DOCKERFILE_ARG
           - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -144,6 +144,7 @@ pipelines:
                 - export SVC="liga360-frontend"
                 - export BUILD_CONTEXT="."
                 - export DOCKERFILE_ARG="-f deploy/frontend/Dockerfile"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f deploy/frontend/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -157,6 +158,7 @@ pipelines:
               name: Build + Push Auth Svc
               script:
                 - export SVC="liga360-auth-svc"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -170,6 +172,7 @@ pipelines:
               name: Build + Push Gateway
               script:
                 - export SVC="liga360-gateway"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/gateway
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -183,6 +186,7 @@ pipelines:
               name: Build + Push Inscriptions Svc
               script:
                 - export SVC="liga360-inscriptions-svc"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/inscriptions-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -196,6 +200,7 @@ pipelines:
               name: Build + Push Teams Svc
               script:
                 - export SVC="liga360-teams-svc"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -209,6 +214,7 @@ pipelines:
               name: Build + Push MatchEvents Svc
               script:
                 - export SVC="liga360-matchevents-svc"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/matchevents-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -222,6 +228,7 @@ pipelines:
               name: Build + Push Tournaments Svc
               script:
                 - export SVC="liga360-tournaments-svc"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/tournaments-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -235,6 +242,7 @@ pipelines:
               name: Build + Push DB Migrator
               script:
                 - export SVC="liga360-migrator"
+                - wget -qO- https://download.docker.com/linux/static/stable/x86_64/docker-26.1.5.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f database/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
