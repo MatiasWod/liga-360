@@ -159,6 +159,7 @@ pipelines:
               name: Build + Push Auth Svc
               script:
                 - export SVC="liga360-auth-svc"
+                - whoami
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
