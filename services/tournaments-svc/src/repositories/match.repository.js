@@ -356,3 +356,40 @@ export async function getMatchAdvanceMeta(session, matchId) {
     fixtureCode: r.records[0].get('fixtureCode'),
   };
 }
+
+const ORDER_HISTORICAL = `ORDER BY COALESCE(m.scheduledAt, ''), COALESCE(m.round, 1), COALESCE(m.leg, 1), m.id`;
+
+/**
+ * Partidos donde participa cualquiera de las inscripciones (ids físicos).
+ * Devuelve contexto de torneo/competencia/etapa para historial cross-torneo.
+ * Incluye partidos de etapa directa y de grupos (UNION).
+ */
+export async function findByInscriptionIds(session, inscriptionIds) {
+  if (!inscriptionIds?.length) return [];
+  const ids = inscriptionIds.map(String);
+  const res = await session.run(
+    `CALL {
+       MATCH (t:Tournament)-[:HAS_COMPETITION]->(c:Competition)-[:HAS_STAGE]->(s:Stage)-[:HAS_MATCH]->(m:Match)
+       WHERE toString(m.homeInscriptionId) IN $ids OR toString(m.awayInscriptionId) IN $ids
+       RETURN m, t, c, s
+       UNION
+       MATCH (t:Tournament)-[:HAS_COMPETITION]->(c:Competition)-[:HAS_STAGE]->(s:Stage)-[:HAS_GROUP]->(:Group)-[:HAS_MATCH]->(m:Match)
+       WHERE toString(m.homeInscriptionId) IN $ids OR toString(m.awayInscriptionId) IN $ids
+       RETURN m, t, c, s
+     }
+     RETURN m, t.id AS tournamentId, t.name AS tournamentName,
+            c.id AS competitionId, c.name AS competitionName,
+            s.id AS stageId, s.name AS stageName
+     ${ORDER_HISTORICAL}`,
+    { ids }
+  );
+  return res.records.map((r) => ({
+    ...matchFromNeoProps(r.get('m').properties),
+    tournamentId: r.get('tournamentId'),
+    tournamentName: r.get('tournamentName'),
+    competitionId: r.get('competitionId'),
+    competitionName: r.get('competitionName'),
+    stageId: r.get('stageId'),
+    stageName: r.get('stageName'),
+  }));
+}

@@ -31,6 +31,10 @@ export function createRouter() {
   router.get('/invites/:token', invite.getByToken);
   router.post('/invites/:token/use', invite.use);
 
+  // Team inscriptions (historial cross-torneo, público — antes de /teams/me/*)
+  router.get('/teams/:teamId/inscriptions', inscription.listByTeam);
+  router.get('/inscriptions/lookup', inscription.lookupByIds);
+
   // Team invites
   router.get('/teams/me/invites', requireTeamUser, teamInvite.list);
   router.post('/teams/me/invites/:id/accept', requireTeamUser, teamInvite.accept);

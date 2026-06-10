@@ -105,3 +105,25 @@ export async function getById(req, res, next) {
     next(e);
   }
 }
+
+/** Historial cross-torneo de un equipo (público). */
+export async function listByTeam(req, res, next) {
+  try {
+    const teamId = Number(req.params.teamId);
+    if (!teamId) return validationError(res, [{ field: 'teamId', message: 'teamId invalido' }]);
+    res.json(await inscriptionService.listByTeam({ teamId }));
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** Lookup público por ids (frontend compone mano a mano). */
+export async function lookupByIds(req, res, next) {
+  try {
+    const raw = String(req.query?.ids || '').trim();
+    const ids = raw ? raw.split(',').map((s) => Number(s.trim())).filter((n) => n > 0) : [];
+    res.json(await inscriptionService.lookupByIds({ ids }));
+  } catch (e) {
+    next(e);
+  }
+}

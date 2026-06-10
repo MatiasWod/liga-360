@@ -7,7 +7,7 @@ import * as inscriptionRepo from '../repositories/inscription.repository.js';
 import * as teamsClient from '../clients/teams.client.js';
 import * as tournamentsClient from '../clients/tournaments.client.js';
 import * as ownerService from './owner.service.js';
-import { conflict, notFound, translateError } from './serviceErrors.js';
+import { conflict, notFound, translateError, badRequest } from './serviceErrors.js';
 import { logger } from '../logger.js';
 
 const normalizeTeamName = (s) => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '');
@@ -208,4 +208,18 @@ export async function getById({ inscriptionId }) {
   const row = await inscriptionRepo.findById(pool, inscriptionId);
   if (!row) throw notFound('inscripcion no encontrada');
   return { inscription: row };
+}
+
+/** Historial cross-torneo de un equipo (público). Incluye rechazadas. */
+export async function listByTeam({ teamId }) {
+  const tid = Number(teamId);
+  if (!tid) throw badRequest('teamId invalido');
+  const rows = await inscriptionRepo.listByTeam(pool, tid);
+  return { teamId: tid, inscriptions: rows };
+}
+
+/** Lookup público por ids (para resolver rival en mano a mano). */
+export async function lookupByIds({ ids }) {
+  const rows = await inscriptionRepo.findByIds(pool, ids);
+  return { inscriptions: rows };
 }

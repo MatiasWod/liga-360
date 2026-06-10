@@ -1,5 +1,7 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
+import { HeadToHeadPanel } from '../../components/team-history/HeadToHeadPanel';
+import { TeamHistoryPanel } from '../../components/team-history/TeamHistoryPanel';
 import { acceptMyTeamInvite, listMyTeamInvites, rejectMyTeamInvite } from '../../services/inscriptionsApi';
 import { enrichInvitesWithTournamentData } from '../../services/tournamentsApi';
 import type { TeamInfo, TeamParticipant } from '../../types/domain';
@@ -135,6 +137,13 @@ export const TeamHomePage: React.FC<TeamHomePageProps> = ({
           ))}
         </div>
       </Card>
+
+      {team?.id ? (
+        <div className="space-y-4">
+          <TeamHistoryPanel teamId={Number(team.id)} />
+          <HeadToHeadPanel teamId={Number(team.id)} />
+        </div>
+      ) : null}
     </div>
   );
 };

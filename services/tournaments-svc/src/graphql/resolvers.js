@@ -24,6 +24,8 @@ const resolvers = {
     tournaments: (_p, _args, { driver }) => tournamentService.list(driver),
     tournament: (_p, { id }, { driver }) => tournamentService.getById(driver, id),
     competition: (_p, { id }, { driver }) => competitionService.getById(driver, id),
+    matchesByInscriptionIds: (_p, { ids }, { driver }) =>
+      matchService.getMatchesByInscriptionIds(driver, ids),
   },
   Mutation: {
     createTournament: (_p, args, context) => {

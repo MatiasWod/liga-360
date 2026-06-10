@@ -89,3 +89,33 @@ test('GET /inscriptions/:id con token de servicio responde 404 para id inexisten
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 404);
 });
+
+test('GET /teams/:teamId/inscriptions sin token responde 200 con lista vacía para equipo sin historia', async (t) => {
+  try {
+    const { pool } = await import('../config/db.js');
+    await pool.query('SELECT 1');
+  } catch {
+    return t.skip('DB no disponible');
+  }
+  const response = await request(app).get('/teams/999999999/inscriptions');
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.teamId, 999999999);
+  assert.deepEqual(response.body.inscriptions, []);
+});
+
+test('GET /teams/:teamId/inscriptions con teamId invalido responde 400', async () => {
+  const response = await request(app).get('/teams/abc/inscriptions');
+  assert.equal(response.statusCode, 400);
+});
+
+test('GET /inscriptions/lookup sin ids responde 200 con lista vacía', async (t) => {
+  try {
+    const { pool } = await import('../config/db.js');
+    await pool.query('SELECT 1');
+  } catch {
+    return t.skip('DB no disponible');
+  }
+  const response = await request(app).get('/inscriptions/lookup');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body.inscriptions, []);
+});

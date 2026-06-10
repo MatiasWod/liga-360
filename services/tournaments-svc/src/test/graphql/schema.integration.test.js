@@ -172,3 +172,22 @@ test('Transition incluye timing y placementSnapshotJson; Mutation saveTransition
   const mutationFields = new Set(mutationType.fields?.map((field) => field.name.value) || []);
   assert.equal(mutationFields.has('saveTransitionPlacementSnapshot'), true);
 });
+
+test('Query expone matchesByInscriptionIds y Match incluye contexto historico', async () => {
+  const sdl = await fs.readFile(schemaPath, 'utf8');
+  const ast = parse(sdl);
+  const queryType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Query'
+  );
+  assert.ok(queryType);
+  const queryFields = new Set(queryType.fields?.map((field) => field.name.value) || []);
+  assert.equal(queryFields.has('matchesByInscriptionIds'), true);
+
+  const matchType = ast.definitions.find(
+    (definition) => definition.kind === 'ObjectTypeDefinition' && definition.name.value === 'Match'
+  );
+  const matchFields = new Set(matchType.fields?.map((field) => field.name.value) || []);
+  for (const f of ['tournamentId', 'tournamentName', 'competitionId', 'competitionName', 'stageId', 'stageName']) {
+    assert.equal(matchFields.has(f), true, `Match.${f}`);
+  }
+});

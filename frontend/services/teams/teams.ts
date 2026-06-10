@@ -121,3 +121,16 @@ export async function resolveTeamByInviteCode(code: string) {
   const json = await parseJsonResponse(res, 'No se pudo resolver equipo por codigo');
   return json.team;
 }
+
+/** Lookup público por ids (nombres para mano a mano y desglose histórico). */
+export async function lookupTeamsByIds(ids: number[]): Promise<{ id: number; name: string }[]> {
+  const clean = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
+  if (!clean.length) return [];
+  const params = new URLSearchParams({ ids: clean.join(',') });
+  const res = await fetch(`${TEAMS_BASE}?${params}`);
+  const json = await parseJsonResponse(res, 'No se pudieron resolver equipos');
+  return (json.teams || []).map((t: { id: number; name: string }) => ({
+    id: Number(t.id),
+    name: String(t.name),
+  }));
+}
