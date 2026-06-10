@@ -96,6 +96,10 @@ definitions:
     - step: &docker-build-push
         runs-on:
           - self.hosted
+        # docker:cli trae su propio cliente docker: no depende del binario que el runner
+        # inyecta en el contenedor (roto en runners viejos → "docker: Permission denied").
+        # DOCKER_HOST ya apunta al servicio DinD, así que el cliente lo usa directo.
+        image: docker:27-cli
         services:
           - docker
         caches:
@@ -159,7 +163,6 @@ pipelines:
               name: Build + Push Auth Svc
               script:
                 - export SVC="liga360-auth-svc"
-                - whoami
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
@@ -173,11 +176,6 @@ pipelines:
               name: Build + Push Gateway
               script:
                 - export SVC="liga360-gateway"
-                # Diagnóstico temporal: docker da "Permission denied" (exit 126) en el runner.
-                - command -v docker; ls -la "$(command -v docker)" || true
-                - id
-                - findmnt -T "$(command -v docker)" || true
-                - docker version || true
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
                 - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/gateway
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
