@@ -101,11 +101,15 @@ describe('teams-svc HTTP integration', () => {
       accessCode = res.body.accessCode;
     });
 
-    test('GET /teams/:id retorna equipo con miembros', async () => {
-      const res = await httpReq('GET', `/teams/${teamId}`);
+    test('GET /teams/:id retorna equipo con miembros (logueado)', async () => {
+      const res = await httpReq('GET', `/teams/${teamId}`, null, authHeader(ownerToken));
       assert.equal(res.status, 200);
       assert.equal(res.body.team.name, 'Equipo Test');
       assert.ok(Array.isArray(res.body.members));
+    });
+
+    test('GET /teams/:id sin token → 401 (roster solo para logueados)', async () => {
+      assert.equal((await httpReq('GET', `/teams/${teamId}`)).status, 401);
     });
 
     test('GET /teams?mine=true retorna equipos del usuario', async () => {
@@ -127,7 +131,7 @@ describe('teams-svc HTTP integration', () => {
     test('POST /teams/:id/members agrega participante', async () => {
       const p = await httpReq('POST', '/participants', { firstName: 'Jugador', lastName: 'Uno', teamId, teamCode: accessCode });
       assert.equal(p.status, 201);
-      const teamRes = await httpReq('GET', `/teams/${teamId}`);
+      const teamRes = await httpReq('GET', `/teams/${teamId}`, null, authHeader(ownerToken));
       assert.ok(teamRes.body.members.map((m) => m.id).includes(p.body.participant.id));
     });
   });
