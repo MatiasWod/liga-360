@@ -1,6 +1,9 @@
 image: alpine:3.20
 
 definitions:
+  services:
+    docker:
+      memory: 3072
 
   caches:
     npm: .npm
