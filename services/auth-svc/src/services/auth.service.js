@@ -16,15 +16,17 @@ function signToken(user) {
   );
 }
 
-export async function register({ mode, username, password, name }) {
+export async function register({ mode, username, password, name, firstName, lastName, nickname, dni }) {
   const existing = await userRepository.findByUsername(username);
   if (existing) {
     throw Object.assign(new Error('username already exists'), { statusCode: 409, code: 'CONFLICT' });
   }
 
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+  // Se guarda el username tal como lo escribió el usuario (p. ej. "FIFA"): la unicidad
+  // y el login son case-insensitive (índice único sobre LOWER(username) + lookup LOWER=LOWER).
   const user = await userRepository.create({
-    username: username.trim().toLowerCase(),
+    username: username.trim(),
     password: hashedPassword,
     type: mode,
   });
@@ -43,7 +45,7 @@ export async function register({ mode, username, password, name }) {
 
   if (mode === 'participant') {
     try {
-      await teamsClient.createParticipant({ name: name.trim(), token });
+      await teamsClient.createParticipant({ name: name.trim(), firstName, lastName, nickname, dni, token });
     } catch (err) {
       logger.error({ err: err.message, userId: user.id }, 'failed to create participant in teams-svc, rolling back user');
       await userRepository.deleteById(user.id);
