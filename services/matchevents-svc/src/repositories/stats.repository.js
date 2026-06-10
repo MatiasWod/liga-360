@@ -113,7 +113,13 @@ export async function eventsByInscription(client, { tournamentId, inscriptionId 
 }
 
 /** Eventos de un Participant (linked_member_id) agrupados por torneo/competencia. */
-export async function participantEventTotals(client, memberId) {
+export async function participantEventTotals(client, memberId, inscriptionIds = null) {
+  const params = [Number(memberId)];
+  let insFilter = '';
+  if (inscriptionIds?.length) {
+    params.push(inscriptionIds);
+    insFilter = ` AND inscription_id = ANY($2::int[])`;
+  }
   const r = await client.query(
     `SELECT tournament_id, competition_id,
             COUNT(*) FILTER (WHERE event_type = 'goal')::int AS goals,
@@ -121,23 +127,29 @@ export async function participantEventTotals(client, memberId) {
             COUNT(*) FILTER (WHERE event_type = 'red_card')::int AS red_cards,
             COALESCE(SUM(suspension_matches) FILTER (WHERE event_type = 'suspension'), 0)::int AS suspension_matches
      FROM "MatchEvent"
-     WHERE linked_member_id = $1
+     WHERE linked_member_id = $1${insFilter}
      GROUP BY tournament_id, competition_id
      ORDER BY tournament_id, competition_id`,
-    [Number(memberId)]
+    params
   );
   return r.rows;
 }
 
 /** Presencias de un Participant agrupadas por torneo/competencia (PJ real). */
-export async function participantPresenceTotals(client, memberId) {
+export async function participantPresenceTotals(client, memberId, inscriptionIds = null) {
+  const params = [Number(memberId)];
+  let insFilter = '';
+  if (inscriptionIds?.length) {
+    params.push(inscriptionIds);
+    insFilter = ` AND inscription_id = ANY($2::int[])`;
+  }
   const r = await client.query(
     `SELECT tournament_id, competition_id, COUNT(*)::int AS matches_played
      FROM "MatchPresence"
-     WHERE linked_member_id = $1
+     WHERE linked_member_id = $1${insFilter}
      GROUP BY tournament_id, competition_id
      ORDER BY tournament_id, competition_id`,
-    [Number(memberId)]
+    params
   );
   return r.rows;
 }

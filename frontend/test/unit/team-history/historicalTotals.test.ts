@@ -64,6 +64,15 @@ describe('computeHistoricalTotals', () => {
     const { totals } = computeHistoricalTotals(matches, [10]);
     expect(totals.played).toBe(0);
   });
+
+  it('deduplica el mismo cruce con distinto id Neo4j', () => {
+    const matches = [
+      finished('m1', 10, 20, 2, 1, { round: 1 }),
+      finished('m1-dup', 10, 20, 2, 1, { round: 1 }),
+    ];
+    const { totals } = computeHistoricalTotals(matches, [10]);
+    expect(totals.played).toBe(1);
+  });
 });
 
 describe('head to head helpers', () => {

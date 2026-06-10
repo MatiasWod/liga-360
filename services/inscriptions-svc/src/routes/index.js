@@ -14,8 +14,9 @@ import * as participantInvite from '../controllers/participantInvite.controller.
 export function createRouter() {
   const router = Router();
 
-  // Inscriptions
+  // Inscriptions (rutas literales antes de /:id para evitar que "lookup" matchee como id)
   router.post('/inscriptions', inscription.create);
+  router.get('/inscriptions/lookup', inscription.lookupByIds);
   router.patch('/inscriptions/:id/status', requireOrganizer, inscription.updateStatus);
   router.patch('/inscriptions/:id/competition', requireOrganizer, inscription.moveCompetition);
   router.post('/inscriptions/:id/associate', requireTeamUser, inscription.associate);
@@ -33,7 +34,6 @@ export function createRouter() {
 
   // Team inscriptions (historial cross-torneo, público — antes de /teams/me/*)
   router.get('/teams/:teamId/inscriptions', inscription.listByTeam);
-  router.get('/inscriptions/lookup', inscription.lookupByIds);
 
   // Team invites
   router.get('/teams/me/invites', requireTeamUser, teamInvite.list);

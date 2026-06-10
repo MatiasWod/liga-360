@@ -216,6 +216,37 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
       assert.equal(r.status, 201);
       assert.equal(r.body.competition_id, CID);
       assert.equal(r.body.inscription_id, 10);
+      const pres = await req('GET', `/matches/${MATCH_B}/presences`);
+      assert.equal(pres.status, 200);
+      assert.ok(pres.body.some((p) => p.linked_member_id === 100));
+    })();
+  });
+
+  test('POST evento con invitado (sin plantilla) crea presencia automatica', (t) => {
+    if (!dbAvailable) return t.skip('sin DB');
+    const MATCH_G = `m-itest-guest-${Date.now()}`;
+    return (async () => {
+      const created = await req(
+        'POST',
+        `/matches/${MATCH_G}/events`,
+        {
+          event_type: 'goal',
+          tournament_id: TID,
+          competition_id: CID,
+          inscription_id: 11,
+          display_name: 'Invitado Gol',
+          minute: 12,
+        },
+        { Authorization: `Bearer ${organizerToken}` }
+      );
+      assert.equal(created.status, 201);
+      const pres = await req('GET', `/matches/${MATCH_G}/presences`);
+      assert.equal(pres.status, 200);
+      const guest = pres.body.find((p) => p.display_name === 'Invitado Gol');
+      assert.ok(guest);
+      assert.equal(guest.is_guest, true);
+      assert.equal(guest.linked_member_id, null);
+      assert.equal(guest.inscription_id, 11);
     })();
   });
 });

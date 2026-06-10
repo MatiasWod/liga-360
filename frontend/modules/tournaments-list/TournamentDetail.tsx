@@ -11,6 +11,7 @@ import {
 } from './teamDisplayName';
 import { listMatchEvents } from '../../services/matchEvents/matchEvents';
 import { CompetitionStatsPanel } from './stats/CompetitionStatsPanel';
+import { dedupeCompetitionsByName } from '../team-presences/matchDedupe';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage, StandingsRow } from './types';
 
 // ---------------------------------------------------------------------------
@@ -458,7 +459,8 @@ export const TournamentDetail: React.FC<{ id: string; onBack: () => void; onConf
 
 	if (!t && !loading && !error) return null;
 
-	const sortedComps = t ? [...t.competitions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) : [];
+	/** Evita pills duplicadas cuando el torneo tiene competiciones repetidas (p. ej. re-seed). */
+	const sortedComps = t ? dedupeCompetitionsByName([...t.competitions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) : [];
 	const competition = sortedComps.find((c) => c.id === competitionId) ?? sortedComps[0] ?? null;
 	const selectableStages = competition
 		? [...competition.stages]

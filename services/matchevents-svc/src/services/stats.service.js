@@ -1,7 +1,16 @@
 /** Lógica de estadísticas agregadas por Competencia/Torneo (lecturas públicas). */
 import { pool } from '../config/db.js';
 import * as statsRepo from '../repositories/stats.repository.js';
+import * as inscriptionsClient from '../clients/inscriptions.client.js';
 import { mergeParticipantTotals } from '../domain/presence.js';
+
+const EMPTY_PARTICIPANT_TOTALS = {
+  goals: 0,
+  yellowCards: 0,
+  redCards: 0,
+  suspensionMatches: 0,
+  matchesPlayed: null,
+};
 
 function toPlayerRow(row) {
   return {
@@ -29,11 +38,23 @@ export async function getCards({ tournamentId, competitionId }) {
   }));
 }
 
-/** Stats de un Participant: totales + desglose por torneo/competencia. */
-export async function getParticipantStats({ memberId }) {
+/** Stats de un Participant: totales + desglose por torneo/competencia. Opcional teamId filtra por inscripciones del equipo. */
+export async function getParticipantStats({ memberId, teamId = null }) {
+  let inscriptionIds = null;
+  if (teamId != null) {
+    const tid = Number(teamId);
+    if (!tid) {
+      return { memberId: Number(memberId), totals: { ...EMPTY_PARTICIPANT_TOTALS }, byTournament: [] };
+    }
+    const rows = await inscriptionsClient.listTeamInscriptions(tid);
+    inscriptionIds = rows.map((r) => Number(r.id)).filter((n) => Number.isFinite(n) && n > 0);
+    if (!inscriptionIds.length) {
+      return { memberId: Number(memberId), totals: { ...EMPTY_PARTICIPANT_TOTALS }, byTournament: [] };
+    }
+  }
   const [eventRows, presenceRows] = await Promise.all([
-    statsRepo.participantEventTotals(pool, memberId),
-    statsRepo.participantPresenceTotals(pool, memberId),
+    statsRepo.participantEventTotals(pool, memberId, inscriptionIds),
+    statsRepo.participantPresenceTotals(pool, memberId, inscriptionIds),
   ]);
   const { totals, byTournament } = mergeParticipantTotals(eventRows, presenceRows);
   return { memberId: Number(memberId), totals, byTournament };

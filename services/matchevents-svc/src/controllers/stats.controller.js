@@ -42,7 +42,9 @@ export async function participantStats(req, res, next) {
   try {
     const memberId = Number(req.params.memberId);
     if (!memberId) return validationError(res, 'memberId invalido');
-    res.json(await statsService.getParticipantStats({ memberId }));
+    const teamIdRaw = req.query?.teamId;
+    const teamId = teamIdRaw != null && String(teamIdRaw).trim() !== '' ? Number(teamIdRaw) : null;
+    res.json(await statsService.getParticipantStats({ memberId, teamId: Number.isFinite(teamId) && teamId > 0 ? teamId : null }));
   } catch (e) {
     next(e);
   }

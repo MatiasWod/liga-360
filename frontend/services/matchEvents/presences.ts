@@ -89,7 +89,8 @@ export interface ParticipantStats {
   byTournament: ParticipantTournamentStats[];
 }
 
-export async function getParticipantStats(memberId: number): Promise<ParticipantStats> {
-  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/participants/${memberId}/stats`);
+export async function getParticipantStats(memberId: number, options?: { teamId?: number }): Promise<ParticipantStats> {
+  const params = options?.teamId ? `?teamId=${Number(options.teamId)}` : '';
+  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/participants/${memberId}/stats${params}`);
   return handleResponse<ParticipantStats>(res);
 }

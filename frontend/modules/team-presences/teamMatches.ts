@@ -3,6 +3,7 @@
  * inscripción del equipo desde el detalle GraphQL del torneo. Sin React ni fetch.
  */
 import type { TournamentEntity, TournamentMatchRow } from '../tournaments-list/types';
+import { dedupeCompetitionsByName, matchFixtureKey } from './matchDedupe';
 
 export interface TeamMatchItem {
   match: TournamentMatchRow;
@@ -27,17 +28,22 @@ export function collectMatchesForInscription(
   inscriptionId: number
 ): TeamMatchItem[] {
   if (!tournament) return [];
+  const competitions = dedupeCompetitionsByName(tournament.competitions || []);
   const items: TeamMatchItem[] = [];
-  for (const c of tournament.competitions || []) {
+  const seenKeys = new Set<string>();
+  for (const c of competitions) {
     for (const s of c.stages || []) {
       const allMatches = [
         ...(s.matches || []),
         ...((s.groups || []).flatMap((g) => g.matches || [])),
       ];
       for (const m of allMatches) {
+        const fixtureKey = matchFixtureKey(m);
+        if (seenKeys.has(fixtureKey)) continue;
         const home = slotInscriptionId(m.homeAssignedInscription);
         const away = slotInscriptionId(m.awayAssignedInscription);
         if (home === inscriptionId || away === inscriptionId) {
+          seenKeys.add(fixtureKey);
           items.push({ match: m, competitionId: c.id, competitionName: c.name, stageName: s.name });
         }
       }
@@ -50,13 +56,17 @@ export function collectMatchesForInscription(
   });
 }
 
-/** Inscripción del equipo en el torneo (linked_team_id), o null si no está inscripto. */
+/** Inscripción activa del equipo en el torneo (linked_team_id). Si hay varias, la de menor id. */
 export function findTeamInscriptionId(
   inscriptions: { id: number | string; linked_team_id?: number | null; status?: string | null }[],
   teamId: number
 ): number | null {
-  const active = inscriptions.find(
-    (i) => Number(i.linked_team_id || 0) === teamId && String(i.status || '').toUpperCase() !== 'RECHAZADO'
-  );
-  return active ? Number(active.id) : null;
+  const active = inscriptions
+    .filter(
+      (i) => Number(i.linked_team_id || 0) === teamId && String(i.status || '').toUpperCase() !== 'RECHAZADO'
+    )
+    .map((i) => Number(i.id))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b);
+  return active.length ? active[0] : null;
 }

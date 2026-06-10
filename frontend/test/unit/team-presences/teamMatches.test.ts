@@ -53,6 +53,34 @@ describe('collectMatchesForInscription', () => {
     expect(items.some((i) => i.match.id === 'm4')).toBe(true);
   });
 
+  it('deduplica partidos repetidos entre competiciones/etapas', () => {
+    const dupTournament = {
+      ...tournament,
+      competitions: [
+        ...(tournament.competitions || []),
+        {
+          id: 'c2',
+          name: 'Primera',
+          order: 2,
+          stages: [
+            {
+              id: 's3',
+              name: 'Copia',
+              format: 'league',
+              order: 1,
+              matches: [
+                match('m2-dup', 10, 20, 2, { round: 2 }),
+                match('m1-dup', 20, 10, 1, { round: 1 }),
+              ],
+            },
+          ],
+        },
+      ],
+    } as unknown as TournamentEntity;
+    const items = collectMatchesForInscription(dupTournament, 10);
+    expect(items.map((i) => i.match.id)).toEqual(['m4', 'm1', 'm2']);
+  });
+
   it('devuelve vacío sin torneo o sin partidos del equipo', () => {
     expect(collectMatchesForInscription(null, 10)).toEqual([]);
     expect(collectMatchesForInscription(tournament, 99)).toEqual([]);
