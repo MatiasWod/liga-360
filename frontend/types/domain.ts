@@ -1,4 +1,4 @@
-export type NavItemId = 'inicio' | 'equipos' | 'participantes' | 'torneos' | 'perfil';
+export type NavItemId = 'inicio' | 'agenda' | 'equipos' | 'participantes' | 'torneos' | 'perfil';
 export type UserRole = 'organizer' | 'team' | 'participant';
 
 export interface NavItem {

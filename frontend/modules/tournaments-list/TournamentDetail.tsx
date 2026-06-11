@@ -350,6 +350,54 @@ function firstGroupRoundKey(groups: { matches?: TournamentMatchRow[] }[]): strin
 	return minRound === Infinity ? '' : `${minRound}|${minLeg}`;
 }
 
+export interface TournamentFixtureFocus {
+	competitionId?: string | null;
+	stageId?: string | null;
+	roundKey?: string | null;
+}
+
+function roundKeysForStage(stage: TournamentStage): Set<string> {
+	const keys = new Set<string>();
+	const collect = (matches: TournamentMatchRow[]) => {
+		for (const m of matches) {
+			keys.add(`${m.round ?? 0}|${m.leg ?? 1}`);
+		}
+	};
+	if (stage.format === 'groups') {
+		for (const g of stage.groups || []) collect(g.matches || []);
+	} else {
+		collect(stage.matches || []);
+	}
+	return keys;
+}
+
+function resolveFixtureFocus(
+	tournament: TournamentEntity,
+	focus: TournamentFixtureFocus
+): { competitionId: string; stageId: string; roundKey: string } | null {
+	if (!focus.competitionId && !focus.stageId && !focus.roundKey) return null;
+	const sortedComps = dedupeCompetitionsByName(
+		[...(tournament.competitions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+	);
+	const competition =
+		sortedComps.find((c) => c.id === focus.competitionId) ?? sortedComps[0] ?? null;
+	if (!competition) return null;
+	const selectableStages = [...competition.stages]
+		.filter((s) => s.format === 'league' || s.format === 'elimination' || s.format === 'groups')
+		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+	const stage =
+		selectableStages.find((s) => s.id === focus.stageId) ?? selectableStages[0] ?? null;
+	if (!stage) return null;
+	const availableRounds = roundKeysForStage(stage);
+	const fallbackRound = stageFirstRoundKey(stage);
+	const roundKey =
+		focus.roundKey && availableRounds.has(focus.roundKey)
+			? focus.roundKey
+			: fallbackRound;
+	if (!roundKey) return null;
+	return { competitionId: competition.id, stageId: stage.id, roundKey };
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -360,8 +408,10 @@ export const TournamentDetail: React.FC<{
 	onConfig?: () => void;
 	/** Vista inicial al abrir (p. ej. desde pestaña Finalizados en vista pública). */
 	defaultDetailView?: 'fixture' | 'stats' | 'history';
+	/** Competición / etapa / fecha al abrir desde Agenda u otra vista contextual. */
+	initialFixtureFocus?: TournamentFixtureFocus;
 	onViewSeries?: (seriesId: string) => void;
-}> = ({ id, onBack, onConfig, defaultDetailView = 'fixture', onViewSeries }) => {
+}> = ({ id, onBack, onConfig, defaultDetailView = 'fixture', initialFixtureFocus, onViewSeries }) => {
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const [t, setT] = React.useState<TournamentEntity | null>(null);
@@ -404,15 +454,26 @@ export const TournamentDetail: React.FC<{
 				setInscriptionNameById(mergeInscriptionNameLookups(fromApi, fromGraph));
 
 				if (tournament) {
-					// Task 1.1: init to first competition/stage by order
-					const sortedComps = [...(tournament.competitions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-					const firstComp = sortedComps[0];
-					if (firstComp) {
-						setCompetitionId(firstComp.id);
-						const firstStage = [...firstComp.stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
-						if (firstStage) {
-							setStageId(firstStage.id);
-							setGroupRoundKey(stageFirstRoundKey(firstStage));
+					const entityTyped = tournament as TournamentEntity;
+					const focused = initialFixtureFocus
+						? resolveFixtureFocus(entityTyped, initialFixtureFocus)
+						: null;
+					if (focused) {
+						setDetailView('fixture');
+						setCompetitionId(focused.competitionId);
+						setStageId(focused.stageId);
+						setGroupRoundKey(focused.roundKey);
+					} else {
+						// Task 1.1: init to first competition/stage by order
+						const sortedComps = [...(tournament.competitions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+						const firstComp = sortedComps[0];
+						if (firstComp) {
+							setCompetitionId(firstComp.id);
+							const firstStage = [...firstComp.stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+							if (firstStage) {
+								setStageId(firstStage.id);
+								setGroupRoundKey(stageFirstRoundKey(firstStage));
+							}
 						}
 					}
 
@@ -460,7 +521,7 @@ export const TournamentDetail: React.FC<{
 			}
 		}
 		load();
-	}, [id]);
+	}, [id, initialFixtureFocus?.competitionId, initialFixtureFocus?.stageId, initialFixtureFocus?.roundKey]);
 
 	function handleCompetitionChange(cid: string) {
 		setCompetitionId(cid);

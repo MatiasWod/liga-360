@@ -25,6 +25,7 @@ const GRAPHQL_URL = process.env.GRAPHQL_URL || 'http://localhost:4000/graphql';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SEED_TEAM_TOURNAMENT = 'Liga Demo Liga360';
+const SEED_ACTIVE_TEAM_TOURNAMENT = 'Liga Activos Demo Liga360';
 const SEED_INDIV_TOURNAMENT = 'Torneo individual demo';
 
 const USERS = [
@@ -411,13 +412,193 @@ async function populateTeamsTournament(orgToken, teamNameToTeamId, tournamentId)
   console.log(`  resultados cargados: ${toFinish.length} partidos (${unfinished.length - toFinish.length} pendientes para seed:stats-demo)`);
 }
 
+function isFinishedMatchStatus(status) {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'finished' || s === 'completed';
+}
+
+const TOURNAMENT_DETAIL_ACTIVE = `
+query ($id: ID!) {
+  tournament(id: $id) {
+    id name status
+    competitions {
+      id name order
+      stages {
+        id name format order stageStatus
+        matches { id status round leg }
+      }
+    }
+  }
+}`;
+
+/** Torneo de equipos publicado, etapa activa y fecha 2+ pendiente (Agenda participante Ana: Alpha + Delta). */
+async function seedActiveTeamsTournament(orgToken, teamNameToTeamId) {
+  const existingId = await findTournamentIdByName(orgToken, SEED_ACTIVE_TEAM_TOURNAMENT);
+  if (existingId) {
+    console.log(`  torneo activo equipos ya existe: ${existingId} — verificando fixture`);
+    await populateActiveTeamsTournament(orgToken, teamNameToTeamId, existingId);
+    return;
+  }
+
+  const created = await gql(orgToken, MUT_CREATE_TOURNAMENT, {
+    name: SEED_ACTIVE_TEAM_TOURNAMENT,
+    sport: 'fútbol',
+    season: '2026',
+    venue: 'Polideportivo Centro',
+    participantType: 'teams',
+    maxSlots: 16,
+    inscriptionMode: 'public',
+    status: 'published',
+  });
+  const tournamentId = created.t.id;
+  console.log(`  torneo activo equipos: ${tournamentId} (${created.t.name})`);
+  await populateActiveTeamsTournament(orgToken, teamNameToTeamId, tournamentId);
+}
+
+async function populateActiveTeamsTournament(orgToken, teamNameToTeamId, tournamentId) {
+  const detail = await gql(orgToken, TOURNAMENT_DETAIL_ACTIVE, { id: tournamentId });
+  const tournament = detail.tournament;
+
+  let competitionId;
+  let stageId;
+  const existingComp = (tournament?.competitions || []).find((c) => c.name === 'Primera división');
+  if (existingComp) {
+    competitionId = existingComp.id;
+    const existingStage = (existingComp.stages || []).find(
+      (s) => s.name === 'Fase regular' || s.format === 'league'
+    );
+    stageId = existingStage?.id;
+  }
+
+  if (!competitionId) {
+    const comp = await gql(orgToken, MUT_CREATE_COMPETITION, {
+      tournamentId,
+      name: 'Primera división',
+      order: 1,
+      maxSlots: 16,
+    });
+    competitionId = comp.c.id;
+  }
+
+  if (!stageId) {
+    const stage = await gql(orgToken, MUT_ADD_STAGE_LEAGUE, {
+      competitionId,
+      name: 'Fase regular',
+      order: 1,
+      configJson: '{"numParticipants":4}',
+    });
+    stageId = stage.s.id;
+    console.log(`  etapa liga activa: ${stageId}`);
+  }
+
+  const existingCount = inscriptionCountForTournament(tournamentId);
+  if (existingCount >= 4) {
+    console.log(`  inscripciones activas ya existen (${existingCount})`);
+  } else {
+    const teamSeedRows = [
+      { name: 'Equipo Alpha', display: 'Equipo Alpha' },
+      { name: 'Equipo Beta', display: 'Equipo Beta' },
+      { name: 'Equipo Gamma', display: 'Equipo Gamma' },
+      { name: 'Equipo Delta', display: 'Equipo Delta' },
+    ];
+    for (const row of teamSeedRows) {
+      const linkedTeamId = teamNameToTeamId.get(row.name);
+      if (linkedTeamId == null) {
+        throw new Error(`seed activo: no hay teamId para "${row.name}"`);
+      }
+      const inscriptionId = await createApprovedTeamInscription(orgToken, {
+        tournamentId,
+        competitionId,
+        linkedTeamId,
+        displayName: row.display,
+      });
+      await gql(orgToken, MUT_ASSIGN_INSCRIPTION, {
+        stageId,
+        inscriptionId: String(inscriptionId),
+        tournamentId,
+        displayName: row.display,
+      });
+    }
+    console.log('  inscripciones activas: Alpha, Beta, Gamma, Delta');
+  }
+
+  const afterDetail = await gql(orgToken, TOURNAMENT_DETAIL_ACTIVE, { id: tournamentId });
+  let matches = [];
+  if (countStageMatches(afterDetail.tournament) > 0) {
+    for (const c of afterDetail.tournament?.competitions || []) {
+      for (const s of c.stages || []) {
+        matches.push(...(s.matches || []));
+      }
+    }
+  } else {
+    const gen = await gql(orgToken, MUT_GEN_RR, { stageId, doubleRound: false });
+    matches = gen.matches || [];
+    console.log(`  fixture activo generado: ${matches.length} partidos`);
+  }
+
+  const roundOnePending = matches.filter(
+    (m) => (m.round ?? 0) === 1 && !isFinishedMatchStatus(m.status)
+  );
+  for (const m of roundOnePending) {
+    await gql(orgToken, MUT_UPDATE_RESULT, {
+      matchId: m.id,
+      homeScore: 2,
+      awayScore: 1,
+      status: 'finished',
+    });
+  }
+  if (roundOnePending.length > 0) {
+    console.log(`  fecha 1 cerrada: ${roundOnePending.length} partido(s)`);
+  }
+
+  const stageRow = (afterDetail.tournament?.competitions || [])
+    .flatMap((c) => c.stages || [])
+    .find((s) => s.id === stageId);
+  if (String(stageRow?.stageStatus || '').toLowerCase() !== 'active') {
+    await gql(orgToken, MUT_SET_STAGE_STATUS, { stageId, status: 'active' });
+    console.log('  etapa marcada como active');
+  }
+
+  const finalDetail = await gql(orgToken, TOURNAMENT_DETAIL_ACTIVE, { id: tournamentId });
+  const finalMatches = (finalDetail.tournament?.competitions || []).flatMap((c) =>
+    (c.stages || []).flatMap((s) => s.matches || [])
+  );
+  const stillPending = finalMatches.filter((m) => !isFinishedMatchStatus(m.status));
+  const minPendingRound =
+    stillPending.length > 0 ? Math.min(...stillPending.map((m) => m.round ?? 99)) : null;
+  console.log(
+    `  torneo activo listo: ${stillPending.length} partido(s) pendiente(s)${
+      minPendingRound != null ? `, próxima fecha ${minPendingRound}` : ''
+    }`
+  );
+}
+
+/** Corrige seeds viejos que guardaron Participant.id en vez de auth user.id. */
+function repairIndividualInscriptionAuthUserIds(tournamentId, participants) {
+  for (const p of participants) {
+    const authUserId = Number(p.linkedParticipantUserId);
+    const displayName = String(p.displayName || '').replace(/'/g, "''");
+    const tid = String(tournamentId).replace(/'/g, "''");
+    if (!Number.isFinite(authUserId) || authUserId <= 0 || !displayName) continue;
+    try {
+      execSync(
+        `docker compose exec -T postgres psql -U liga -d liga360_inscriptions -c "UPDATE \\"Inscription\\" SET linked_participant_user_id = ${authUserId} WHERE tournament_id = '${tid}' AND display_name = '${displayName}' AND competitor_kind = 'participant'"`,
+        { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+      );
+    } catch {
+      // Sin Docker local: el alta nueva ya usa auth user.id.
+    }
+  }
+}
+
 /**
  * @param {Array<{ linkedParticipantUserId: number; displayName: string }>} participants
  */
 async function seedIndividualsTournament(orgToken, participants) {
   const existingId = await findTournamentIdByName(orgToken, SEED_INDIV_TOURNAMENT);
   if (existingId) {
-    console.log(`  torneo individual ya existe: ${existingId} — omitiendo creación`);
+    console.log(`  torneo individual ya existe: ${existingId} — reparando vínculos de usuario`);
+    repairIndividualInscriptionAuthUserIds(existingId, participants);
     return;
   }
 
@@ -463,6 +644,7 @@ async function seedIndividualsTournament(orgToken, participants) {
     });
   }
   await gql(orgToken, MUT_GEN_RR, { stageId: sid2, doubleRound: false });
+  repairIndividualInscriptionAuthUserIds(tid2, participants);
   console.log(`  torneo individual: ${tid2} (3 jugadores, fixture generado)`);
 }
 
@@ -534,6 +716,11 @@ mutation ($matchId: ID!, $homeScore: Int, $awayScore: Int, $status: String) {
   }
 }`;
 
+const MUT_SET_STAGE_STATUS = `
+mutation ($stageId: ID!, $status: String!) {
+  setStageStatus(stageId: $stageId, status: $status) { id stageStatus }
+}`;
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -588,7 +775,10 @@ Ejemplo:
     { username: 'participante_luis', dni: '31234567', firstName: 'Luis', lastName: 'Pérez' },
     { username: 'participante_mia', dni: '32345678', firstName: 'Mia', lastName: 'Rodríguez' },
   ];
-  const participantIds = [];
+  /** Participant.id en teams-svc (miembros de plantilla). */
+  const participantRosterIds = [];
+  /** User.id en auth-svc (linked_participant_user_id en inscripciones). */
+  const participantAuthUserIds = [];
   for (const pu of participantUsernames) {
     const { user } = await loginWithUser(pu);
     if (user?.type !== 'participant') {
@@ -598,9 +788,10 @@ Ejemplo:
     if (pid == null) {
       throw new Error(`usuario ${pu} sin Participant en teams-svc (¿Docker/Postgres arriba?)`);
     }
-    participantIds.push(pid);
+    participantRosterIds.push(pid);
+    participantAuthUserIds.push(Number(user.id));
   }
-  const assignCycle = [participantIds[0], participantIds[1], participantIds[2], participantIds[0]];
+  const assignCycle = [participantRosterIds[0], participantRosterIds[1], participantRosterIds[2], participantRosterIds[0]];
   for (let i = 0; i < teamRows.length; i += 1) {
     const { token, teamId, name } = teamRows[i];
     const pid = assignCycle[i];
@@ -638,10 +829,11 @@ Ejemplo:
   const orgToken = await login('organizador');
   const teamNameToTeamId = new Map(teamRows.map((r) => [r.name, r.teamId]));
   await seedTeamsTournament(orgToken, teamNameToTeamId);
+  await seedActiveTeamsTournament(orgToken, teamNameToTeamId);
   const indivParticipants = [
-    { linkedParticipantUserId: participantIds[0], displayName: 'Ana García' },
-    { linkedParticipantUserId: participantIds[1], displayName: 'Luis Pérez' },
-    { linkedParticipantUserId: participantIds[2], displayName: 'Mia Rodríguez' },
+    { linkedParticipantUserId: participantAuthUserIds[0], displayName: 'Ana García' },
+    { linkedParticipantUserId: participantAuthUserIds[1], displayName: 'Luis Pérez' },
+    { linkedParticipantUserId: participantAuthUserIds[2], displayName: 'Mia Rodríguez' },
   ];
   await seedIndividualsTournament(orgToken, indivParticipants);
 
