@@ -22,7 +22,9 @@ export function createRouter() {
   router.post('/inscriptions/:id/associate', requireTeamUser, inscription.associate);
   // Endpoint interno service-to-service (matchevents-svc resuelve inscription → linked_team_id)
   router.get('/inscriptions/:id', requireServiceToken, inscription.getById);
-  router.get('/tournaments/:id/inscriptions', requireAuthMiddleware, inscription.listByTournament);
+  // Público: los nombres/imágenes de inscripciones ya son visibles en el fixture público
+  // (la vista de torneos para anónimos también muestra escudos/avatares).
+  router.get('/tournaments/:id/inscriptions', inscription.listByTournament);
   router.get('/competitions/:id/inscriptions', requireAuthMiddleware, inscription.listByCompetition);
 
   // Invites (rutas específicas antes de /:token)

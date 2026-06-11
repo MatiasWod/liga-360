@@ -33,3 +33,9 @@ export async function getProfileIdByUser(userId) {
   const body = await svcGet(BASE, `/profiles?userId=${encodeURIComponent(userId)}`);
   return body?.profile?.id ?? null;
 }
+
+/** Profile completo por usuario (avatar para inscripciones de participantes). */
+export async function getProfileByUser(userId) {
+  const body = await svcGet(BASE, `/profiles?userId=${encodeURIComponent(userId)}`);
+  return body?.profile ?? null;
+}

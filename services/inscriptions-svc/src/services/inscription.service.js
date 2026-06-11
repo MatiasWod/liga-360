@@ -163,11 +163,37 @@ export async function associate({ inscriptionId, user }) {
   }
 }
 
+/** Avatares de participantes (kind=participant con usuario vinculado) vía Person_Profile. */
+async function loadParticipantAvatars(rows) {
+  const userIds = [...new Set(
+    rows
+      .filter((r) => String(r.competitor_kind || '') === 'participant' && r.linked_participant_user_id != null)
+      .map((r) => Number(r.linked_participant_user_id))
+      .filter((n) => Number.isFinite(n) && n > 0)
+  )];
+  if (userIds.length === 0) return {};
+  const settled = await Promise.allSettled(userIds.map(async (uid) => [uid, await teamsClient.getProfileByUser(uid)]));
+  const avatarByUserId = {};
+  for (const e of settled) {
+    if (e.status === 'fulfilled' && e.value[1]?.avatar_url) avatarByUserId[e.value[0]] = e.value[1].avatar_url;
+  }
+  return avatarByUserId;
+}
+
 async function hydrateInscriptionsWithTeams(rows) {
+  // Imagen del competidor: escudo del equipo o avatar del participante, según el kind.
+  const avatarByUserId = await loadParticipantAvatars(rows).catch(() => ({}));
+  const imageFor = (r, teamBadgeUrl) => {
+    if (String(r.competitor_kind || '') === 'participant') {
+      return avatarByUserId[Number(r.linked_participant_user_id)] ?? null;
+    }
+    return teamBadgeUrl ?? null;
+  };
+
   const ids = [...new Set(rows.map((r) => r.linked_team_id).filter((v) => v != null))];
   const names = [...new Set(rows.map((r) => r.display_name).filter(Boolean))];
   if (ids.length === 0 && names.length === 0) {
-    return rows.map((r) => ({ ...r, team_badge_url: null }));
+    return rows.map((r) => ({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
   }
   // Degradación elegante: si teams-svc no responde, devolvemos el listado SIN enriquecer
   // (nombre/escudo del equipo) en lugar de fallar toda la petición con 502.
@@ -176,7 +202,7 @@ async function hydrateInscriptionsWithTeams(rows) {
     teams = await teamsClient.resolveTeams(ids, names);
   } catch (err) {
     logger.warn({ err: err.message }, 'teams-svc no disponible: inscripciones sin enriquecer con equipo');
-    return rows.map((r) => ({ ...r, team_badge_url: null }));
+    return rows.map((r) => ({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
   }
   const byId = {};
   const byName = {};
@@ -189,7 +215,7 @@ async function hydrateInscriptionsWithTeams(rows) {
     const display_name = team && team.name ? team.name : r.display_name;
     const fallback = byName[normalizeTeamName(r.display_name)];
     const team_badge_url = team && team.badge_url != null ? team.badge_url : (fallback?.badge_url ?? null);
-    return { ...r, display_name, team_badge_url };
+    return { ...r, display_name, team_badge_url, competitor_image_url: imageFor(r, team_badge_url) };
   });
 }
 
