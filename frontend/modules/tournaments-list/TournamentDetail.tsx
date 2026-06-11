@@ -203,7 +203,9 @@ function CompactMatchRow({ match, goals, badgeById }: {
 }
 
 // Máx. columnas por fila en fixture público (grupos, tablas)
-const SCHEDULE_PANEL_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4';
+// Columnas con ancho mínimo: la tabla de posiciones necesita ~252px solo para las
+// columnas numéricas (table-fixed); por debajo de ~330px el nombre colapsaba a 0px.
+const SCHEDULE_PANEL_GRID = 'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))]';
 
 // Splits items into N balanced columns with at most maxPerCol items each
 function splitBalanced<T>(items: T[], maxPerCol = 4): T[][] {
