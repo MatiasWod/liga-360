@@ -9,17 +9,24 @@ function mapStatus(raw: string | null | undefined): MatchStatus {
   return 'scheduled';
 }
 
-function teamRef(slot?: { inscriptionId?: string; displayName?: string } | null) {
+function teamRef(
+  slot?: { inscriptionId?: string; displayName?: string } | null,
+  images?: ReadonlyMap<string, string>,
+) {
   const id = String(slot?.inscriptionId ?? '').trim() || 'tbd';
   const name = slot?.displayName?.trim() || 'Por definir';
-  return { id, name };
+  const badgeUrl = images?.get(id);
+  return { id, name, ...(badgeUrl ? { badgeUrl } : {}) };
 }
 
-export function tournamentMatchToRecord(match: TournamentMatchRow): MatchRecord {
+export function tournamentMatchToRecord(
+  match: TournamentMatchRow,
+  images?: ReadonlyMap<string, string>,
+): MatchRecord {
   return {
     id: match.id,
-    homeTeam: teamRef(match.homeAssignedInscription),
-    awayTeam: teamRef(match.awayAssignedInscription),
+    homeTeam: teamRef(match.homeAssignedInscription, images),
+    awayTeam: teamRef(match.awayAssignedInscription, images),
     scheduledAt: match.scheduledAt ?? undefined,
     venue: match.venue ?? undefined,
     referee: match.referee ?? undefined,

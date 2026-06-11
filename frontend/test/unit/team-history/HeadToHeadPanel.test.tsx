@@ -109,7 +109,7 @@ describe('HeadToHeadPanel', () => {
         status: 'ACEPTADO',
       },
     ]);
-    vi.mocked(teamsApi.lookupTeamsByIds).mockResolvedValue([{ id: 2, name: 'Rival FC' }]);
+    vi.mocked(teamsApi.lookupTeamsByIds).mockResolvedValue([{ id: 2, name: 'Rival FC', badgeUrl: null }]);
 
     render(<HeadToHeadPanel teamId={1} />);
     await waitFor(() => {

@@ -1,5 +1,7 @@
 import React from 'react';
 import { listTeamInscriptions } from '../../services/inscriptions/teamInscriptions';
+import { listTournamentInscriptions } from '../../services/inscriptionsApi';
+import { buildCompetitorImageMap } from '../../services/inscriptions/competitorImages';
 import { listTournamentsGraphql } from '../../services/tournamentsApi';
 import type { LinkedTeam } from '../../types/domain';
 import type { TournamentEntity } from '../tournaments-list/types';
@@ -41,6 +43,8 @@ export function useAgendaData({
 }: UseAgendaDataOptions) {
   const [rows, setRows] = React.useState<AgendaRow[]>([]);
   const [tournamentsById, setTournamentsById] = React.useState<Map<string, TournamentEntity>>(new Map());
+  // Imagen por inscripción (escudo/avatar) por torneo, para las tarjetas vs.
+  const [imagesByTournamentId, setImagesByTournamentId] = React.useState<Map<string, Map<string, string>>>(new Map());
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [reloadToken, setReloadToken] = React.useState(0);
@@ -124,11 +128,20 @@ export function useAgendaData({
           organizerRows = tournaments.flatMap((t) => buildOrganizerRowsFromTournament(t));
         }
 
+        // Imágenes de competidores por torneo (degradación: sin imágenes si falla).
+        const imageEntries = await Promise.all(
+          [...tournamentMap.keys()].map(async (tid) => {
+            const inscriptions = await listTournamentInscriptions(tid).catch(() => []);
+            return [tid, buildCompetitorImageMap(inscriptions)] as const;
+          })
+        );
+
         if (cancelled) return;
         const merged: AgendaRow[] =
           role === 'organizer' ? organizerRows : participantRows;
         setRows(sortAgendaRows(merged));
         setTournamentsById(tournamentMap);
+        setImagesByTournamentId(new Map(imageEntries));
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'No se pudo cargar la agenda');
@@ -162,5 +175,5 @@ export function useAgendaData({
     [role, refresh]
   );
 
-  return { rows, tournamentsById, loading, error, refresh, refreshTournament };
+  return { rows, tournamentsById, imagesByTournamentId, loading, error, refresh, refreshTournament };
 }

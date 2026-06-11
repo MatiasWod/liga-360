@@ -35,7 +35,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({
   const [tournamentFilter, setTournamentFilter] = React.useState(AGENDA_ALL_TOURNAMENTS);
   const [page, setPage] = React.useState(0);
 
-  const { rows, tournamentsById, loading, error, refresh, refreshTournament } = useAgendaData({
+  const { rows, tournamentsById, imagesByTournamentId, loading, error, refresh, refreshTournament } = useAgendaData({
     role,
     teamId,
     participantUserId,
@@ -144,6 +144,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({
               key={row.rowKey}
               row={row as AgendaOrganizerRowData}
               tournament={tournamentsById.get(row.tournamentId) ?? null}
+              images={imagesByTournamentId.get(row.tournamentId)}
               onRefreshTournament={refreshTournament}
               onViewTournament={() => openTournamentAtFixture(row)}
             />
@@ -151,6 +152,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({
             <AgendaParticipantRow
               key={row.rowKey}
               row={row as AgendaParticipantRowData}
+              images={imagesByTournamentId.get(row.tournamentId)}
               onOpen={() => openTournamentAtFixture(row)}
             />
           )

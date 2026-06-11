@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompetitorBadge } from '../competitor/CompetitorBadge';
 import { Card } from '../ui/Card';
 import { FilterDropdown } from '../ui/FilterDropdown';
 import { SearchField } from '../ui/SearchField';
@@ -78,6 +79,9 @@ export const HeadToHeadPanel: React.FC<HeadToHeadPanelProps> = ({
   const error = externalError ?? internal.error;
 
   const [rivals, setRivals] = React.useState<RivalOption[]>([]);
+  // Imagen por nombre normalizado (propio + rivales) para las filas de cruces.
+  const [imageByName, setImageByName] = React.useState<Map<string, string>>(new Map());
+  const normName = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '');
   const [rivalsLoading, setRivalsLoading] = React.useState(false);
   const [rivalsError, setRivalsError] = React.useState('');
   const [selectedRivalId, setSelectedRivalId] = React.useState<string>('');
@@ -104,9 +108,15 @@ export const HeadToHeadPanel: React.FC<HeadToHeadPanelProps> = ({
               .filter((id): id is number => id != null && Number(id) > 0 && Number(id) !== Number(teamId))
           ),
         ];
+        const teams = await lookupTeamsByIds([...teamIds, Number(teamId)]);
+        const images = new Map<string, string>();
+        for (const t of teams) {
+          if (t.badgeUrl) images.set(t.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, ''), t.badgeUrl);
+        }
+        if (!cancelled) setImageByName(images);
         if (!teamIds.length) return [];
-        const teams = await lookupTeamsByIds(teamIds);
         return teams
+          .filter((t) => t.id !== Number(teamId))
           .map((t) => ({ teamId: t.id, name: t.name }))
           .sort((a, b) => a.name.localeCompare(b.name));
       })
@@ -358,11 +368,17 @@ export const HeadToHeadPanel: React.FC<HeadToHeadPanelProps> = ({
                       ) : null}
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-sm">
-                      <span className="flex-1 truncate text-right font-medium text-text-primary">{home}</span>
+                      <span className="flex-1 min-w-0 flex items-center justify-end gap-1.5 font-medium text-text-primary">
+                        <CompetitorBadge url={imageByName.get(normName(home))} name={home} />
+                        <span className="min-w-0 truncate">{home}</span>
+                      </span>
                       <span className="flex-none rounded-md bg-surface-2 px-2.5 py-1 text-xs font-bold tabular-nums text-text-primary">
                         {formatMatchScore(m.homeScore, m.awayScore)}
                       </span>
-                      <span className="flex-1 truncate text-left font-medium text-text-primary">{away}</span>
+                      <span className="flex-1 min-w-0 flex items-center justify-start gap-1.5 font-medium text-text-primary">
+                        <span className="min-w-0 truncate">{away}</span>
+                        <CompetitorBadge url={imageByName.get(normName(away))} name={away} />
+                      </span>
                     </div>
                     {eventsLoading ? (
                       <p className="mt-2 text-[11px] text-text-muted">Cargando eventos…</p>

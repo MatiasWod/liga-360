@@ -24,9 +24,10 @@ function formatScheduledAt(iso: string | null | undefined): string {
 export const AgendaOrganizerRow: React.FC<{
   row: AgendaOrganizerRowData;
   tournament: TournamentEntity | null;
+  images?: ReadonlyMap<string, string>;
   onRefreshTournament: (tournamentId: string) => Promise<void>;
   onViewTournament: () => void;
-}> = ({ row, tournament, onRefreshTournament, onViewTournament }) => {
+}> = ({ row, tournament, images, onRefreshTournament, onViewTournament }) => {
   const [expanded, setExpanded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [actionError, setActionError] = React.useState('');
@@ -43,8 +44,8 @@ export const AgendaOrganizerRow: React.FC<{
   });
 
   const matchRecords = React.useMemo(
-    () => row.pendingMatches.map(tournamentMatchToRecord),
-    [row.pendingMatches]
+    () => row.pendingMatches.map((m) => tournamentMatchToRecord(m, images)),
+    [row.pendingMatches, images]
   );
 
   const whenLabel = row.earliestScheduledAt
@@ -109,6 +110,8 @@ export const AgendaOrganizerRow: React.FC<{
             awaySlot={matchRow?.awayAssignedInscription}
             teamsResolved={teamsResolved}
             defaultTab={teamsResolved ? (isMatchFinished ? 'schedule' : 'result') : 'schedule'}
+            homeImageUrl={images?.get(String(matchRow?.homeAssignedInscription?.inscriptionId ?? ''))}
+            awayImageUrl={images?.get(String(matchRow?.awayAssignedInscription?.inscriptionId ?? ''))}
             initialData={{
               scheduledAt: matchRow?.scheduledAt,
               venue: matchRow?.venue,

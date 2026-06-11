@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompetitorBadge } from '../competitor/CompetitorBadge';
 import { updateMatchDateTime } from '../../services/tournaments/matchDateTime';
 import { gqlRequest } from '../../services/tournaments/client';
 import {
@@ -70,6 +71,8 @@ export interface MatchEditDrawerProps {
   /** Competencia a la que pertenece el partido; viaja en los eventos para stats por Competencia. */
   competitionId?: string | null;
   /** Slots de inscripción del partido para atribuir eventos a un equipo. */
+  homeImageUrl?: string;
+  awayImageUrl?: string;
   homeSlot?: { inscriptionId?: string | number | null; displayName?: string | null } | null;
   awaySlot?: { inscriptionId?: string | number | null; displayName?: string | null } | null;
   initialData?: {
@@ -99,6 +102,8 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
   matchId,
   tournamentId,
   competitionId,
+  homeImageUrl,
+  awayImageUrl,
   homeSlot,
   awaySlot,
   initialData,
@@ -134,8 +139,12 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
           <div>
             <h3 className="text-base font-semibold text-text-primary">Editar partido</h3>
             {initialData?.homeDisplayName && initialData?.awayDisplayName ? (
-              <p className="mt-0.5 text-xs text-text-muted">
-                {initialData.homeDisplayName} vs {initialData.awayDisplayName}
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
+                <CompetitorBadge url={homeImageUrl} name={initialData.homeDisplayName} />
+                <span className="min-w-0 truncate">{initialData.homeDisplayName}</span>
+                <span>vs</span>
+                <span className="min-w-0 truncate">{initialData.awayDisplayName}</span>
+                <CompetitorBadge url={awayImageUrl} name={initialData.awayDisplayName} />
               </p>
             ) : null}
           </div>

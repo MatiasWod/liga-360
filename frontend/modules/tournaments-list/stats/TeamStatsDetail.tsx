@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompetitorBadge } from '../../../components/competitor/CompetitorBadge';
 import { getEventsByInscription } from '../../../services/matchEvents/stats';
 import type { MatchEvent } from '../../../services/matchEvents/types';
 import type { TournamentMatchRow } from '../types';
@@ -17,6 +18,8 @@ export interface TeamStatsDetailProps {
   teamName: string;
   /** Partidos de la Competencia donde juega el equipo (resultado incluido). */
   matches: TournamentMatchRow[];
+  /** Lookup inscriptionId → imagen (escudo/avatar). */
+  imageById?: ReadonlyMap<string, string>;
   onClose: () => void;
 }
 
@@ -29,6 +32,7 @@ export const TeamStatsDetail: React.FC<TeamStatsDetailProps> = ({
   inscriptionId,
   teamName,
   matches,
+  imageById,
   onClose,
 }) => {
   const [events, setEvents] = React.useState<MatchEvent[]>([]);
@@ -106,11 +110,17 @@ export const TeamStatsDetail: React.FC<TeamStatsDetailProps> = ({
             return (
               <div key={m.id} className="rounded-xl border border-border-subtle bg-surface-2 px-3 py-2">
                 <div className="flex items-center gap-1 text-xs">
-                  <span className="flex-1 min-w-0 text-right truncate text-text-primary">{homeName}</span>
+                  <span className="flex-1 min-w-0 flex items-center justify-end gap-1.5 text-text-primary">
+                    <CompetitorBadge url={imageById?.get(String(m.homeAssignedInscription?.inscriptionId ?? ''))} name={homeName} />
+                    <span className="min-w-0 truncate">{homeName}</span>
+                  </span>
                   <span className={`flex-none w-11 text-center font-bold tabular-nums ${isPlayed ? 'text-text-primary' : 'text-text-muted font-normal'}`}>
                     {isPlayed ? `${m.homeScore ?? 0}–${m.awayScore ?? 0}` : 'vs'}
                   </span>
-                  <span className="flex-1 min-w-0 text-left truncate text-text-primary">{awayName}</span>
+                  <span className="flex-1 min-w-0 flex items-center justify-start gap-1.5 text-text-primary">
+                    <span className="min-w-0 truncate">{awayName}</span>
+                    <CompetitorBadge url={imageById?.get(String(m.awayAssignedInscription?.inscriptionId ?? ''))} name={awayName} />
+                  </span>
                 </div>
                 {matchEvents.length > 0 ? (
                   <ul className="mt-1.5 space-y-1 border-t border-border-subtle pt-1.5">

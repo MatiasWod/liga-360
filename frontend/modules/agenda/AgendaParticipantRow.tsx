@@ -1,4 +1,5 @@
 import React from 'react';
+import { CompetitorBadge } from '../../components/competitor/CompetitorBadge';
 import { roundLabelForStage, type AgendaParticipantRowData } from './agendaPickers';
 
 function formatScheduledAt(iso: string | null | undefined): string {
@@ -18,10 +19,13 @@ function formatScheduledAt(iso: string | null | undefined): string {
 
 export const AgendaParticipantRow: React.FC<{
   row: AgendaParticipantRowData;
+  images?: ReadonlyMap<string, string>;
   onOpen: () => void;
-}> = ({ row, onOpen }) => {
+}> = ({ row, images, onOpen }) => {
   const round = row.match.round ?? 0;
   const roundLabel = round > 0 ? roundLabelForStage(row.stageFormat, round) : null;
+  const opponentSlot = row.isHome ? row.match.awayAssignedInscription : row.match.homeAssignedInscription;
+  const opponentImage = images?.get(String(opponentSlot?.inscriptionId ?? ''));
   return (
     <button
       type="button"
@@ -40,8 +44,10 @@ export const AgendaParticipantRow: React.FC<{
           </>
         ) : null}
       </div>
-      <p className="mt-2 text-sm font-semibold text-text-primary">
-        {row.isHome ? 'Local' : 'Visitante'} vs {row.opponentName}
+      <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-text-primary">
+        <span>{row.isHome ? 'Local' : 'Visitante'} vs</span>
+        <CompetitorBadge url={opponentImage} name={row.opponentName} />
+        <span className="min-w-0 truncate">{row.opponentName}</span>
       </p>
       <p className="mt-1 text-xs text-text-muted">{formatScheduledAt(row.match.scheduledAt)}</p>
     </button>

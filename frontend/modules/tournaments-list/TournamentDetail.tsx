@@ -5,6 +5,7 @@ import { RoundSelector } from '../../components/tournament-schedule/RoundSelecto
 import type { ClassificationZone } from '../../components/standings';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
 import { listTournamentInscriptions } from '../../services/inscriptionsApi';
+import { buildCompetitorImageMap } from '../../services/inscriptions/competitorImages';
 import { ConvergingEliminationBracket } from './ConvergingEliminationBracket';
 import {
   buildInscriptionNameLookupFromTournament,
@@ -477,9 +478,7 @@ export const TournamentDetail: React.FC<{
 				const fromApi = new Map(
 					inscriptions.map((item) => [String(item.id), String(item.display_name || '').trim()])
 				);
-				setInscriptionBadgeById(new Map(
-					inscriptions.filter((item) => item.team_badge_url).map((item) => [String(item.id), String(item.team_badge_url)])
-				));
+				setInscriptionBadgeById(buildCompetitorImageMap(inscriptions));
 				const fromGraph = entity ? buildInscriptionNameLookupFromTournament(entity) : new Map<string, string>();
 				setInscriptionNameById(mergeInscriptionNameLookups(fromApi, fromGraph));
 
@@ -713,6 +712,7 @@ export const TournamentDetail: React.FC<{
 									tournamentId={t.id}
 									competition={competition}
 									nameById={inscriptionNameById}
+									imageById={inscriptionBadgeById}
 								/>
 							)}
 

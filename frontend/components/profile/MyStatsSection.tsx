@@ -8,6 +8,8 @@ import { getParticipantStats, type ParticipantTournamentStats } from '../../serv
 import { getEventsByInscription } from '../../services/matchEvents/stats';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
 import { listTournamentInscriptions } from '../../services/inscriptionsApi';
+import { buildCompetitorImageMap } from '../../services/inscriptions/competitorImages';
+import { CompetitorBadge } from '../competitor/CompetitorBadge';
 import { collectMatchesForInscription, type TeamMatchItem } from '../../modules/team-presences/teamMatches';
 import { matchFixtureKey } from '../../modules/team-presences/matchDedupe';
 import type { TournamentEntity } from '../../modules/tournaments-list/types';
@@ -60,6 +62,7 @@ const KPI_ITEMS: { key: keyof MyTotals; label: string; help: string }[] = [
 
 interface TeamTournamentBlock extends MyStatsMatchBlock {
   myEventsByMatch: Map<string, MatchEvent[]>;
+  imageById: Map<string, string>;
 }
 
 export interface MyStatsSectionProps {
@@ -127,11 +130,17 @@ function MatchRow({
         ) : null}
       </div>
       <div className="mt-2 flex items-center gap-2 text-sm">
-        <span className="flex-1 truncate text-right font-medium text-text-primary">{home}</span>
+        <span className="flex-1 min-w-0 flex items-center justify-end gap-1.5 font-medium text-text-primary">
+          <CompetitorBadge url={block.imageById.get(String(item.match.homeAssignedInscription?.inscriptionId ?? ''))} name={home} />
+          <span className="min-w-0 truncate">{home}</span>
+        </span>
         <span className="flex-none rounded-md bg-surface-2 px-2.5 py-1 text-xs font-bold tabular-nums text-text-primary">
           {played ? `${item.match.homeScore ?? 0}–${item.match.awayScore ?? 0}` : 'vs'}
         </span>
-        <span className="flex-1 truncate text-left font-medium text-text-primary">{away}</span>
+        <span className="flex-1 min-w-0 flex items-center justify-start gap-1.5 font-medium text-text-primary">
+          <span className="min-w-0 truncate">{away}</span>
+          <CompetitorBadge url={block.imageById.get(String(item.match.awayAssignedInscription?.inscriptionId ?? ''))} name={away} />
+        </span>
       </div>
       {myEvents.length > 0 ? (
         <ul className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
@@ -237,6 +246,7 @@ export const MyStatsSection: React.FC<MyStatsSectionProps> = ({ participants, te
               if (matches.length === 0) return null;
               const eventsResult = await getEventsByInscription(tid, insId).catch(() => [] as MatchEvent[]);
               return {
+                imageById: buildCompetitorImageMap(inscriptions as any[]),
                 tournamentId: tid,
                 tournamentName: tournament?.name ?? tid,
                 teamId,

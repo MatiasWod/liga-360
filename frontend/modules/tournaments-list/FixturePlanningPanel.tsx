@@ -30,6 +30,7 @@ import { resolvePersistedTeamDisplayName } from './teamDisplayName';
 import { effectiveStageStatus } from './stageLifecycle';
 import { enrichStageTeamDisplayNames } from './teamDisplayName';
 import type { InscriptionItem } from '../../services/inscriptionsApi';
+import { buildCompetitorImageMap } from '../../services/inscriptions/competitorImages';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
@@ -85,14 +86,19 @@ export const FixturePlanningPanel: React.FC<{
     return map;
   }, [displayStage]);
 
+  const imageById = React.useMemo(
+    () => buildCompetitorImageMap([...(inscriptionById?.values() ?? [])]),
+    [inscriptionById]
+  );
+
   const scheduleView = React.useMemo(() => {
     if (!displayStage || displayStage.format === 'composed') return null;
     return buildScheduleFromStage({
       format: displayStage.format,
       matches: displayStage.matches,
       groups: displayStage.groups,
-    });
-  }, [displayStage]);
+    }, imageById);
+  }, [displayStage, imageById]);
 
   // -- Modo calendario (FixtureViewer) --
 
@@ -856,6 +862,8 @@ export const FixturePlanningPanel: React.FC<{
             competitionId={competitionId || null}
             homeSlot={matchRow?.homeAssignedInscription}
             awaySlot={matchRow?.awayAssignedInscription}
+            homeImageUrl={imageById.get(String(matchRow?.homeAssignedInscription?.inscriptionId ?? ''))}
+            awayImageUrl={imageById.get(String(matchRow?.awayAssignedInscription?.inscriptionId ?? ''))}
             teamsResolved={teamsResolved}
             defaultTab={teamsResolved ? (isMatchFinished ? 'schedule' : 'result') : 'schedule'}
             presetTimes={schedApi?.presetTimes}

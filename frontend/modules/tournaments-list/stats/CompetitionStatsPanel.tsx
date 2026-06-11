@@ -23,6 +23,8 @@ export interface CompetitionStatsPanelProps {
   competition: TournamentCompetition | null;
   /** Lookup inscriptionId → nombre (Postgres + grafo) ya armado por TournamentDetail. */
   nameById: Map<string, string>;
+  /** Lookup inscriptionId → imagen (escudo/avatar) ya armado por TournamentDetail. */
+  imageById?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -34,6 +36,7 @@ export const CompetitionStatsPanel: React.FC<CompetitionStatsPanelProps> = ({
   tournamentId,
   competition,
   nameById,
+  imageById,
 }) => {
   const competitionId = competition?.id ?? null;
   const [scorers, setScorers] = React.useState<ScorerStatsRow[]>([]);
@@ -159,6 +162,7 @@ export const CompetitionStatsPanel: React.FC<CompetitionStatsPanelProps> = ({
           tournamentId={tournamentId}
           inscriptionId={selectedTeamId}
           teamName={selectedTeamName}
+          imageById={imageById}
           matches={collectCompetitionMatchesForInscription(competition, selectedTeamId)}
           onClose={() => setSelectedTeamId(null)}
         />

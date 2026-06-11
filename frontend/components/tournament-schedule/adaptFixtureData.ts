@@ -59,16 +59,19 @@ function teamFromSlot(
   slot: { inscriptionId: string; displayName: string } | null | undefined,
   side: 'home' | 'away',
   matchId: string,
-  isBye = false
+  isBye = false,
+  images?: ReadonlyMap<string, string>
 ): TeamRef {
   if (!slot?.inscriptionId) {
     return isBye
       ? { id: `__bye-${side}-${matchId}`, name: 'Libre' }
       : { id: `__empty-${side}-${matchId}`, name: '—' };
   }
+  const badgeUrl = images?.get(String(slot.inscriptionId));
   return {
     id: String(slot.inscriptionId),
     name: (slot.displayName || '—').trim() || '—',
+    ...(badgeUrl ? { badgeUrl } : {}),
   };
 }
 
@@ -77,7 +80,7 @@ function isRealInscriptionId(id: string | null | undefined): boolean {
   return !!s && !s.startsWith('liga360-slot:') && !s.startsWith('pos:');
 }
 
-export function matchInputToRecord(m: FixtureMatchInput, stageFormat?: string | null): MatchRecord {
+export function matchInputToRecord(m: FixtureMatchInput, stageFormat?: string | null, images?: ReadonlyMap<string, string>): MatchRecord {
   const homeId = m.homeAssignedInscription?.inscriptionId;
   const awayId = m.awayAssignedInscription?.inscriptionId;
   const partial =
@@ -90,8 +93,8 @@ export function matchInputToRecord(m: FixtureMatchInput, stageFormat?: string | 
 
   const rec: MatchRecord = {
     id: m.id,
-    homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id, isBye && !homeId),
-    awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id, isBye && !awayId),
+    homeTeam: teamFromSlot(m.homeAssignedInscription, 'home', m.id, isBye && !homeId, images),
+    awayTeam: teamFromSlot(m.awayAssignedInscription, 'away', m.id, isBye && !awayId, images),
     status: mapGraphqlStatusToMatchStatus(m.status),
   };
   if (m.scheduledAt) rec.scheduledAt = m.scheduledAt;
@@ -104,8 +107,8 @@ export function matchInputToRecord(m: FixtureMatchInput, stageFormat?: string | 
   return rec;
 }
 
-function eliminationMatchInputToRecord(m: FixtureMatchInput): MatchRecord {
-  const rec = matchInputToRecord(m, 'elimination');
+function eliminationMatchInputToRecord(m: FixtureMatchInput, images?: ReadonlyMap<string, string>): MatchRecord {
+  const rec = matchInputToRecord(m, 'elimination', images);
   rec.matchCode = bracketDisplayCode(m as TournamentMatchRow);
   rec.matchSubtitle = eliminationMatchSubtitle(m as TournamentMatchRow);
   return rec;
@@ -163,7 +166,7 @@ function sortEliminationMatches(matches: FixtureMatchInput[]): FixtureMatchInput
  * Convierte partidos de una etapa (GraphQL) al modelo de {@link TournamentSchedule}.
  * Devuelve `null` si no hay partidos para mostrar.
  */
-export function buildScheduleFromStage(stage: FixtureStageInput):
+export function buildScheduleFromStage(stage: FixtureStageInput, images?: ReadonlyMap<string, string>):
   | { type: 'league'; data: LeagueScheduleData }
   | { type: 'groups'; data: GroupsScheduleData }
   | { type: 'knockout'; data: KnockoutScheduleData }
@@ -179,7 +182,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
       return {
         id: `lr-${key}`,
         label: leagueRoundTitle(r, leg),
-        matches: rowMatches.map((row) => matchInputToRecord(row, 'league')),
+        matches: rowMatches.map((row) => matchInputToRecord(row, 'league', images)),
       };
     });
     return { type: 'league', data: { rounds } };
@@ -199,7 +202,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
     const rounds = roundNums.map((rn) => ({
       id: `ko-r${rn}`,
       label: eliminationRoundTitle(rn),
-      matches: (byRound.get(rn) || []).map(eliminationMatchInputToRecord),
+      matches: (byRound.get(rn) || []).map((m) => eliminationMatchInputToRecord(m, images)),
     }));
     return { type: 'knockout', data: { rounds } };
   }
@@ -222,7 +225,7 @@ export function buildScheduleFromStage(stage: FixtureStageInput):
         return {
           id: `gr-${key}`,
           label: leagueRoundTitle(r, leg),
-          matches: rowMatches.map((row) => matchInputToRecord(row, 'groups')),
+          matches: rowMatches.map((row) => matchInputToRecord(row, 'groups', images)),
         };
       });
       outGroups.push({ id: g.id, name: g.name, rounds });
