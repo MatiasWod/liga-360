@@ -138,10 +138,31 @@ function zoneStyle(idx: number) {
 	return ZONE_STYLES[Math.min(idx, ZONE_STYLES.length - 1)];
 }
 
+// Escudo del equipo en filas vs (oculto si la inscripción no tiene badge).
+function TeamRowBadge({ url, name }: { url?: string; name: string }) {
+	if (!url) return null;
+	return (
+		<img
+			src={url}
+			alt={`Escudo de ${name}`}
+			className="h-4 w-4 flex-none rounded-full object-cover"
+			onError={(e) => {
+				e.currentTarget.style.display = 'none';
+			}}
+		/>
+	);
+}
+
 // Tasks 3.1–3.4: compact match row — flex layout so team names always truncate correctly
-function CompactMatchRow({ match, goals }: { match: TournamentMatchRow; goals?: GoalRecord[] }) {
+function CompactMatchRow({ match, goals, badgeById }: {
+	match: TournamentMatchRow;
+	goals?: GoalRecord[];
+	badgeById?: ReadonlyMap<string, string>;
+}) {
 	const homeName = match.homeAssignedInscription?.displayName ?? 'Por definir';
 	const awayName = match.awayAssignedInscription?.displayName ?? 'Por definir';
+	const homeBadge = badgeById?.get(String(match.homeAssignedInscription?.inscriptionId ?? ''));
+	const awayBadge = badgeById?.get(String(match.awayAssignedInscription?.inscriptionId ?? ''));
 	const status = mapMatchStatus(match.status);
 	const isCompleted = status === 'completed';
 	const isLive = status === 'live';
@@ -149,14 +170,18 @@ function CompactMatchRow({ match, goals }: { match: TournamentMatchRow; goals?: 
 	return (
 		<div className="px-3 py-1.5">
 			<div className="flex items-center gap-1 text-xs">
-				<span className="flex-1 min-w-0 text-right truncate text-text-primary">
-					{match.homeAssignedInscription ? <TeamNameLink teamName={homeName} className="max-w-full truncate align-bottom" /> : homeName}
+				{/* Local: escudo a la izquierda del nombre */}
+				<span className="flex-1 min-w-0 flex items-center justify-end gap-1.5 text-text-primary">
+					<TeamRowBadge url={homeBadge} name={homeName} />
+					{match.homeAssignedInscription ? <TeamNameLink teamName={homeName} className="min-w-0 truncate" /> : <span className="truncate">{homeName}</span>}
 				</span>
 				<span className={`flex-none w-11 text-center font-bold tabular-nums ${isLive ? 'text-emerald-400' : isCompleted ? 'text-text-primary' : 'text-text-muted font-normal'}`}>
 					{isCompleted || isLive ? `${match.homeScore ?? 0}–${match.awayScore ?? 0}` : 'vs'}
 				</span>
-				<span className="flex-1 min-w-0 text-left truncate text-text-primary">
-					{match.awayAssignedInscription ? <TeamNameLink teamName={awayName} className="max-w-full truncate align-bottom" /> : awayName}
+				{/* Visitante: escudo a la derecha del nombre */}
+				<span className="flex-1 min-w-0 flex items-center justify-start gap-1.5 text-text-primary">
+					{match.awayAssignedInscription ? <TeamNameLink teamName={awayName} className="min-w-0 truncate" /> : <span className="truncate">{awayName}</span>}
+					<TeamRowBadge url={awayBadge} name={awayName} />
 				</span>
 			</div>
 			{match.scheduledAt && !isCompleted && !isLive && (
@@ -190,7 +215,7 @@ function splitBalanced<T>(items: T[], maxPerCol = 4): T[][] {
 }
 
 // Match grid for league/elimination: auto-fill responsive columns
-function MatchGrid({ matches, goalsByMatchId }: { matches: TournamentMatchRow[]; goalsByMatchId: Record<string, GoalRecord[]> }) {
+function MatchGrid({ matches, goalsByMatchId, badgeById }: { matches: TournamentMatchRow[]; goalsByMatchId: Record<string, GoalRecord[]>; badgeById?: ReadonlyMap<string, string> }) {
 	if (matches.length === 0) return null;
 	return (
 		<div className="rounded-xl border border-border-subtle bg-border-subtle overflow-hidden">
@@ -200,7 +225,7 @@ function MatchGrid({ matches, goalsByMatchId }: { matches: TournamentMatchRow[];
 			>
 				{matches.map((m) => (
 					<div key={m.id} className="bg-surface-2">
-						<CompactMatchRow match={m} goals={goalsByMatchId[m.id]} />
+						<CompactMatchRow match={m} goals={goalsByMatchId[m.id]} badgeById={badgeById} />
 					</div>
 				))}
 			</div>
@@ -209,10 +234,11 @@ function MatchGrid({ matches, goalsByMatchId }: { matches: TournamentMatchRow[];
 }
 
 // Group block: header + matches in balanced sub-columns (max 4 per column)
-function GroupMatchBlock({ name, matches, goalsByMatchId }: {
+function GroupMatchBlock({ name, matches, goalsByMatchId, badgeById }: {
 	name: string;
 	matches: TournamentMatchRow[];
 	goalsByMatchId: Record<string, GoalRecord[]>;
+	badgeById?: ReadonlyMap<string, string>;
 }) {
 	if (matches.length === 0) return null;
 	const chunks = splitBalanced(matches, 4);
@@ -227,7 +253,7 @@ function GroupMatchBlock({ name, matches, goalsByMatchId }: {
 							className={`divide-y divide-border-subtle${ci < chunks.length - 1 ? ' border-r border-dashed border-border-subtle' : ''}`}
 						>
 							{chunk.map((m) => (
-								<CompactMatchRow key={m.id} match={m} goals={goalsByMatchId[m.id]} />
+								<CompactMatchRow key={m.id} match={m} goals={goalsByMatchId[m.id]} badgeById={badgeById} />
 							))}
 						</div>
 					))}
@@ -416,6 +442,7 @@ export const TournamentDetail: React.FC<{
 	const [error, setError] = React.useState<string | null>(null);
 	const [t, setT] = React.useState<TournamentEntity | null>(null);
 	const [inscriptionNameById, setInscriptionNameById] = React.useState<Map<string, string>>(new Map());
+	const [inscriptionBadgeById, setInscriptionBadgeById] = React.useState<Map<string, string>>(new Map());
 	const [goalsByMatchId, setGoalsByMatchId] = React.useState<Record<string, GoalRecord[]>>({});
 
 	const [competitionId, setCompetitionId] = React.useState('');
@@ -450,6 +477,9 @@ export const TournamentDetail: React.FC<{
 				const fromApi = new Map(
 					inscriptions.map((item) => [String(item.id), String(item.display_name || '').trim()])
 				);
+				setInscriptionBadgeById(new Map(
+					inscriptions.filter((item) => item.team_badge_url).map((item) => [String(item.id), String(item.team_badge_url)])
+				));
 				const fromGraph = entity ? buildInscriptionNameLookupFromTournament(entity) : new Map<string, string>();
 				setInscriptionNameById(mergeInscriptionNameLookups(fromApi, fromGraph));
 
@@ -754,7 +784,7 @@ export const TournamentDetail: React.FC<{
 													{chunks.map((chunk, ci) => (
 														<div key={ci} className={`divide-y divide-border-subtle${ci < chunks.length - 1 ? ' border-r border-dashed border-border-subtle' : ''}`}>
 															{chunk.map((m) => (
-																<CompactMatchRow key={m.id} match={m} goals={goalsByMatchId[m.id]} />
+																<CompactMatchRow key={m.id} match={m} goals={goalsByMatchId[m.id]} badgeById={inscriptionBadgeById} />
 															))}
 														</div>
 													))}
@@ -773,7 +803,7 @@ export const TournamentDetail: React.FC<{
 
 							{/* Elimination — bracket visual */}
 							{detailView === 'fixture' && stage?.format === 'elimination' && hasMatches && (
-								<ConvergingEliminationBracket stage={stage} nameById={inscriptionNameById} />
+								<ConvergingEliminationBracket stage={stage} nameById={inscriptionNameById} badgeById={inscriptionBadgeById} />
 							)}
 
 							{/* Groups: grupos en columnas, cada uno con sub-columnas equilibradas de partidos */}
@@ -791,7 +821,7 @@ export const TournamentDetail: React.FC<{
 										<div className={SCHEDULE_PANEL_GRID}>
 											{activeGroups.map(({ g, matches }) => (
 												<div key={g.id} className="min-w-0">
-													<GroupMatchBlock name={g.name} matches={matches} goalsByMatchId={goalsByMatchId} />
+													<GroupMatchBlock name={g.name} matches={matches} goalsByMatchId={goalsByMatchId} badgeById={inscriptionBadgeById} />
 												</div>
 											))}
 										</div>

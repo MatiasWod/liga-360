@@ -40,12 +40,20 @@ function bracketColLabel(roundNum: number, roundNums: number[], slotsInRound: nu
 	return `Ronda ${roundNum}`;
 }
 
-function BracketTeamRow({ name, score, isWinner, isCompleted }: {
-	name: string; score?: number | null; isWinner: boolean; isCompleted: boolean;
+function BracketTeamRow({ name, score, isWinner, isCompleted, badgeUrl }: {
+	name: string; score?: number | null; isWinner: boolean; isCompleted: boolean; badgeUrl?: string;
 }) {
 	const hasName = name.length > 0;
 	return (
 		<div className="flex items-center gap-1 px-2 py-1 min-h-[26px]">
+			{hasName && badgeUrl ? (
+				<img
+					src={badgeUrl}
+					alt={`Escudo de ${name}`}
+					className="h-4 w-4 flex-none rounded-full object-cover"
+					onError={(e) => { e.currentTarget.style.display = 'none'; }}
+				/>
+			) : null}
 			<span className={`flex-1 min-w-0 truncate text-xs ${hasName ? (isWinner ? 'font-semibold text-text-primary' : 'text-text-muted') : 'text-transparent select-none'}`}>
 				{hasName ? <TeamNameLink teamName={name} className="max-w-full truncate align-bottom" /> : '\u00a0'}
 			</span>
@@ -56,11 +64,14 @@ function BracketTeamRow({ name, score, isWinner, isCompleted }: {
 	);
 }
 
-function BracketMatchSlot({ matches, isFinalCol, nameById }: {
+function BracketMatchSlot({ matches, isFinalCol, nameById, badgeById }: {
 	matches: TournamentMatchRow[];
 	isFinalCol: boolean;
 	nameById?: ReadonlyMap<string, string>;
+	badgeById?: ReadonlyMap<string, string>;
 }) {
+	const badgeOf = (ins?: TournamentMatchRow['homeAssignedInscription']) =>
+		badgeById?.get(String(ins?.inscriptionId ?? ''));
 	const borderCls = isFinalCol ? 'border-amber-400/60' : 'border-border-subtle';
 	const bgCls = isFinalCol ? 'bg-amber-500/[0.10]' : 'bg-surface-2';
 	const sorted = [...matches].sort((a, b) => (a.leg ?? 0) - (b.leg ?? 0));
@@ -87,6 +98,7 @@ function BracketMatchSlot({ matches, isFinalCol, nameById }: {
 					score={hasData ? scoreHome : null}
 					isWinner={homeWins}
 					isCompleted={isCompleted && hasData}
+					badgeUrl={badgeOf(leg1.homeAssignedInscription)}
 				/>
 				<div className="border-t border-border-subtle/40" />
 				<BracketTeamRow
@@ -94,6 +106,7 @@ function BracketMatchSlot({ matches, isFinalCol, nameById }: {
 					score={hasData ? scoreAway : null}
 					isWinner={awayWins}
 					isCompleted={isCompleted && hasData}
+					badgeUrl={badgeOf(leg1.awayAssignedInscription)}
 				/>
 			</div>
 		);
@@ -112,9 +125,9 @@ function BracketMatchSlot({ matches, isFinalCol, nameById }: {
 				const awayName = bracketPublicTeamName(m.awayAssignedInscription, nameById);
 				return (
 					<div key={m.id}>
-						<BracketTeamRow name={homeName} score={m.homeScore} isWinner={homeWins} isCompleted={isCompleted} />
+						<BracketTeamRow name={homeName} score={m.homeScore} isWinner={homeWins} isCompleted={isCompleted} badgeUrl={badgeOf(m.homeAssignedInscription)} />
 						<div className="border-t border-border-subtle/40" />
-						<BracketTeamRow name={awayName} score={m.awayScore} isWinner={awayWins} isCompleted={isCompleted} />
+						<BracketTeamRow name={awayName} score={m.awayScore} isWinner={awayWins} isCompleted={isCompleted} badgeUrl={badgeOf(m.awayAssignedInscription)} />
 					</div>
 				);
 			})}
@@ -122,9 +135,10 @@ function BracketMatchSlot({ matches, isFinalCol, nameById }: {
 	);
 }
 
-export function ConvergingEliminationBracket({ stage, nameById }: {
+export function ConvergingEliminationBracket({ stage, nameById, badgeById }: {
 	stage: TournamentStage;
 	nameById?: ReadonlyMap<string, string>;
+	badgeById?: ReadonlyMap<string, string>;
 }) {
 	const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -248,7 +262,7 @@ export function ConvergingEliminationBracket({ stage, nameById }: {
 							className="absolute z-10"
 							style={{ left: x, top: Math.max(LABEL_H, top), width: BRACKET_CARD_W }}
 						>
-							<BracketMatchSlot matches={matches} isFinalCol={isFinalCol} nameById={nameById} />
+							<BracketMatchSlot matches={matches} isFinalCol={isFinalCol} nameById={nameById} badgeById={badgeById} />
 						</div>
 					);
 				})}
@@ -262,7 +276,7 @@ export function ConvergingEliminationBracket({ stage, nameById }: {
 						}}
 					>
 						<p className="mb-1 text-center text-[10px] font-medium text-text-muted">3er puesto</p>
-						<BracketMatchSlot matches={thirdPlaceMatches} isFinalCol={false} nameById={nameById} />
+						<BracketMatchSlot matches={thirdPlaceMatches} isFinalCol={false} nameById={nameById} badgeById={badgeById} />
 					</div>
 				) : null}
 			</div>
