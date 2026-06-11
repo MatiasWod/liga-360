@@ -31,6 +31,15 @@ export async function create({ username, email, password, type, isVerified = fal
   return r.rows[0];
 }
 
+// Claim atómico: solo una request concurrente obtiene la fila (las demás reciben null).
+export async function markVerified(id) {
+  const r = await pool.query(
+      'UPDATE "Users" SET "isVerified" = true WHERE id = $1 AND NOT "isVerified" RETURNING id, username, type, "isVerified"',
+      [id]
+  );
+  return r.rows[0] || null;
+}
+
 export async function deleteById(id) {
   await pool.query('DELETE FROM "Users" WHERE id = $1', [id]);
 }

@@ -42,14 +42,18 @@ export async function login(req, res, next) {
 
 export async function verifyEmail(req, res, next) {
   try {
-    const { userid } = req.params;
+    // El id viene como string en la URL; el token lo guarda como number (user.id de Postgres).
+    const userId = Number(req.params.userid);
     const { token } = req.body; // El frontend enviará { "token": "XYZ..." } en el body
 
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Invalid user id', code: 'BAD_REQUEST' });
+    }
     if (!token) {
       return res.status(400).json({ error: 'Token is required', code: 'BAD_REQUEST' });
     }
 
-    const result = await authService.verifyEmail({ userId: userid,token });
+    const result = await authService.verifyEmail({ userId, token });
     return res.status(200).json(result);
   } catch (error) {
     const statusCode = error.statusCode || 500;

@@ -97,11 +97,12 @@ export async function verifyEmail({ userId, token }) {
     throw Object.assign(new Error('User not found'), { statusCode: 404, code: 'NOT_FOUND' });
   }
 
-  if (user.isVerified) {
+  // Claim atómico: si dos requests llegan a la vez (doble click, StrictMode), solo una
+  // pasa de acá y crea el perfil en teams-svc; la otra recibe ALREADY_VERIFIED.
+  const updatedUser = await userRepository.markVerified(user.id);
+  if (!updatedUser) {
     throw Object.assign(new Error('User is already verified'), { statusCode: 400, code: 'ALREADY_VERIFIED' });
   }
-
-  const updatedUser = await userRepository.update(user.id, { isVerified: true });
 
   const { mode, name } = decoded;
   const authToken = signToken(updatedUser); // Generamos el token de sesión real
