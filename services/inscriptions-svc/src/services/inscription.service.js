@@ -8,6 +8,7 @@ import * as teamsClient from '../clients/teams.client.js';
 import * as tournamentsClient from '../clients/tournaments.client.js';
 import * as ownerService from './owner.service.js';
 import { conflict, notFound, translateError, badRequest } from './serviceErrors.js';
+import { DEFAULT_ELO, eloToSuggestedWeight } from '../domain/eloToSuggestedWeight.js';
 import { logger } from '../logger.js';
 
 const normalizeTeamName = (s) => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '');
@@ -145,6 +146,72 @@ export async function moveCompetition({ inscriptionId, competitionId, authorizat
   }
 }
 
+function normalizeWeightInput(weight) {
+  if (weight == null || weight === '') return null;
+  const n = Number(weight);
+  if (!Number.isInteger(n) || n < 1 || n > 10) {
+    throw badRequest('weight debe ser entero entre 1 y 10, o null');
+  }
+  return n;
+}
+
+function attachSuggestedWeight(row, teamById = {}) {
+  if (String(row.competitor_kind || 'team') === 'participant') {
+    return { ...row, suggested_weight: null, elo_source: null, elo_raw: null };
+  }
+  let elo = DEFAULT_ELO;
+  let source = 'default';
+  if (row.linked_team_id != null) {
+    const team = teamById[Number(row.linked_team_id)];
+    elo = Number(team?.elo ?? DEFAULT_ELO);
+    source = 'team_global';
+  } else if (row.tournament_rating != null) {
+    elo = Number(row.tournament_rating);
+    source = 'tournament_local';
+  }
+  return {
+    ...row,
+    elo_raw: elo,
+    elo_source: source,
+    suggested_weight: eloToSuggestedWeight(elo),
+  };
+}
+
+export async function updateTournamentRating({ inscriptionId, tournamentRating }) {
+  try {
+    const rating = Number(tournamentRating);
+    if (!Number.isInteger(rating) || rating < 0) throw badRequest('tournamentRating invalido');
+    return await withTransaction(async (client) => {
+      const current = await inscriptionRepo.findByIdForUpdate(client, inscriptionId);
+      if (!current) throw notFound('inscription no existe');
+      if (current.linked_team_id) {
+        throw conflict('tournament_rating solo aplica a inscripciones sin linked_team_id');
+      }
+      const updated = await inscriptionRepo.updateTournamentRating(client, inscriptionId, rating, nowIso());
+      return { inscription: updated };
+    });
+  } catch (e) {
+    throw translateError(e);
+  }
+}
+
+export async function updateWeight({ inscriptionId, weight }) {
+  try {
+    const normalized = normalizeWeightInput(weight);
+    return await withTransaction(async (client) => {
+      const current = await inscriptionRepo.findByIdForUpdate(client, inscriptionId);
+      if (!current) throw notFound('inscription no existe');
+      if (!['PENDIENTE', 'ACEPTADO'].includes(String(current.status || ''))) {
+        throw conflict('solo se puede ponderar inscription en estado PENDIENTE o ACEPTADO');
+      }
+      const updated = await inscriptionRepo.updateWeight(client, inscriptionId, normalized, nowIso());
+      return { inscription: updated };
+    });
+  } catch (e) {
+    throw translateError(e);
+  }
+}
+
 export async function associate({ inscriptionId, user }) {
   try {
     return await withTransaction(async (client) => {
@@ -193,7 +260,7 @@ async function hydrateInscriptionsWithTeams(rows) {
   const ids = [...new Set(rows.map((r) => r.linked_team_id).filter((v) => v != null))];
   const names = [...new Set(rows.map((r) => r.display_name).filter(Boolean))];
   if (ids.length === 0 && names.length === 0) {
-    return rows.map((r) => ({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
+    return rows.map((r) => attachSuggestedWeight({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
   }
   // Degradación elegante: si teams-svc no responde, devolvemos el listado SIN enriquecer
   // (nombre/escudo del equipo) en lugar de fallar toda la petición con 502.
@@ -202,7 +269,7 @@ async function hydrateInscriptionsWithTeams(rows) {
     teams = await teamsClient.resolveTeams(ids, names);
   } catch (err) {
     logger.warn({ err: err.message }, 'teams-svc no disponible: inscripciones sin enriquecer con equipo');
-    return rows.map((r) => ({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
+    return rows.map((r) => attachSuggestedWeight({ ...r, team_badge_url: null, competitor_image_url: imageFor(r, null) }));
   }
   const byId = {};
   const byName = {};
@@ -215,7 +282,12 @@ async function hydrateInscriptionsWithTeams(rows) {
     const display_name = team && team.name ? team.name : r.display_name;
     const fallback = byName[normalizeTeamName(r.display_name)];
     const team_badge_url = team && team.badge_url != null ? team.badge_url : (fallback?.badge_url ?? null);
-    return { ...r, display_name, team_badge_url, competitor_image_url: imageFor(r, team_badge_url) };
+    return attachSuggestedWeight({
+      ...r,
+      display_name,
+      team_badge_url,
+      competitor_image_url: imageFor(r, team_badge_url),
+    }, byId);
   });
 }
 

@@ -22,6 +22,7 @@ import {
   resolveAdvanceRoleForLeg,
 } from '../domain/elimination/eliminationAdvance.js';
 import { assertStageAllowsMatchResults } from '../domain/stage/stageStatus.js';
+import * as teamsClient from '../clients/teams.client.js';
 import {
   resolveMatchRefs,
   resolvePositionRef,
@@ -194,6 +195,25 @@ export async function assignInscriptionToMatchSlot(driver, { stageId, matchId, s
   }
 }
 
+/** Dispara recálculo ELO en teams-svc (fire-and-forget vía cliente resiliente). */
+async function triggerEloAfterResult(session, matchId, matchProps, finalHomeScore, finalAwayScore) {
+  const meta = await matchRepo.findTournamentMetaForMatch(session, matchId);
+  if (!meta) return;
+  const hid = String(matchProps?.homeInscriptionId ?? '').trim();
+  const aid = String(matchProps?.awayInscriptionId ?? '').trim();
+  if (!isPhysicalInscriptionId(hid) || !isPhysicalInscriptionId(aid)) return;
+  if (finalHomeScore == null || finalAwayScore == null) return;
+  void teamsClient.processEloMatch({
+    matchId: String(matchId),
+    tournamentId: String(meta.tournamentId ?? ''),
+    tournamentStatus: String(meta.status ?? ''),
+    homeInscriptionId: hid,
+    awayInscriptionId: aid,
+    homeScore: finalHomeScore,
+    awayScore: finalAwayScore,
+  });
+}
+
 export async function updateMatchResult(driver, { matchId, homeScore, awayScore, status }) {
   const session = driver.session();
   try {
@@ -230,6 +250,7 @@ export async function updateMatchResult(driver, { matchId, homeScore, awayScore,
 
     if (matchStatus === 'finished') {
       await propagateEliminationResult(session, driver, matchId);
+      await triggerEloAfterResult(session, matchId, m, finalHomeScore, finalAwayScore);
     }
 
     return {

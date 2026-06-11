@@ -8,6 +8,7 @@ export {
   createPublicTeamInscription,
   createPublicParticipantInscription,
   updateInscriptionStatus,
+  updateInscriptionWeight,
   moveInscriptionCompetition,
   associateInscription,
   listTeamsForOrganizer,

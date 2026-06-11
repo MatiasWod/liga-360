@@ -17,8 +17,10 @@ export function createRouter() {
   // Inscriptions (rutas literales antes de /:id para evitar que "lookup" matchee como id)
   router.post('/inscriptions', inscription.create);
   router.get('/inscriptions/lookup', inscription.lookupByIds);
+  router.patch('/internal/inscriptions/:id/tournament-rating', requireServiceToken, inscription.updateTournamentRating);
   router.patch('/inscriptions/:id/status', requireOrganizer, inscription.updateStatus);
   router.patch('/inscriptions/:id/competition', requireOrganizer, inscription.moveCompetition);
+  router.patch('/inscriptions/:id/weight', requireOrganizer, inscription.updateWeight);
   router.post('/inscriptions/:id/associate', requireTeamUser, inscription.associate);
   // Endpoint interno service-to-service (matchevents-svc resuelve inscription → linked_team_id)
   router.get('/inscriptions/:id', requireServiceToken, inscription.getById);

@@ -1,8 +1,8 @@
 /** Acceso a datos de Team (y lectura de miembros). Recibe un client/pool pg. */
 import { buildInviteCodeCandidate } from '../domain/invite.js';
 
-const TEAM_COLS = 'id, name, owner_user_id, badge_url, invite_code, created_at, updated_at';
-const TEAM_COLS_T = 't.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.created_at, t.updated_at';
+const TEAM_COLS = 'id, name, owner_user_id, badge_url, invite_code, elo, created_at, updated_at';
+const TEAM_COLS_T = 't.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.elo, t.created_at, t.updated_at';
 
 export async function listAll(client) {
   const r = await client.query(`SELECT ${TEAM_COLS} FROM "Team" ORDER BY id DESC`);

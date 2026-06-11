@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/error.middleware.js';
 import teamRoutes from './routes/team.routes.js';
 import participantRoutes from './routes/participant.routes.js';
 import profileRoutes from './routes/profile.routes.js';
+import eloRoutes from './routes/elo.routes.js';
 
 export function createApp() {
   const app = express();
@@ -33,6 +34,7 @@ export function createApp() {
   app.use('/teams', teamRoutes);
   app.use('/participants', participantRoutes);
   app.use('/profiles', profileRoutes);
+  app.use('/internal/elo', eloRoutes);
 
   app.use(errorHandler);
 
