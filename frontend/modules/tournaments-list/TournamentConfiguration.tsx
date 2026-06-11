@@ -482,14 +482,14 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
         return true;
       })
       .sort((a, b) => {
+        // Sólo placements reales en el grafo: el competition_id de la inscripción (enrolamiento)
+        // no se limpia al quitar de una fase, y dejaría la tarjeta marcada para siempre.
         const aAssigned = assignmentByInscriptionId.get(String(a.id)) || [];
         const bAssigned = assignmentByInscriptionId.get(String(b.id)) || [];
         const aInActive =
-          Boolean(activeCompetitionId) &&
-          (String(a.competition_id || '') === activeCompetitionId || aAssigned.some((p) => p.competitionId === activeCompetitionId));
+          Boolean(activeCompetitionId) && aAssigned.some((p) => p.competitionId === activeCompetitionId);
         const bInActive =
-          Boolean(activeCompetitionId) &&
-          (String(b.competition_id || '') === activeCompetitionId || bAssigned.some((p) => p.competitionId === activeCompetitionId));
+          Boolean(activeCompetitionId) && bAssigned.some((p) => p.competitionId === activeCompetitionId);
         if (aInActive !== bInActive) return aInActive ? 1 : -1; // verdes al final
         return String(a.display_name || '').localeCompare(String(b.display_name || ''), 'es', { sensitivity: 'base' });
       });
@@ -831,6 +831,21 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
       await loadInscriptions();
     } catch (e: any) {
       setError(e?.message || 'No se pudo mover al grupo');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Quita la inscripción de la fase; el backend también la desasigna de su grupo y de las llaves de partido. */
+  async function removeFromStage(inscriptionId: string, stage: Stage) {
+    setSaving(true);
+    setError('');
+    try {
+      await unassignInscriptionFromStage(stage.id, inscriptionId, tournamentId);
+      await loadTournament();
+      await loadInscriptions();
+    } catch (e: any) {
+      setError(e?.message || `No se pudo quitar de la fase "${stage.name}"`);
     } finally {
       setSaving(false);
     }
@@ -1195,6 +1210,23 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     const stage = sortedStages.find((s) => s.id === initializationStageId) ?? sortedStages[0];
                     if (!stage) return null;
 
+                    // Inscripciones con partidos ya finalizados en esta fase: quitarlas rompería resultados/posiciones.
+                    const playedInscriptionIds = new Set<string>();
+                    for (const m of [...(stage.matches || []), ...(stage.groups || []).flatMap((g) => g.matches || [])]) {
+                      if (!['finished', 'completed'].includes(String(m.status || '').toLowerCase())) continue;
+                      for (const side of [m.homeAssignedInscription, m.awayAssignedInscription]) {
+                        if (side?.inscriptionId) playedInscriptionIds.add(String(side.inscriptionId));
+                      }
+                    }
+                    const isSyntheticRef = (id: unknown) => /^(liga360-slot:|pos:)/.test(String(id ?? ''));
+                    const removalBlockReason = (id: unknown): string | null => {
+                      if (stage.stageStatus === 'finished') return 'No se puede quitar: la fase ya está finalizada';
+                      if (playedInscriptionIds.has(String(id ?? ''))) {
+                        return 'No se puede quitar: ya tiene partidos finalizados en esta fase';
+                      }
+                      return null;
+                    };
+
                     const stageRosterEntries = buildStageRosterEntries(stage.assignedInscriptions, inscriptionById);
                     const cap = stageCapacity(stage);
                     const stageAssignedList = stage.assignedInscriptions || [];
@@ -1307,6 +1339,18 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                         <span className="inline-flex h-5 w-5 shrink-0 rounded-full bg-warning-soft" aria-hidden />
                                       )}
                                       <span className="truncate font-medium">{label}</span>
+                                      {!isSyntheticRef(assigned.inscriptionId) ? (
+                                        <button
+                                          type="button"
+                                          disabled={saving || removalBlockReason(assigned.inscriptionId) != null}
+                                          onClick={() => void removeFromStage(String(assigned.inscriptionId), stage)}
+                                          className="shrink-0 rounded p-0.5 text-sm leading-none text-warning-base transition-colors hover:bg-danger-soft hover:text-danger-base disabled:cursor-not-allowed disabled:opacity-40"
+                                          title={removalBlockReason(assigned.inscriptionId) ?? 'Quitar de la fase'}
+                                          aria-label={`Quitar ${label} de la fase`}
+                                        >
+                                          ×
+                                        </button>
+                                      ) : null}
                                     </div>
                                   );
                                 })}
@@ -1373,7 +1417,19 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                               ) : (
                                                 <span className="inline-flex h-6 w-6 shrink-0 rounded-full bg-surface-3" aria-hidden />
                                               )}
-                                              <p className="line-clamp-1 font-medium text-text-primary">{label}</p>
+                                              <p className="line-clamp-1 min-w-0 flex-1 font-medium text-text-primary">{label}</p>
+                                              {!isSyntheticRef(assigned.inscriptionId) ? (
+                                                <button
+                                                  type="button"
+                                                  disabled={saving || removalBlockReason(assigned.inscriptionId) != null}
+                                                  onClick={() => void removeFromStage(String(assigned.inscriptionId), stage)}
+                                                  className="shrink-0 rounded p-0.5 text-sm leading-none text-text-subtle transition-colors hover:bg-danger-soft hover:text-danger-base disabled:cursor-not-allowed disabled:opacity-40"
+                                                  title={removalBlockReason(assigned.inscriptionId) ?? 'Quitar de la fase'}
+                                                  aria-label={`Quitar ${label} de la fase`}
+                                                >
+                                                  ×
+                                                </button>
+                                              ) : null}
                                             </div>
                                           );
                                         })}
@@ -1469,10 +1525,20 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, entry.item)}
                                     onDragEnd={handleDragEnd}
-                                    className={`w-24 rounded-xl border border-border-subtle bg-surface-2 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-primary hover:shadow-md ${
+                                    className={`relative w-24 rounded-xl border border-border-subtle bg-surface-2 px-2 py-2 text-center text-xs shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-primary hover:shadow-md ${
                                       draggingInscriptionId === String(entry.item.id) ? 'scale-95 opacity-60' : 'cursor-grab active:cursor-grabbing'
                                     }`}
                                   >
+                                    <button
+                                      type="button"
+                                      disabled={saving || removalBlockReason(entry.item.id) != null}
+                                      onClick={() => void removeFromStage(String(entry.item.id), stage)}
+                                      className="absolute -right-1.5 -top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-subtle bg-surface-1 text-sm leading-none text-text-subtle shadow-sm transition-colors hover:border-danger-base hover:text-danger-base disabled:cursor-not-allowed disabled:opacity-40"
+                                      title={removalBlockReason(entry.item.id) ?? 'Quitar de la fase'}
+                                      aria-label={`Quitar ${entry.item.display_name} de la fase`}
+                                    >
+                                      ×
+                                    </button>
                                     <div className="mx-auto mb-1 w-fit">{renderEntryAvatar(entry.item, 'h-8 w-8')}</div>
                                     <p className="line-clamp-2 font-medium text-text-primary">{entry.item.display_name}</p>
                                   </div>
@@ -1481,8 +1547,20 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                                     key={`gql-${String(entry.assigned.inscriptionId)}`}
                                     draggable={false}
                                     title="Asignado en el torneo pero sin inscripción en la base de gestión; re-seed o creá la inscripción manual para arrastrar y editar aquí."
-                                    className="w-24 rounded-xl border border-warning-base/40 bg-warning-soft px-2 py-2 text-center text-xs shadow-sm"
+                                    className="relative w-24 rounded-xl border border-warning-base/40 bg-warning-soft px-2 py-2 text-center text-xs shadow-sm"
                                   >
+                                    {!isSyntheticRef(entry.assigned.inscriptionId) ? (
+                                      <button
+                                        type="button"
+                                        disabled={saving || removalBlockReason(entry.assigned.inscriptionId) != null}
+                                        onClick={() => void removeFromStage(String(entry.assigned.inscriptionId), stage)}
+                                        className="absolute -right-1.5 -top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-warning-base/40 bg-surface-1 text-sm leading-none text-warning-base shadow-sm transition-colors hover:border-danger-base hover:text-danger-base disabled:cursor-not-allowed disabled:opacity-40"
+                                        title={removalBlockReason(entry.assigned.inscriptionId) ?? 'Quitar de la fase'}
+                                        aria-label={`Quitar ${(entry.assigned.displayName || '').trim() || `Inscripción ${entry.assigned.inscriptionId}`} de la fase`}
+                                      >
+                                        ×
+                                      </button>
+                                    ) : null}
                                     <div className="mx-auto mb-1 w-fit">
                                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-warning-soft text-[10px] font-semibold text-warning-base" aria-hidden>
                                         ?
@@ -1572,8 +1650,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                   const assignedInfo = assignmentByInscriptionId.get(String(item.id)) || [];
                   const isInActiveCompetition =
                     initializationCompetitionId &&
-                    (String(item.competition_id || '') === initializationCompetitionId ||
-                      assignedInfo.some((placement) => placement.competitionId === initializationCompetitionId));
+                    assignedInfo.some((placement) => placement.competitionId === initializationCompetitionId);
                   return (
                     <div
                       key={item.id}
