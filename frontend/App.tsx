@@ -9,6 +9,7 @@ import { OrganizerTournamentsPage } from './pages/organizer/OrganizerTournaments
 import { ParticipantHomePage } from './pages/participant/ParticipantHomePage';
 import { ParticipantTeamsPage } from './pages/participant/ParticipantTeamsPage';
 import { ParticipantTournamentsPage } from './pages/participant/ParticipantTournamentsPage';
+import { AgendaPage } from './pages/shared/AgendaPage';
 import { PublicViewerPage } from './pages/shared/PublicViewerPage';
 import { PlaceholderPage } from './pages/shared/PlaceholderPage';
 import { TeamPublicViewPage } from './pages/shared/TeamPublicViewPage';
@@ -36,7 +37,7 @@ export const App: React.FC = () => {
     if (mode === 'general_with_account' || mode === 'team_claim') return mode;
     return null;
   });
-  const NAV_IDS: NavItemId[] = ['inicio', 'torneos', 'equipos', 'participantes', 'perfil'];
+  const NAV_IDS: NavItemId[] = ['inicio', 'agenda', 'torneos', 'equipos', 'participantes', 'perfil'];
   const [activeNav, setActiveNav] = React.useState<NavItemId>(() => {
     const seg = window.location.pathname.replace(/^\//, '').split('/')[0] as NavItemId;
     return NAV_IDS.includes(seg) ? seg : 'inicio';
@@ -105,6 +106,7 @@ export const App: React.FC = () => {
     if (currentRole === 'organizer') {
       return [
         { id: 'torneos', label: 'Torneos' },
+        { id: 'agenda', label: 'Agenda' },
         { id: 'equipos', label: 'Equipos' },
         { id: 'participantes', label: 'Participantes' },
       ];
@@ -112,12 +114,14 @@ export const App: React.FC = () => {
     if (currentRole === 'team') {
       return [
         { id: 'inicio', label: 'Inicio' },
+        { id: 'agenda', label: 'Agenda' },
         { id: 'participantes', label: 'Plantilla' },
         { id: 'torneos', label: 'Torneos' },
       ];
     }
     return [
       { id: 'inicio', label: 'Inicio' },
+      { id: 'agenda', label: 'Agenda' },
       { id: 'equipos', label: 'Equipos' },
       { id: 'torneos', label: 'Torneos' },
       { id: 'perfil', label: 'Mi Perfil' },
@@ -179,7 +183,7 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     if (!user) return;
-    if (currentRole !== 'participant' && activeNav !== 'perfil') return;
+    if (currentRole !== 'participant' && activeNav !== 'perfil' && activeNav !== 'agenda') return;
     (async () => {
       setProfileLoading(true);
       setProfileError('');
@@ -415,6 +419,14 @@ export const App: React.FC = () => {
       if (activeNav === 'torneos') {
         return <OrganizerTournamentsPage organizerName={currentUser.username || currentUser.fullName} />;
       }
+      if (activeNav === 'agenda') {
+        return (
+          <AgendaPage
+            role="organizer"
+            organizerName={currentUser.username || currentUser.fullName}
+          />
+        );
+      }
       if (activeNav === 'equipos') {
         return <OrganizerTeamsPage />;
       }
@@ -439,6 +451,14 @@ export const App: React.FC = () => {
             team={activeTeam}
             participants={teamParticipants}
             tournamentsCount={0}
+          />
+        );
+      }
+      if (activeNav === 'agenda') {
+        return (
+          <AgendaPage
+            role="team"
+            teamId={activeTeam?.id ? Number(activeTeam.id) : null}
           />
         );
       }
@@ -496,6 +516,16 @@ export const App: React.FC = () => {
           linkedParticipants={linkedParticipants}
           teamTournamentsCount={0}
           individualTournamentsCount={0}
+        />
+      );
+    }
+    if (activeNav === 'agenda') {
+      const participantUserId = Number(user?.id || 0);
+      return (
+        <AgendaPage
+          role="participant"
+          participantUserId={Number.isFinite(participantUserId) && participantUserId > 0 ? participantUserId : null}
+          linkedTeams={linkedTeams}
         />
       );
     }
