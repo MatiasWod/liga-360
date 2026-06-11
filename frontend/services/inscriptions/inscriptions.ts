@@ -113,6 +113,16 @@ export async function updateInscriptionStatus(inscriptionId: number, status: 'ap
   return json.inscription;
 }
 
+export async function updateInscriptionWeight(inscriptionId: number, weight: number | null) {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions/${inscriptionId}/weight`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ weight }),
+  });
+  const json = await parseResponse(res, 'No se pudo actualizar la ponderacion');
+  return json.inscription as InscriptionItem;
+}
+
 export async function moveInscriptionCompetition(inscriptionId: number, competitionId: string) {
   const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions/${inscriptionId}/competition`, {
     method: 'PATCH',

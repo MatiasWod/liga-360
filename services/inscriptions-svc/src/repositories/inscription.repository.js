@@ -1,7 +1,7 @@
 /** Acceso a datos de Inscription. Recibe un client/pool pg (las transacciones las maneja el servicio). */
 
 const COLS = `id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id,
-  linked_participant_user_id, status, source, created_by_user_id, reviewed_by_user_id, created_at, updated_at`;
+  linked_participant_user_id, status, source, weight, tournament_rating, created_by_user_id, reviewed_by_user_id, created_at, updated_at`;
 
 /** Lock transaccional por clave (advisory) para evitar carreras en duplicados/cupos. */
 export async function acquireAdvisoryLock(client, key) {
@@ -122,6 +122,28 @@ export async function countAcceptedByCompetition(client, competitionId) {
   return Number(r.rows[0].count_accepted || 0);
 }
 
+export async function updateTournamentRating(client, id, tournamentRating, now) {
+  const r = await client.query(
+    `UPDATE "Inscription"
+     SET tournament_rating = $2, updated_at = $3
+     WHERE id = $1
+     RETURNING ${COLS}`,
+    [id, tournamentRating, now]
+  );
+  return r.rows[0] || null;
+}
+
+export async function updateWeight(client, id, weight, now) {
+  const r = await client.query(
+    `UPDATE "Inscription"
+     SET weight = $2, updated_at = $3
+     WHERE id = $1
+     RETURNING ${COLS}`,
+    [id, weight, now]
+  );
+  return r.rows[0] || null;
+}
+
 export async function updateCompetition(client, id, competitionId, displayName, now) {
   const r = await client.query(
     `UPDATE "Inscription"
@@ -161,7 +183,7 @@ export async function completeTargetFromInvite(client, id, displayName, reviewed
 }
 
 const LIST_COLS = `i.id, i.tournament_id, i.competition_id, i.competitor_kind, i.display_name,
-  i.linked_team_id, i.linked_participant_user_id, i.status, i.source,
+  i.linked_team_id, i.linked_participant_user_id, i.status, i.source, i.weight, i.tournament_rating,
   i.created_by_user_id, i.reviewed_by_user_id, i.created_at, i.updated_at`;
 
 export async function listByTournament(client, tournamentId, competitionId = null) {
@@ -209,7 +231,7 @@ export async function findByIds(client, ids) {
   const numericIds = (ids || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
   if (numericIds.length === 0) return [];
   const r = await client.query(
-    `SELECT id, tournament_id, competition_id, display_name, linked_team_id, status
+    `SELECT id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, tournament_rating
      FROM "Inscription" WHERE id = ANY($1::int[])
      ORDER BY created_at DESC`,
     [numericIds]

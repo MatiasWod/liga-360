@@ -10,6 +10,12 @@ export interface InscriptionItem {
   linked_team_id: number | null;
   linked_participant_user_id?: number | null;
   display_name: string;
+  /** Ponderación manual 1–10; null se trata como 5 (neutro) al ordenar seeds. */
+  weight?: number | null;
+  /** Ponderación sugerida por ELO (solo equipos). */
+  suggested_weight?: number | null;
+  elo_source?: 'team_global' | 'tournament_local' | 'default' | null;
+  elo_raw?: number | null;
   status: 'PENDIENTE' | 'ACEPTADO' | 'RECHAZADO';
   created_by_user_id: number | null;
   reviewed_by_user_id: number | null;

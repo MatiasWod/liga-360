@@ -124,6 +124,7 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
       - INSCRIPTIONS_SVC_URL=http://inscriptions-svc:4004
       - MATCHEVENTS_SVC_URL=http://matchevents-svc:4006
+      - TEAMS_SVC_URL=http://teams-svc:4002
       - NODE_ENV=production
     depends_on:
       neo4j:
@@ -131,6 +132,8 @@ services:
       inscriptions-svc:
         condition: service_started
       matchevents-svc:
+        condition: service_started
+      teams-svc:
         condition: service_started
     ports:
       - '4001:4001'
@@ -148,6 +151,7 @@ services:
       - PORT=4002
       - JWT_SECRET=${JWT_SECRET:-devsecret}
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_teams
+      - INSCRIPTIONS_SVC_URL=http://inscriptions-svc:4004
       - NODE_ENV=production
     depends_on:
       postgres:

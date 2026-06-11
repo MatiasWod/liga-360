@@ -32,6 +32,19 @@ export async function findById(session, matchId) {
   return props ? matchFromNeoProps(props) : null;
 }
 
+export async function findTournamentMetaForMatch(session, matchId) {
+  const r = await session.run(
+    `MATCH (t:Tournament)-[:HAS_COMPETITION]->(:Competition)-[:HAS_STAGE]->(:Stage)-[:HAS_MATCH]->(m:Match {id:$id})
+     RETURN t.id AS tournamentId, t.status AS status LIMIT 1`,
+    { id: matchId }
+  );
+  if (!r.records.length) return null;
+  return {
+    tournamentId: r.records[0].get('tournamentId'),
+    status: r.records[0].get('status'),
+  };
+}
+
 export async function findStageIdForMatch(session, matchId) {
   const r = await session.run(
     `MATCH (s:Stage)-[:HAS_MATCH]->(m:Match {id:$id}) RETURN s.id AS stageId LIMIT 1`,

@@ -27,4 +27,5 @@ export const env = {
   logLevel: process.env.LOG_LEVEL || 'info',
   inscriptionsSvcUrl: process.env.INSCRIPTIONS_SVC_URL || 'http://localhost:4004',
   matcheventsSvcUrl: process.env.MATCHEVENTS_SVC_URL || 'http://localhost:4006',
+  teamsSvcUrl: process.env.TEAMS_SVC_URL || 'http://localhost:4002',
 };

@@ -59,3 +59,26 @@ export async function svcGet(baseUrl, path) {
   }
   return response.json();
 }
+
+export async function svcPost(baseUrl, path, body) {
+  let response;
+  try {
+    response = await resilientFetch(
+      `${baseUrl}${path}`,
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...serviceAuthHeader() },
+        body: JSON.stringify(body ?? {}),
+      },
+      { retries: 0 }
+    );
+  } catch (err) {
+    logger.warn({ err: err.message, baseUrl, path }, 'downstream POST failed');
+    return null;
+  }
+  if (!response.ok) {
+    logger.warn({ status: response.status, baseUrl, path }, 'downstream POST non-ok');
+    return null;
+  }
+  return response.json();
+}

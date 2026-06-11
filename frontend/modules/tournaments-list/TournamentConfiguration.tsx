@@ -12,6 +12,7 @@ import {
   listTournamentInscriptions,
   type InscriptionItem,
   updateInscriptionStatus,
+  updateInscriptionWeight,
 } from '../../services/inscriptionsApi';
 import {
   assignInscriptionToGroup,
@@ -22,6 +23,7 @@ import {
 } from '../../services/tournaments/configuration';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
+import { InscriptionWeightSelect } from './components/InscriptionWeightSelect';
 import { EliminationInitWizard } from './EliminationInitWizard';
 import type {
   AssignedInscription,
@@ -690,6 +692,19 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     }
   }
 
+  async function handleWeightChange(inscriptionId: number, weight: number | null) {
+    setSaving(true);
+    setError('');
+    try {
+      await updateInscriptionWeight(inscriptionId, weight);
+      await loadInscriptions();
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo actualizar la ponderacion');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleManualBatchSubmit(event: React.FormEvent) {
     event.preventDefault();
     const rows = manualRows
@@ -1090,12 +1105,27 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
                     .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
                   return (
                     <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        {renderEntryAvatar(item, 'h-9 w-9')}
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-800">{isTeamsTournament ? <TeamNameLink teamId={item.linked_team_id ?? undefined} teamName={item.display_name} className="max-w-full truncate align-bottom" /> : item.display_name}</p>
-                          <p className="text-[11px] text-emerald-700">ACEPTADO</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          {renderEntryAvatar(item, 'h-9 w-9')}
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-800">{isTeamsTournament ? <TeamNameLink teamId={item.linked_team_id ?? undefined} teamName={item.display_name} className="max-w-full truncate align-bottom" /> : item.display_name}</p>
+                            <p className="text-[11px] text-emerald-700">ACEPTADO</p>
+                          </div>
                         </div>
+                        <InscriptionWeightSelect
+                          inscriptionId={item.id}
+                          value={item.weight ?? null}
+                          suggestedWeight={item.suggested_weight ?? null}
+                          eloRaw={item.elo_raw ?? null}
+                          disabled={saving}
+                          onChange={(weight) => void handleWeightChange(item.id, weight)}
+                          onApplySuggested={
+                            item.suggested_weight != null
+                              ? () => void handleWeightChange(item.id, item.suggested_weight!)
+                              : undefined
+                          }
+                        />
                       </div>
                       <p className="mt-2 text-xs text-slate-600">
                         <span className="font-medium">Competiciones:</span>{' '}

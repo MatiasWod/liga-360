@@ -5,7 +5,9 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { createApp } from '../app.js';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = 'testsecret-nodb';
 
 let server;
 let baseUrl;
@@ -27,8 +29,14 @@ function req(method, path, body, headers = {}) {
   });
 }
 
+function bearer(payload) {
+  return { Authorization: `Bearer ${jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })}` };
+}
+
 describe('teams-svc HTTP (sin DB)', () => {
   before(async () => {
+    process.env.JWT_SECRET = JWT_SECRET;
+    const { createApp } = await import('../app.js');
     const app = createApp();
     server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
@@ -86,5 +94,33 @@ describe('teams-svc HTTP (sin DB)', () => {
   test('GET /profiles (lookup interno) sin token de servicio → 401', async () => {
     const r = await req('GET', '/profiles?dni=12345678');
     assert.equal(r.status, 401);
+  });
+
+  test('POST /internal/elo/process-match sin token → 401', async () => {
+    const r = await req('POST', '/internal/elo/process-match', { matchId: 'm-1', tournamentId: 't-1' });
+    assert.equal(r.status, 401);
+    assert.equal(r.body.error.code, 'UNAUTHORIZED');
+  });
+
+  test('POST /internal/elo/process-match con token organizer → 403', async () => {
+    const r = await req(
+      'POST',
+      '/internal/elo/process-match',
+      { matchId: 'm-1', tournamentId: 't-1' },
+      bearer({ sub: 1, type: 'organizer' })
+    );
+    assert.equal(r.status, 403);
+    assert.equal(r.body.error.code, 'FORBIDDEN');
+  });
+
+  test('POST /internal/elo/process-match sin matchId → 400', async () => {
+    const r = await req(
+      'POST',
+      '/internal/elo/process-match',
+      { tournamentId: 't-1' },
+      bearer({ type: 'service', iss: 'test' })
+    );
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 });

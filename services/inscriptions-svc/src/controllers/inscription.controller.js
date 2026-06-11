@@ -64,6 +64,38 @@ export async function moveCompetition(req, res, next) {
   }
 }
 
+export async function updateTournamentRating(req, res, next) {
+  try {
+    const inscriptionId = Number(req.params.id);
+    if (!inscriptionId) return validationError(res, [{ field: 'id', message: 'inscriptionId invalido' }]);
+    const tournamentRating = Number(req.body?.tournamentRating);
+    if (!Number.isInteger(tournamentRating)) {
+      return validationError(res, [{ field: 'tournamentRating', message: 'tournamentRating entero requerido' }]);
+    }
+    res.json(await inscriptionService.updateTournamentRating({ inscriptionId, tournamentRating }));
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function updateWeight(req, res, next) {
+  try {
+    const inscriptionId = Number(req.params.id);
+    if (!inscriptionId) return validationError(res, [{ field: 'id', message: 'inscriptionId invalido' }]);
+    const rawWeight = req.body?.weight;
+    if (rawWeight != null && rawWeight !== '') {
+      const n = Number(rawWeight);
+      if (!Number.isInteger(n) || n < 1 || n > 10) {
+        return validationError(res, [{ field: 'weight', message: 'weight debe ser entero entre 1 y 10, o null' }]);
+      }
+    }
+    const weight = rawWeight == null || rawWeight === '' ? null : Number(rawWeight);
+    res.json(await inscriptionService.updateWeight({ inscriptionId, weight }));
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function associate(req, res, next) {
   try {
     const inscriptionId = Number(req.params.id);

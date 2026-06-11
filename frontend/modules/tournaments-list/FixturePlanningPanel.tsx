@@ -31,6 +31,7 @@ import { effectiveStageStatus } from './stageLifecycle';
 import { enrichStageTeamDisplayNames } from './teamDisplayName';
 import type { InscriptionItem } from '../../services/inscriptionsApi';
 import { buildCompetitorImageMap } from '../../services/inscriptions/competitorImages';
+import { applyStageSeedingFromWeights } from './inscriptionWeight';
 
 export const FixturePlanningPanel: React.FC<{
   tournament: TournamentEntity;
@@ -146,6 +147,13 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
+      if (inscriptionById) {
+        await applyStageSeedingFromWeights({
+          stage,
+          tournamentId: tournament.id,
+          inscriptionById,
+        });
+      }
       await generateLeagueRoundRobin(stage.id, doubleRound, maxRoundsFromConfig);
       await onRefresh();
     } catch (e: unknown) {
@@ -160,6 +168,13 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
+      if (inscriptionById) {
+        await applyStageSeedingFromWeights({
+          stage,
+          tournamentId: tournament.id,
+          inscriptionById,
+        });
+      }
       await generateSingleEliminationBracket(stage.id, doubleRound);
       await onRefresh();
     } catch (e: unknown) {
@@ -174,6 +189,13 @@ export const FixturePlanningPanel: React.FC<{
     setSaving(true);
     setError('');
     try {
+      if (inscriptionById) {
+        await applyStageSeedingFromWeights({
+          stage,
+          tournamentId: tournament.id,
+          inscriptionById,
+        });
+      }
       await generateGroupsStageRoundRobin(stage.id, doubleRound, maxRoundsFromConfig);
       await onRefresh();
     } catch (e: unknown) {

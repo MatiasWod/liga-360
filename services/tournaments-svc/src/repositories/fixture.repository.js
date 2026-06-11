@@ -19,11 +19,11 @@ export async function loadOrderedStageInscriptions(session, stageId) {
   return res.records.map(mapInscription);
 }
 
-/** Inscripciones del grupo en orden (displayName, inscriptionId). */
+/** Inscripciones del grupo en orden de seed (seedOrder, displayName, inscriptionId). */
 export async function loadOrderedGroupInscriptions(session, groupId) {
   const res = await session.run(
     `MATCH (g:Group {id:$groupId})-[:HAS_ASSIGNED_INSCRIPTION]->(i:InscriptionRef)
-     RETURN i ORDER BY i.displayName, i.inscriptionId`,
+     RETURN i ORDER BY coalesce(i.seedOrder, 999999), i.displayName, i.inscriptionId`,
     { groupId }
   );
   return res.records.map(mapInscription);
