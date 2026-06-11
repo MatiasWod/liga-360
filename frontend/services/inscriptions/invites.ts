@@ -76,7 +76,7 @@ export async function getInviteByToken(token: string): Promise<{
   targetInscriptionId: number | null;
   target: any;
 }> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/invites/${encodeURIComponent(token)}`);
+  const res = await fetch(`${INSCRIPTIONS_BASE}/invites/${encodeURIComponent(token)}`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudo cargar la invitacion');
   const invite = json.invite;
   return {

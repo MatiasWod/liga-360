@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from '../config';
+import { authHeaders } from '../http';
 
 /** Presencia de un partido (ADR-0002): snapshot opt-in cargado por el equipo. */
 export interface MatchPresence {
@@ -27,11 +28,6 @@ export interface ReplacePresencesPayload {
   entries: PresenceEntry[];
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('liga360:token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function handleResponse<T>(res: Response): Promise<T> {
   const json = await res.json().catch(() => null);
   if (!res.ok) throw new Error((json as any)?.error?.message || (json as any)?.error || `HTTP ${res.status}`);
@@ -43,7 +39,9 @@ const base = () => API_ENDPOINTS.matchEvents;
 
 /** Lectura pública de presencias del partido. */
 export async function listMatchPresences(matchId: string): Promise<MatchPresence[]> {
-  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences`);
+  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences`, {
+    headers: authHeaders(),
+  });
   return handleResponse<MatchPresence[]>(res);
 }
 
@@ -54,7 +52,7 @@ export async function replaceMatchPresences(
 ): Promise<MatchPresence[]> {
   const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
   return handleResponse<MatchPresence[]>(res);
@@ -63,7 +61,7 @@ export async function replaceMatchPresences(
 export async function deleteMatchPresence(matchId: string, presenceId: number): Promise<void> {
   const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences/${presenceId}`, {
     method: 'DELETE',
-    headers: { ...getAuthHeaders() },
+    headers: authHeaders(),
   });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
@@ -71,7 +69,7 @@ export async function deleteMatchPresence(matchId: string, presenceId: number): 
   }
 }
 
-/** Stats agregadas de un Participant (público): totales + desglose por torneo. */
+/** Stats agregadas de un Participant (requiere sesión): totales + desglose por torneo. */
 export interface ParticipantTournamentStats {
   tournamentId: string;
   competitionId: string | null;
@@ -91,6 +89,8 @@ export interface ParticipantStats {
 
 export async function getParticipantStats(memberId: number, options?: { teamId?: number }): Promise<ParticipantStats> {
   const params = options?.teamId ? `?teamId=${Number(options.teamId)}` : '';
-  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/participants/${memberId}/stats${params}`);
+  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/participants/${memberId}/stats${params}`, {
+    headers: authHeaders(),
+  });
   return handleResponse<ParticipantStats>(res);
 }
