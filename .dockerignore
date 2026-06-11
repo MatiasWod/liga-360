@@ -1,8 +1,15 @@
 .git
 .gitignore
 node_modules
+*/node_modules
+*/*/node_modules
 dist
+build
+*/dist
+*/*/dist
 coverage
+*/coverage
+*/*/coverage
 test-results
 tests
 playwright-report
@@ -11,4 +18,6 @@ temp
 logs
 *.log
 *.tsbuildinfo
-services
+.env
+.venv
+__pycache__
