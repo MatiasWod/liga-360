@@ -1,6 +1,8 @@
 import React from 'react';
 import { AppLayout } from './components/layout/AppLayout';
 import { AuthPage } from './pages/auth/AuthPage';
+import { VerificationPendingPage } from './pages/auth/VerificationPendingPage';
+import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
 import { InviteLandingPage } from './pages/invite/InviteLandingPage';
 import { OrganizerParticipantsPage } from './pages/organizer/OrganizerParticipantsPage';
 import { OrganizerProfilePage } from './pages/organizer/OrganizerProfilePage';
@@ -104,6 +106,7 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     if (!user) return;
+    if (!user.isVerified) return;
     (async () => {
       try {
         let teamList = await getMyTeams();
@@ -138,6 +141,7 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     if (!user || !activeTeamId) return;
+    if (!user.isVerified) return;
     (async () => {
       setTeamLoading(true);
       setTeamError('');
@@ -157,6 +161,7 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     if (!user) return;
+    if (!user.isVerified) return;
     if (currentRole !== 'participant' && activeNav !== 'perfil') return;
     (async () => {
       setProfileLoading(true);
@@ -190,6 +195,10 @@ export const App: React.FC = () => {
     setShowAuthPage(false);
     setTeams([]);
     setActiveTeamId(null);
+  }
+
+  if (window.location.pathname === '/verify') {
+    return <VerifyEmailPage />;
   }
 
   if (inviteToken) {
@@ -261,6 +270,11 @@ export const App: React.FC = () => {
       />
     );
   }
+
+  if (user && !user.isVerified) {
+    return <VerificationPendingPage onLogout={handleLogout} />;
+  }
+
   const currentUser = user;
 
   async function handleCreateParticipant(payload: any) {

@@ -8,11 +8,11 @@ import {verifyToken, requireRole, ROLES} from '@liga360/shared';
 export function createRouter() {
   const router = Router();
 
-  router.post('/matches/:matchId/events', verifyToken, requireRole[ROLES.ORGANIZER], matchEvent.create);
+  router.post('/matches/:matchId/events', verifyToken, requireRole([ROLES.ORGANIZER]), matchEvent.create);
   // Lectura pública: mismos datos que las tablas de estadísticas; `notes` solo organizador
   router.get('/matches/:matchId/events', matchEvent.list);
-  router.patch('/matches/:matchId/events/:eventId', verifyToken, requireRole[ROLES.ORGANIZER], matchEvent.update);
-  router.delete('/matches/:matchId/events/:eventId', verifyToken, requireRole[ROLES.ORGANIZER], matchEvent.remove);
+  router.patch('/matches/:matchId/events/:eventId', verifyToken, requireRole([ROLES.ORGANIZER]), matchEvent.update);
+  router.delete('/matches/:matchId/events/:eventId', verifyToken, requireRole([ROLES.ORGANIZER]), matchEvent.remove);
 
   // Presencias por partido (ADR-0002): lectura pública; escritura solo dueño del equipo
   // (la matriz de autorización vive en presence.service, no alcanza con el rol del token)

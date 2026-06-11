@@ -18,8 +18,8 @@ export function createRouter() {
   // Inscriptions (rutas literales antes de /:id para evitar que "lookup" matchee como id)
   router.post('/inscriptions', verifyToken, inscription.create);
   router.get('/inscriptions/lookup', inscription.lookupByIds);
-  router.patch('/inscriptions/:id/status', verifyToken, requireRole[ROLES.ORGANIZER], inscription.updateStatus);
-  router.patch('/inscriptions/:id/competition', verifyToken, requireRole[ROLES.ORGANIZER], inscription.moveCompetition);
+  router.patch('/inscriptions/:id/status', verifyToken, requireRole([ROLES.ORGANIZER]), inscription.updateStatus);
+  router.patch('/inscriptions/:id/competition', verifyToken, requireRole([ROLES.ORGANIZER]), inscription.moveCompetition);
   router.post('/inscriptions/:id/associate', verifyToken, requireRole([ROLES.TEAM,ROLES.PARTICIPANT]), inscription.associate);
   // Endpoint interno service-to-service (matchevents-svc resuelve inscription → linked_team_id)
   router.get('/inscriptions/:id', requireServiceToken, inscription.getById);
@@ -27,8 +27,8 @@ export function createRouter() {
   router.get('/competitions/:id/inscriptions', verifyToken, inscription.listByCompetition);
 
   // Invites (rutas específicas antes de /:token)
-  router.get('/invites', verifyToken, requireRole[ROLES.ORGANIZER], invite.list);
-  router.post('/invites', verifyToken, requireRole[ROLES.ORGANIZER], invite.create);
+  router.get('/invites', verifyToken, requireRole([ROLES.ORGANIZER]), invite.list);
+  router.post('/invites', verifyToken, requireRole([ROLES.ORGANIZER]), invite.create);
   router.post('/invites/claims', verifyToken, invite.claimByCode);
   router.get('/invites/:token', invite.getByToken);
   router.post('/invites/:token/use', verifyToken, invite.use);
@@ -37,9 +37,9 @@ export function createRouter() {
   router.get('/teams/:teamId/inscriptions', inscription.listByTeam);
 
   // Team invites
-  router.get('/teams/me/invites', verifyToken, requireRole[ROLES.TEAM], teamInvite.list);
-  router.post('/teams/me/invites/:id/accept', verifyToken, requireRole[ROLES.TEAM], teamInvite.accept);
-  router.post('/teams/me/invites/:id/reject', verifyToken, requireRole[ROLES.TEAM], teamInvite.reject);
+  router.get('/teams/me/invites', verifyToken, requireRole([ROLES.TEAM]), teamInvite.list);
+  router.post('/teams/me/invites/:id/accept', verifyToken, requireRole([ROLES.TEAM]), teamInvite.accept);
+  router.post('/teams/me/invites/:id/reject', verifyToken, requireRole([ROLES.TEAM]), teamInvite.reject);
 
   // Participant invites
   router.get('/participants/me/invites', verifyToken, requireRole(ROLES.PARTICIPANT), participantInvite.list);

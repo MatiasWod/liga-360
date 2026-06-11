@@ -12,7 +12,7 @@ const TOKEN_EXPIRY = '1d';
 
 function signToken(user) {
   return jwt.sign(
-    { sub: user.id, username: user.username, type: user.type },
+    { sub: user.id, username: user.username, type: user.type, isVerified: user.isVerified },
     env.jwtSecret,
     { expiresIn: TOKEN_EXPIRY }
   );
@@ -45,7 +45,7 @@ export async function register({ mode, username, email, password, name }) {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
 
   try {
-    await sendVerificationEmail(user.username, name, verificationUrl);
+    await sendVerificationEmail(user.email, name, verificationUrl);
   } catch (err) {
     logger.error({ err: err.message, userId: user.id }, 'failed to send verification email');
   }
@@ -70,7 +70,7 @@ export async function login({ username, password }) {
 
   return {
     token,
-    user: { id: user.id, username: user.username, type: user.type },
+    user: { id: user.id, username: user.username, type: user.type, isVerified: user.isVerified },
   };
 }
 
@@ -101,10 +101,10 @@ export async function verifyEmail({ userId, token }) {
     throw Object.assign(new Error('User is already verified'), { statusCode: 400, code: 'ALREADY_VERIFIED' });
   }
 
-  await userRepository.update(user.id, { isVerified: true });
+  const updatedUser = await userRepository.update(user.id, { isVerified: true });
 
   const { mode, name } = decoded;
-  const authToken = signToken(user); // Generamos el token de sesión real
+  const authToken = signToken(updatedUser); // Generamos el token de sesión real
 
   if (mode === 'team') {
     try {

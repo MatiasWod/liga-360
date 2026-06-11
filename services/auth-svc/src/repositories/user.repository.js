@@ -9,7 +9,7 @@ const pool = new Pool({
 
 export async function findByUsername(username) {
   const r = await pool.query(
-    'SELECT id, username, password, type FROM "Users" WHERE LOWER(username) = LOWER($1)',
+    'SELECT id, username, password, type, "isVerified" FROM "Users" WHERE LOWER(username) = LOWER($1)',
     [username]
   );
   return r.rows[0] || null;
@@ -25,8 +25,8 @@ export async function findById(id) {
 
 export async function create({ username, email, password, type, isVerified = false }) {
   const r = await pool.query(
-      'INSERT INTO "Users"(username, email, password, type, "isVerified") VALUES ($1, $2, $3, $4) RETURNING id, username, type, "isVerified"',
-      [username, password, type, isVerified]
+      'INSERT INTO "Users"(username, email, password, type, "isVerified") VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, type, "isVerified"',
+      [username, email, password, type, isVerified]
   );
   return r.rows[0];
 }

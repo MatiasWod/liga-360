@@ -15,6 +15,14 @@ export function verifyToken(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
+
+        if (!req.user.isVerified) {
+            return res.status(403).json({
+                error: 'Forbidden: Email not verified',
+                code: 'EMAIL_NOT_VERIFIED'
+            });
+        }
+
         next();
     } catch (err) {
         // Si jwt.verify falla (token modificado, falso o expirado), cae aquí
