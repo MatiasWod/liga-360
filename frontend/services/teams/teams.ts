@@ -123,14 +123,15 @@ export async function resolveTeamByInviteCode(code: string) {
 }
 
 /** Lookup público por ids (nombres para mano a mano y desglose histórico). */
-export async function lookupTeamsByIds(ids: number[]): Promise<{ id: number; name: string }[]> {
+export async function lookupTeamsByIds(ids: number[]): Promise<{ id: number; name: string; badgeUrl: string | null }[]> {
   const clean = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
   if (!clean.length) return [];
   const params = new URLSearchParams({ ids: clean.join(',') });
   const res = await fetch(`${TEAMS_BASE}?${params}`);
   const json = await parseJsonResponse(res, 'No se pudieron resolver equipos');
-  return (json.teams || []).map((t: { id: number; name: string }) => ({
+  return (json.teams || []).map((t: { id: number; name: string; badge_url?: string | null }) => ({
     id: Number(t.id),
     name: String(t.name),
+    badgeUrl: t.badge_url ?? null,
   }));
 }

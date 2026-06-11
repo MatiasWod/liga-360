@@ -4,6 +4,8 @@ export interface InscriptionItem {
   competition_id: string | null;
   competitor_kind?: 'team' | 'participant';
   team_badge_url?: string | null;
+  /** Imagen del competidor: escudo del equipo o avatar del participante según el kind. */
+  competitor_image_url?: string | null;
   source: 'public' | 'invitation' | 'manual';
   linked_team_id: number | null;
   linked_participant_user_id?: number | null;
