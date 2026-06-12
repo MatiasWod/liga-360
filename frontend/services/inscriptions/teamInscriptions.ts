@@ -1,4 +1,4 @@
-import { INSCRIPTIONS_BASE, parseResponse } from './client';
+import { authHeaders, INSCRIPTIONS_BASE, parseResponse } from './client';
 
 export interface TeamInscriptionItem {
   id: number;
@@ -20,7 +20,7 @@ export interface InscriptionLookupItem {
 
 /** Historial cross-torneo de un equipo (público). Incluye inscripciones rechazadas. */
 export async function listTeamInscriptions(teamId: number): Promise<TeamInscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/teams/${Number(teamId)}/inscriptions`);
+  const res = await fetch(`${INSCRIPTIONS_BASE}/teams/${Number(teamId)}/inscriptions`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones del equipo');
   return json.inscriptions || [];
 }
@@ -29,7 +29,7 @@ export async function listTeamInscriptions(teamId: number): Promise<TeamInscript
 export async function lookupInscriptions(ids: number[]): Promise<InscriptionLookupItem[]> {
   if (!ids.length) return [];
   const params = new URLSearchParams({ ids: ids.join(',') });
-  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions/lookup?${params}`);
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions/lookup?${params}`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudieron resolver las inscripciones');
   return json.inscriptions || [];
 }

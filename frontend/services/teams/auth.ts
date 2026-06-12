@@ -1,16 +1,16 @@
-import { AUTH_BASE, parseJsonResponse } from './client';
+import { AUTH_BASE, authHeaders, parseJsonResponse } from './client';
 import { readSessionUser, saveSession } from './session';
 import { ensureTeamForSession } from './teams';
 
 export async function login(username: string, password: string) {
   const res = await fetch(`${AUTH_BASE}/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ username, password }),
   });
   const json = await parseJsonResponse(res, 'Error de login');
   saveSession(json.token, json.user);
-  if (json.user?.type === 'team') {
+  if (json.user?.type === 'team' && json.user?.isVerified !== false ) {
     await ensureTeamForSession();
   }
   return readSessionUser();
@@ -19,7 +19,7 @@ export async function login(username: string, password: string) {
 export async function register(mode: 'team' | 'participant' | 'organizer', username: string, email: string, password: string, name: string) {
   const res = await fetch(`${AUTH_BASE}/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ mode, username, email, password, name }),
   });
   const json = await parseJsonResponse(res, 'Error de registro');

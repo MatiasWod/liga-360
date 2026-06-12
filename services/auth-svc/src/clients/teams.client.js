@@ -29,7 +29,7 @@ export async function createParticipant({ name, token }) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ firstName, lastName }),
+    body: JSON.stringify({ firstName, lastName, linkToUserProfile: true }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
