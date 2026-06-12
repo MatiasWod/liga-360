@@ -173,7 +173,7 @@ pipelines:
               script:
                 - export SVC="liga360-auth-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/auth-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -207,7 +207,7 @@ pipelines:
               script:
                 - export SVC="liga360-inscriptions-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/inscriptions-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/inscriptions-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -224,7 +224,7 @@ pipelines:
               script:
                 - export SVC="liga360-teams-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/teams-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -241,7 +241,7 @@ pipelines:
               script:
                 - export SVC="liga360-matchevents-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/matchevents-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/matchevents-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
