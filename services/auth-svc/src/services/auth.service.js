@@ -5,7 +5,7 @@ import * as userRepository from '../repositories/user.repository.js';
 import * as teamsClient from '../clients/teams.client.js';
 import { logger } from '../logger.js';
 import {sendVerificationEmail} from "../middleware/mailer.js";
-import {PUBLIC_ROLES} from "@liga360/shared/constants/constants.js";
+import {PUBLIC_ROLES, ROLES} from "@liga360/shared/constants/constants.js";
 
 const SALT_ROUNDS = 10;
 const TOKEN_EXPIRY = '1d';
@@ -55,6 +55,35 @@ export async function register({ mode, username, email, password, name, nickname
   };
 }
 
+/**
+ * Crea el usuario admin desde env vars (los admins no se registran). Idempotente: si el
+ * username ya existe no hace nada, y si faltan las ADMIN_* solo avisa (entornos sin admin).
+ * Se crea verificado: verifyToken (shared) rechaza tokens con isVerified false.
+ */
+export async function bootstrapAdmin() {
+  const { adminUsername, adminEmail, adminPassword } = env;
+  if (!adminUsername || !adminEmail || !adminPassword) {
+    logger.warn('admin bootstrap skipped: ADMIN_USERNAME/ADMIN_EMAIL/ADMIN_PASSWORD not set');
+    return null;
+  }
+
+  const existing = await userRepository.findByUsername(adminUsername);
+  if (existing) {
+    return existing;
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, SALT_ROUNDS);
+  const admin = await userRepository.create({
+    email: adminEmail.trim().toLowerCase(),
+    username: adminUsername.trim().toLowerCase(),
+    password: hashedPassword,
+    type: ROLES.ADMIN,
+    isVerified: true,
+  });
+  logger.info({ userId: admin.id, username: admin.username }, 'admin user bootstrapped');
+  return admin;
+}
+
 export async function login({ username, password }) {
   const user = await userRepository.findByUsername(username);
   if (!user) {
@@ -64,6 +93,12 @@ export async function login({ username, password }) {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) {
     throw Object.assign(new Error('invalid credentials'), { statusCode: 401, code: 'UNAUTHORIZED' });
+  }
+
+  // El baneo se aplica solo acá: sin token nuevo, los JWT vigentes expiran solos (1d).
+  // Después del check de password para no revelar el estado de baneo a terceros.
+  if (user.banned_at) {
+    throw Object.assign(new Error('user is banned'), { statusCode: 403, code: 'BANNED' });
   }
 
   const token = signToken(user);

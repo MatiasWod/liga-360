@@ -22,4 +22,8 @@ export const env = {
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
     : ['*'],
   logLevel: process.env.LOG_LEVEL || 'info',
+  // Bootstrap del admin (sin registro): si falta alguna, el bootstrap se saltea con warning.
+  adminUsername: process.env.ADMIN_USERNAME || '',
+  adminEmail: process.env.ADMIN_EMAIL || '',
+  adminPassword: process.env.ADMIN_PASSWORD || '',
 };
