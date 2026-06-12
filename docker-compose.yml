@@ -91,8 +91,12 @@ services:
     restart: "no"
 
   auth-svc:
-    build: ./services/auth-svc
+    build:
+      context: .
+      dockerfile: services/auth-svc/Dockerfile
     container_name: liga360-auth-svc
+    env_file:
+      - .env
     environment:
       - PORT=4003
       - JWT_SECRET=${JWT_SECRET:-devsecret}
@@ -145,7 +149,9 @@ services:
       start_period: 20s
 
   teams-svc:
-    build: ./services/teams-svc
+    build:
+      context: .
+      dockerfile: services/teams-svc/Dockerfile
     container_name: liga360-teams-svc
     environment:
       - PORT=4002
@@ -168,7 +174,9 @@ services:
       start_period: 15s
 
   inscriptions-svc:
-    build: ./services/inscriptions-svc
+    build:
+      context: .
+      dockerfile: services/inscriptions-svc/Dockerfile
     container_name: liga360-inscriptions-svc
     environment:
       - PORT=4004
@@ -194,7 +202,9 @@ services:
       start_period: 15s
 
   matchevents-svc:
-    build: ./services/matchevents-svc
+    build:
+      context: .
+      dockerfile: services/matchevents-svc/Dockerfile
     container_name: liga360-matchevents-svc
     environment:
       - PORT=4006
@@ -242,11 +252,17 @@ services:
       dockerfile: deploy/frontend/Dockerfile
     container_name: liga360-frontend
     depends_on:
-      - gateway
-      - teams-svc
-      - auth-svc
-      - inscriptions-svc
-      - matchevents-svc
+      gateway:
+        condition: service_started
+      teams-svc:
+        condition: service_started
+      auth-svc:
+        condition: service_started
+      inscriptions-svc:
+        condition: service_healthy
+      matchevents-svc:
+        condition: service_started
+    restart: unless-stopped
     ports:
       - '5173:80'
     healthcheck:

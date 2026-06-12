@@ -1,5 +1,7 @@
 import { API_ENDPOINTS } from '../config';
 
+export { getToken, authHeaders } from '../http';
+
 export const TEAMS_BASE = API_ENDPOINTS.teams;
 export const AUTH_BASE = API_ENDPOINTS.auth;
 
@@ -8,18 +10,6 @@ export function formatApiError(json: any, fallback: string): string {
   if (typeof err === 'string' && err.trim()) return err;
   if (err && typeof err.message === 'string' && err.message.trim()) return err.message;
   return fallback;
-}
-
-export function getToken() {
-  return localStorage.getItem('liga360:token');
-}
-
-export function authHeaders() {
-  const token = getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
 }
 
 export async function parseJsonResponse(res: Response, fallbackError: string) {

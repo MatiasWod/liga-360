@@ -127,7 +127,7 @@ export async function lookupTeamsByIds(ids: number[]): Promise<{ id: number; nam
   const clean = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
   if (!clean.length) return [];
   const params = new URLSearchParams({ ids: clean.join(',') });
-  const res = await fetch(`${TEAMS_BASE}?${params}`);
+  const res = await fetch(`${TEAMS_BASE}?${params}`, { headers: authHeaders() });
   const json = await parseJsonResponse(res, 'No se pudieron resolver equipos');
   return (json.teams || []).map((t: { id: number; name: string; badge_url?: string | null }) => ({
     id: Number(t.id),

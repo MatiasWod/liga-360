@@ -18,46 +18,56 @@ test.after(async () => {
   }
 });
 
+function extractCode(body) {
+  // verifyToken/requireRole: { error: "string", code: "..." }
+  // errorHandler: { error: { code: "...", message: "..." } }
+  return body.code || body.error?.code || '';
+}
+
+function makeToken(type) {
+  return jwt.sign({ sub: 1, username: 'u', type, isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
+}
+
 test('GET /invites sin token responde 401', async () => {
   const response = await request(app).get('/invites?tournamentId=t-1');
   assert.equal(response.statusCode, 401);
-  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('GET /invites con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 99, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+  const token = makeToken('team');
   const response = await request(app)
     .get('/invites?tournamentId=t-1')
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 403);
-  assert.match(response.body.error?.code || '', /FORBIDDEN/);
+  assert.match(extractCode(response.body), /FORBIDDEN/);
 });
 
 test('GET /teams/me/invites sin token responde 401', async () => {
   const response = await request(app).get('/teams/me/invites');
   assert.equal(response.statusCode, 401);
-  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('POST /invites/claims sin token responde 401', async () => {
   const response = await request(app).post('/invites/claims').send({ code: 'ABCD1234' });
   assert.equal(response.statusCode, 401);
-  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('GET /participants/me/invites sin token responde 401', async () => {
   const response = await request(app).get('/participants/me/invites');
   assert.equal(response.statusCode, 401);
-  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('GET /participants/me/invites con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 7, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+  const token = makeToken('team');
   const response = await request(app)
     .get('/participants/me/invites')
     .set('Authorization', `Bearer ${token}`);
   assert.equal(response.statusCode, 403);
-  assert.match(response.body.error?.code || '', /FORBIDDEN/);
+  assert.match(extractCode(response.body), /FORBIDDEN/);
 });
 
 test('GET /inscriptions/:id sin token responde 401 (endpoint interno)', async () => {
@@ -111,27 +121,27 @@ test('GET /teams/:teamId/inscriptions con teamId invalido responde 400', async (
 test('PATCH /inscriptions/:id/weight sin token responde 401', async () => {
   const response = await request(app).patch('/inscriptions/1/weight').send({ weight: 5 });
   assert.equal(response.statusCode, 401);
-  assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('PATCH /inscriptions/:id/weight con token team responde 403', async () => {
-  const token = jwt.sign({ sub: 7, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+  const token = jwt.sign({ sub: 7, type: 'team', isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
   const response = await request(app)
     .patch('/inscriptions/1/weight')
     .set('Authorization', `Bearer ${token}`)
     .send({ weight: 5 });
   assert.equal(response.statusCode, 403);
-  assert.match(response.body.error?.code || '', /FORBIDDEN/);
+  assert.match(extractCode(response.body), /FORBIDDEN/);
 });
 
 test('PATCH /inscriptions/:id/weight con peso invalido responde 400', async () => {
-  const token = jwt.sign({ sub: 1, type: 'organizer' }, JWT_SECRET, { expiresIn: '1h' });
+  const token = jwt.sign({ sub: 1, type: 'organizer', isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
   const response = await request(app)
     .patch('/inscriptions/1/weight')
     .set('Authorization', `Bearer ${token}`)
     .send({ weight: 11 });
   assert.equal(response.statusCode, 400);
-  assert.match(response.body.error?.code || '', /VALIDATION_ERROR/);
+  assert.match(extractCode(response.body), /VALIDATION_ERROR/);
 });
 
 test('PATCH /internal/inscriptions/:id/tournament-rating sin token responde 401', async () => {

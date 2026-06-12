@@ -8,6 +8,7 @@ import http from 'node:http';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../app.js';
 
+const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 let server;
 let baseUrl;
 
@@ -29,7 +30,7 @@ function req(method, path, body, headers = {}) {
 }
 
 function token(type) {
-  return jwt.sign({ sub: 1, username: 'u', type }, 'devsecret', { expiresIn: '1h' });
+  return jwt.sign({ sub: 1, username: 'u', type, isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 describe('inscriptions-svc HTTP (sin DB)', () => {
@@ -53,17 +54,17 @@ describe('inscriptions-svc HTTP (sin DB)', () => {
   test('GET /invites sin token → 401 estructurado', async () => {
     const r = await req('GET', '/invites?tournamentId=t1');
     assert.equal(r.status, 401);
-    assert.equal(r.body.error.code, 'UNAUTHORIZED');
+    assert.equal(r.body.code, 'UNAUTHORIZED');
   });
 
   test('GET /invites con token no-organizer → 403', async () => {
     const r = await req('GET', '/invites?tournamentId=t1', null, { Authorization: `Bearer ${token('team')}` });
     assert.equal(r.status, 403);
-    assert.equal(r.body.error.code, 'FORBIDDEN');
+    assert.equal(r.body.code, 'FORBIDDEN');
   });
 
   test('POST /inscriptions sin tournamentId/displayName → 400 VALIDATION_ERROR', async () => {
-    const r = await req('POST', '/inscriptions', { source: 'public' });
+    const r = await req('POST', '/inscriptions', { source: 'public' }, { Authorization: `Bearer ${token('team')}` });
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });

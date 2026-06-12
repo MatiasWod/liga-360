@@ -10,3 +10,4 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=10s \
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 CMD ["npm", "start"]
+

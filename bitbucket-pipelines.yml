@@ -88,9 +88,10 @@ definitions:
           # Las suites unit/integration no requieren Postgres (los servicios SQL aíslan el acceso
           # a datos en repos y se testean sin DB). Las migraciones por servicio viven en
           # database/migrations-{auth,teams,inscriptions} y corren en deploy (Jobs db-migrate-*).
+          # NOTA: npm ci en la raíz ya instala todos los workspaces (packages/*, services/*),
+          # incluyendo @liga360/shared. No usar npm install --prefix porque rompe la resolución
+          # de workspaces locales e intenta buscar @liga360/shared en el registry.
           - npm ci --cache .npm --prefer-offline
-          - npm install --prefix services/inscriptions-svc
-          - npm install --prefix services/tournaments-svc
           - npm run test:ci
 
     - step: &docker-build-push
@@ -146,6 +147,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Frontend
+              condition:
+                changesets:
+                  includePaths:
+                    - "frontend/**"
               script:
                 - export SVC="liga360-frontend"
                 - export BUILD_CONTEXT="."
@@ -161,10 +166,14 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Auth Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/auth-svc/**"
               script:
                 - export SVC="liga360-auth-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/auth-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/auth-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -174,6 +183,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Gateway
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/gateway/**"
               script:
                 - export SVC="liga360-gateway"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -187,10 +200,14 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Inscriptions Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/inscriptions-svc/**"
               script:
                 - export SVC="liga360-inscriptions-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/inscriptions-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/inscriptions-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -200,10 +217,14 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Teams Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/teams-svc/**"
               script:
                 - export SVC="liga360-teams-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/teams-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/teams-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -213,10 +234,14 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push MatchEvents Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/matchevents-svc/**"
               script:
                 - export SVC="liga360-matchevents-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" ./services/matchevents-svc
+                - docker build -t "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" -f services/matchevents-svc/Dockerfile .
                 - docker tag "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT" "$DOCKER_USER/$SVC:latest"
                 - docker push "$DOCKER_USER/$SVC:$BITBUCKET_COMMIT"
                 - docker push "$DOCKER_USER/$SVC:latest"
@@ -226,6 +251,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Tournaments Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/tournaments-svc/**"
               script:
                 - export SVC="liga360-tournaments-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -239,6 +268,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push DB Migrator
+              condition:
+                changesets:
+                  includePaths:
+                    - "database/**"
               script:
                 - export SVC="liga360-migrator"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin

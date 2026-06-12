@@ -10,6 +10,7 @@ export function readSessionUser(): AppUser | null {
       fullName: user.username || `Usuario ${user.id}`,
       username: user.username,
       type: user.type,
+      isVerified: user.isVerified,
     };
   } catch {
     return null;

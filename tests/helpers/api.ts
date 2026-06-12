@@ -75,11 +75,12 @@ export async function registerAndLogin(
   prefix: string
 ): Promise<Session> {
   const username = `${prefix}_${uniqueSuffix()}`.toLowerCase();
+  const email = "email@email.com"
   const password = 'Pass1234!';
   const name = mode === 'team' ? `Team ${prefix}` : mode === 'organizer' ? `Org ${prefix}` : `User ${prefix}`;
 
   const registerResponse = await request.post(`${AUTH_BASE}/register`, {
-    data: { mode, username, password, name },
+    data: { mode, username, email, password, name },
   });
   await assertOk(registerResponse, 'No se pudo registrar usuario E2E');
 
