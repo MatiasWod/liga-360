@@ -25,6 +25,8 @@
     "elo:backfill": "node scripts/elo-backfill.mjs",
     "seed:stats-demo": "node scripts/seed-stats-demo.mjs",
     "seed:world-cup-2022": "node scripts/seed-world-cup-2022.mjs",
+    "seed:next-edition-demo": "node scripts/seed-next-edition-demo.mjs",
+    "try:next-edition": "node scripts/try-next-edition.mjs",
     "seed:all": "npm run seed:dev && npm run seed:stats-demo && npm run seed:world-cup-2022",
     "dev:bootstrap": "bash scripts/dev-bootstrap.sh",
     "test:ci": "npm run test:unit && npm run test:integration",

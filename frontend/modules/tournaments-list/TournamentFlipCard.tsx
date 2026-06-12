@@ -1,5 +1,6 @@
 import React from 'react';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
+import { resolveEditionDisplay } from './editionDisplay';
 import type { TournamentCompetition, TournamentEntity, TournamentStage, TournamentTransition } from './types';
 
 interface TournamentFlipCardProps {
@@ -27,6 +28,9 @@ function IconTrophy() {
 }
 function IconGlobe() {
   return <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>;
+}
+function IconCalendar() {
+  return <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>;
 }
 function IconLock() {
   return <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
@@ -376,6 +380,7 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
   const [detailData, setDetailData]           = React.useState<any | null>(null);
   const [detailLoading, setDetailLoading]     = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const editionDisplay = resolveEditionDisplay(t.editionLabel, t.season);
 
   const isOrganizer =
     !!currentOrganizer &&
@@ -493,14 +498,33 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
               </div>
             )}
             <h3 className="text-base font-bold text-text-primary leading-snug pr-8 mb-2" title={t.name}>{t.name}</h3>
-            <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${status.bg}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-              <span className={status.text}>{status.label}</span>
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${status.bg}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                <span className={status.text}>{status.label}</span>
+              </span>
+              {editionDisplay ? (
+                <span
+                  className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-brand-greenAccent/40 bg-accent-soft text-brand-greenAccent"
+                  title={`Edición ${editionDisplay}`}
+                >
+                  Edición {editionDisplay}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {/* Body 2 cols */}
           <div className="flex-1 px-5 py-4 grid grid-cols-2 gap-x-4 gap-y-2.5 content-start">
+            {editionDisplay && (
+              <div className="flex items-start gap-1.5 min-w-0">
+                <span className="mt-0.5 text-brand-greenAccent"><IconCalendar /></span>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-text-subtle uppercase tracking-wider leading-none mb-0.5">Edición</p>
+                  <p className="text-xs font-semibold text-brand-greenAccent">{editionDisplay}</p>
+                </div>
+              </div>
+            )}
             {t.venue && (
               <div className="flex items-start gap-1.5 min-w-0">
                 <span className="mt-0.5 text-text-subtle"><IconPin /></span>
@@ -561,7 +585,12 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
         >
           {/* Header */}
           <div className="px-4 pt-3.5 pb-3 border-b border-border-subtle/60 flex items-center justify-between gap-2 flex-shrink-0">
-            <h3 className="text-xs font-semibold text-text-primary truncate" title={t.name}>{t.name}</h3>
+            <div className="min-w-0">
+              <h3 className="text-xs font-semibold text-text-primary truncate" title={t.name}>{t.name}</h3>
+              {editionDisplay ? (
+                <p className="mt-0.5 text-[10px] font-medium text-brand-greenAccent truncate">Edición {editionDisplay}</p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setFlipped(false)}

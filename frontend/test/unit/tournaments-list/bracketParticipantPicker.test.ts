@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ensureCurrentSelectionInSections,
   filterPoolSectionsForRole,
   resolvePoolEntryId,
 } from '../../../modules/tournaments-list/bracketParticipantPool';
@@ -69,6 +70,13 @@ describe('BracketParticipantPicker helpers', () => {
     );
     expect(s.headline).toBe('1° mejor 3° entre grupos');
     expect(s.subline).toContain('Italia');
+  });
+
+  it('ensureCurrentSelectionInSections agrega la asignación actual si el cupo quedó vacío', () => {
+    const out = ensureCurrentSelectionInSections([], 'pos:sg:st:g1:1', 'Posición 1 · Grupo 1');
+    expect(out).toHaveLength(1);
+    expect(out[0].sectionLabel).toBe('Asignación actual');
+    expect(resolvePoolEntryId(out[0].entries[0])).toBe('pos:sg:st:g1:1');
   });
 
   it('filterPoolSectionsForRole mantiene secciones con entradas permitidas para home', () => {

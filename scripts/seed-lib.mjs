@@ -305,3 +305,119 @@ const MUT_SET_STAGE_STATUS = `
 mutation ($stageId: ID!, $status: String!) {
   setStageStatus(stageId: $stageId, status: $status) { id stageStatus }
 }`;
+
+export const TOURNAMENT_NEXT_EDITION_DETAIL = `
+query ($id: ID!) {
+  tournament(id: $id) {
+    id name status seriesId editionLabel sport season venue participantType inscriptionMode
+    competitions {
+      id name order
+      stages {
+        id name order format stageStatus
+        standings {
+          position inscriptionId displayName points goalDifference goalsFor
+        }
+        transitions {
+          id label timing selectionKind topN rangeFrom rangeTo bottomN
+          toStageId toExternalStageId toExternalTournamentId placementSnapshotJson
+        }
+        matches {
+          id status homeScore awayScore
+          homeAssignedInscription { inscriptionId displayName }
+          awayAssignedInscription { inscriptionId displayName }
+        }
+      }
+    }
+  }
+}`;
+
+const MUT_SAVE_PLACEMENT_SNAPSHOT = `
+mutation ($transitionId: ID!, $snapshotJson: String!) {
+  saveTransitionPlacementSnapshot(transitionId: $transitionId, snapshotJson: $snapshotJson) {
+    id placementSnapshotJson
+  }
+}`;
+
+export const MUT_CREATE_NEXT_EDITION = `
+mutation (
+  $sourceTournamentId: ID!
+  $editionLabel: String!
+  $name: String
+  $mode: NextEditionMode!
+  $seriesId: ID
+) {
+  createNextEditionFromTournament(
+    sourceTournamentId: $sourceTournamentId
+    editionLabel: $editionLabel
+    name: $name
+    mode: $mode
+    seriesId: $seriesId
+  ) {
+    tournament { id name status seriesId editionLabel }
+    warnings
+    inscriptionsCreated
+    permanenciesApplied
+    snapshotsApplied
+  }
+}`;
+
+function normalizeTiming(raw) {
+  return String(raw || '').trim().toLowerCase() === 'next_edition' ? 'next_edition' : 'in_season';
+}
+
+/** Réplica mínima de computeAutoAdvance (liga) para seeds/CLI. */
+export function computeAutoAdvancePlacements(stage, transition) {
+  const kind = String(transition.selectionKind || 'top').toLowerCase();
+  const sorted = [...(stage.standings || [])].sort((a, b) => Number(a.position) - Number(b.position));
+
+  if (kind === 'top') {
+    const n = Number(transition.topN) || 0;
+    return sorted
+      .filter((r) => Number(r.position) >= 1 && Number(r.position) <= n)
+      .map((r) => ({
+        inscriptionId: String(r.inscriptionId),
+        displayName: String(r.displayName || r.inscriptionId),
+      }));
+  }
+  if (kind === 'bottom') {
+    const b = Number(transition.bottomN) || 0;
+    return sorted.slice(-b).map((r) => ({
+      inscriptionId: String(r.inscriptionId),
+      displayName: String(r.displayName || r.inscriptionId),
+    }));
+  }
+  return [];
+}
+
+/** Guarda snapshots next_edition desde standings actuales (como Finalizar etapa en UI). */
+export async function saveNextEditionSnapshotsForTournament(token, tournament) {
+  let saved = 0;
+  for (const comp of tournament?.competitions || []) {
+    for (const stage of comp.stages || []) {
+      for (const tr of stage.transitions || []) {
+        if (normalizeTiming(tr.timing) !== 'next_edition') continue;
+        const placements = computeAutoAdvancePlacements(stage, tr);
+        await gql(token, MUT_SAVE_PLACEMENT_SNAPSHOT, {
+          transitionId: tr.id,
+          snapshotJson: JSON.stringify({
+            savedAt: new Date().toISOString(),
+            sourceStageId: stage.id,
+            placements,
+          }),
+        });
+        saved += 1;
+      }
+    }
+  }
+  return saved;
+}
+
+export async function createNextEdition(token, input) {
+  const data = await gql(token, MUT_CREATE_NEXT_EDITION, input);
+  return data?.createNextEditionFromTournament;
+}
+
+export async function loadTournamentForNextEdition(token, tournamentId) {
+  const data = await gql(token, TOURNAMENT_NEXT_EDITION_DETAIL, { id: tournamentId });
+  return data?.tournament || null;
+}

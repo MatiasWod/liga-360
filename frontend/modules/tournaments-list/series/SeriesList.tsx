@@ -5,23 +5,37 @@ export interface SeriesListProps {
   series: CompetitionSeries[];
   loading?: boolean;
   error?: string;
+  organizerFilter?: string;
   onOpen: (seriesId: string) => void;
 }
 
-export const SeriesList: React.FC<SeriesListProps> = ({ series, loading, error, onOpen }) => {
+export const SeriesList: React.FC<SeriesListProps> = ({
+  series,
+  loading,
+  error,
+  organizerFilter,
+  onOpen,
+}) => {
+  const filteredSeries = React.useMemo(() => {
+    const needle = (organizerFilter || '').trim().toLowerCase();
+    if (!needle) return series;
+    return series.filter((row) => (row.organizer || '').trim().toLowerCase() === needle);
+  }, [series, organizerFilter]);
   if (loading) return <p className="py-3 text-sm text-slate-600">Cargando series…</p>;
   if (error) return <p className="py-3 text-sm text-red-600">{error}</p>;
-  if (!series.length) {
+  if (!filteredSeries.length) {
     return (
       <p className="py-3 text-sm text-slate-600">
-        No hay series públicas con ediciones publicadas o finalizadas.
+        {organizerFilter?.trim()
+          ? 'Este organizador no tiene series con histórico publicado.'
+          : 'No hay series públicas con ediciones publicadas o finalizadas.'}
       </p>
     );
   }
 
   return (
     <ul className="divide-y divide-slate-200">
-      {series.map((s) => {
+      {filteredSeries.map((s) => {
         const finished = s.editions.filter((e) => String(e.status).toLowerCase() === 'finished').length;
         const inProgress = s.editions.length - finished;
         return (
@@ -29,7 +43,7 @@ export const SeriesList: React.FC<SeriesListProps> = ({ series, loading, error, 
             <button
               type="button"
               onClick={() => onOpen(s.id)}
-              className="flex w-full items-center justify-between gap-3 px-1 py-3 text-left hover:bg-white hover:text-[#0F2A33]"
+              className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-3 text-left text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
               <div>
                 <p className="font-medium text-[#0F2A33]">{s.name}</p>

@@ -60,6 +60,48 @@ export async function svcGet(baseUrl, path) {
   return response.json();
 }
 
+export async function userFetch(baseUrl, path, { method = 'GET', body, authHeader } = {}) {
+  const headers = { Accept: 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) };
+  if (body != null) headers['Content-Type'] = 'application/json';
+  let response;
+  try {
+    response = await resilientFetch(
+      `${baseUrl}${path}`,
+      {
+        method,
+        headers,
+        body: body != null ? JSON.stringify(body) : undefined,
+      },
+      { retries: 0 }
+    );
+  } catch (err) {
+    logger.warn({ err: err.message, baseUrl, path, method }, 'downstream user request failed');
+    throw Object.assign(new Error('servicio downstream no disponible'), { statusCode: 503, code: 'DOWNSTREAM_UNAVAILABLE' });
+  }
+  const text = await response.text();
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  if (!response.ok) {
+    const message = json?.error?.message || `${baseUrl} respondió ${response.status}`;
+    throw Object.assign(new Error(message), { statusCode: response.status, code: json?.error?.code || 'DOWNSTREAM_ERROR', body: json });
+  }
+  return json;
+}
+
+export async function userPost(baseUrl, path, body, authHeader) {
+  return userFetch(baseUrl, path, { method: 'POST', body, authHeader });
+}
+
+export async function userPatch(baseUrl, path, body, authHeader) {
+  return userFetch(baseUrl, path, { method: 'PATCH', body, authHeader });
+}
+
 export async function svcPost(baseUrl, path, body) {
   let response;
   try {

@@ -14,6 +14,7 @@ import * as advancementService from '../services/advancement.service.js';
 import * as fixtureService from '../services/fixture.service.js';
 import * as matchService from '../services/match.service.js';
 import * as standingsService from '../services/standings.service.js';
+import * as nextEditionService from '../services/nextEdition.service.js';
 
 function requireOrganizer(context) {
   return requireOrganizerFromAuthHeader(context?.headers?.authorization || '');
@@ -155,6 +156,16 @@ const resolvers = {
     clearInscriptionAssignments: (_p, { inscriptionId, tournamentId }, context) => {
       requireOrganizer(context);
       return stageService.clearAssignments(context.driver, tournamentId, inscriptionId);
+    },
+    createNextEditionFromTournament: (_p, args, context) => {
+      const user = requireOrganizer(context);
+      const organizer = String(user?.username || '').trim() || `organizer-${String(user?.sub || '')}`;
+      const authHeader = context?.headers?.authorization || '';
+      return nextEditionService.createNextEditionFromTournament(context.driver, {
+        ...args,
+        organizer,
+        authHeader,
+      });
     },
   },
 

@@ -23,6 +23,7 @@ import {
 } from '../../services/tournaments/configuration';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
+import { CreateNextEditionModal } from './CreateNextEditionModal';
 import { InscriptionWeightSelect } from './components/InscriptionWeightSelect';
 import { EliminationInitWizard } from './EliminationInitWizard';
 import type {
@@ -88,6 +89,12 @@ type Tab = 'gestion' | 'inicializacion' | 'fixture';
 interface TournamentConfigurationProps {
   tournamentId: string;
   onBack: () => void;
+  onNextEditionCreated?: (payload: {
+    tournamentId: string;
+    name: string;
+    warnings: string[];
+    inscriptionsCreated: number;
+  }) => void;
 }
 
 const DEFAULT_SHIELD_SRC = '/predeterminado.png';
@@ -259,7 +266,11 @@ type GestionParticipantRow =
       placement: { competitionIds: Set<string>; stageIds: Set<string> };
     };
 
-export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({ tournamentId, onBack }) => {
+export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({
+  tournamentId,
+  onBack,
+  onNextEditionCreated,
+}) => {
   const [tab, setTab] = React.useState<Tab>('gestion');
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -285,6 +296,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
     mode: 'include' | 'exclude';
     selections: Array<{ competitionId: string; phaseId: string }>;
   }>({ mode: 'include', selections: [] });
+  const [nextEditionModalOpen, setNextEditionModalOpen] = React.useState(false);
   const [manualRows, setManualRows] = React.useState<Array<{ id: string; name: string; inviteCode: string }>>([
     { id: crypto.randomUUID(), name: '', inviteCode: '' },
   ]);
@@ -928,6 +940,22 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
 
   return (
     <div className="space-y-4">
+      <CreateNextEditionModal
+        open={nextEditionModalOpen}
+        onClose={() => setNextEditionModalOpen(false)}
+        sourceTournamentId={tournamentId}
+        sourceTournamentName={tournament.name}
+        sourceEditionLabel={tournament.editionLabel}
+        seriesId={tournament.seriesId}
+        onSuccess={(result) => {
+          onNextEditionCreated?.({
+            tournamentId: result.tournament.id,
+            name: result.tournament.name,
+            warnings: result.warnings,
+            inscriptionsCreated: result.inscriptionsCreated,
+          });
+        }}
+      />
       <div className="flex items-center justify-between">
         <Button type="button" variant="secondary" onClick={onBack}>← Volver</Button>
       </div>
@@ -936,8 +964,16 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-[#0F2A33]">Centro de gestión del torneo</h2>
-            <p className="text-sm text-slate-600">{tournament.name}</p>
+            <p className="text-sm text-slate-600">
+              {tournament.name}
+              {tournament.editionLabel ? ` · Edición ${tournament.editionLabel}` : ''}
+            </p>
           </div>
+          {String(tournament.status || '').toLowerCase() === 'finished' ? (
+            <Button type="button" variant="secondary" onClick={() => setNextEditionModalOpen(true)}>
+              Crear próxima edición
+            </Button>
+          ) : null}
           <div className="inline-flex rounded-xl bg-slate-100 p-1">
             <button
               type="button"

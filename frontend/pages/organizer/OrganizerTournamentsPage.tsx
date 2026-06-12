@@ -161,7 +161,19 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
               </button>
             </div>
             {selectedTournamentId && (
-              <TournamentConfiguration tournamentId={selectedTournamentId} onBack={() => setMode('visualizacion')} />
+              <TournamentConfiguration
+                tournamentId={selectedTournamentId}
+                onBack={() => setMode('visualizacion')}
+                onNextEditionCreated={({ tournamentId, name, warnings, inscriptionsCreated }) => {
+                  setSelectedTournamentId(tournamentId);
+                  setSelectedTournamentName(name);
+                  const warn =
+                    warnings.length > 0 ? ` Advertencias: ${warnings.slice(0, 2).join('; ')}` : '';
+                  setFeedback(
+                    `Edición "${name}" creada en borrador con ${inscriptionsCreated} inscripciones.${warn}`
+                  );
+                }}
+              />
             )}
           </div>
         </Card>

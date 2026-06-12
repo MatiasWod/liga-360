@@ -37,6 +37,8 @@ export const TournamentsList: React.FC<{
 		const participantTypeLabel = normalizedParticipantType === 'teams' ? 'equipos teams team' : 'participantes participant participants individual individuales';
 		const searchable = [
 			tournament.name,
+			tournament.editionLabel ? `edición ${tournament.editionLabel}` : null,
+			tournament.season ? `temporada ${tournament.season}` : null,
 			tournament.organizer,
 			tournament.venue,
 			tournament.participantType,

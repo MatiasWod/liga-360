@@ -32,6 +32,7 @@ test('schema incluye mutaciones de inicializacion avanzada', async () => {
   assert.equal(mutationFields.has('generateGroupsStageRoundRobin'), true);
   assert.equal(mutationFields.has('trimEliminationBracketAfterRound'), true);
   assert.equal(mutationFields.has('deleteTransition'), true);
+  assert.equal(mutationFields.has('createNextEditionFromTournament'), true);
   assert.equal(mutationFields.has('updateMatchScheduling'), true);
   assert.equal(mutationFields.has('setMatchWinnerAdvancement'), true);
 });

@@ -77,3 +77,26 @@ export function filterPoolSectionsForRole(
   }
   return out;
 }
+
+/** Mantiene la asignación actual visible aunque el cupo esté agotado (permite desasignar/cambiar). */
+export function ensureCurrentSelectionInSections(
+  sections: ParticipantPoolSection[],
+  value: string | null | undefined,
+  valueLabel?: string | null
+): ParticipantPoolSection[] {
+  const currentId = normPoolId(value);
+  if (!currentId) return sections;
+
+  const alreadyListed = sections.some((section) =>
+    section.entries.some((entry) => resolvePoolEntryId(entry) === currentId)
+  );
+  if (alreadyListed) return sections;
+
+  const currentEntry: PoolEntry = {
+    kind: 'assigned',
+    id: currentId,
+    displayName: String(valueLabel || currentId).trim() || currentId,
+  };
+
+  return [{ sectionLabel: 'Asignación actual', entries: [currentEntry] }, ...sections];
+}

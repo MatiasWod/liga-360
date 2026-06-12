@@ -154,6 +154,27 @@ type Mutation {
   # Transición (emitida por la etapa del partido) asociada al ganador para avance / referencia.
   setMatchWinnerAdvancement(matchId: ID!, transitionId: ID): Match!
   setStageStatus(stageId: ID!, status: String!): Stage!
+  """Crea nueva edición en la misma serie clonando estructura y aplicando snapshots next_edition."""
+  createNextEditionFromTournament(
+    sourceTournamentId: ID!
+    editionLabel: String!
+    name: String
+    mode: NextEditionMode!
+    seriesId: ID
+  ): CreateNextEditionResult!
+}
+
+enum NextEditionMode {
+  full
+  structure_only
+}
+
+type CreateNextEditionResult {
+  tournament: Tournament!
+  warnings: [String!]!
+  inscriptionsCreated: Int!
+  permanenciesApplied: Int!
+  snapshotsApplied: Int!
 }
 
 type MatchResult {

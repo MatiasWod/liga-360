@@ -25,8 +25,18 @@ done
 
 log "Asegurando bases por servicio (volumen existente puede no tenerlas)..."
 for db in liga360_auth liga360_teams liga360_inscriptions liga360_matchevents; do
-  docker compose exec -T postgres psql -U liga -d liga360 -tc "SELECT 1 FROM pg_database WHERE datname = '${db}'" | grep -q 1 \
-    || docker compose exec -T postgres psql -U liga -d liga360 -c "CREATE DATABASE ${db};"
+  exists="$(docker compose exec -T postgres psql -U liga -d liga360 -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" 2>/dev/null | tr -d '[:space:]')"
+  if [[ "${exists}" == "1" ]]; then
+    continue
+  fi
+  # Idempotente: volumen existente o carrera paralela → "already exists" no es fatal.
+  create_out="$(docker compose exec -T postgres psql -U liga -d liga360 -c "CREATE DATABASE \"${db}\";" 2>&1)" || {
+    if echo "${create_out}" | grep -qi 'already exists'; then
+      continue
+    fi
+    warn "No se pudo crear la base ${db}: ${create_out}"
+    exit 1
+  }
 done
 
 docker compose run --rm migrate-auth

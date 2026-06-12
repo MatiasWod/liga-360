@@ -7,6 +7,9 @@ export async function getTournamentConfigurationById(tournamentId: string) {
       tournament(id: $id) {
         id
         name
+        status
+        seriesId
+        editionLabel
         participantType
         competitions {
           id

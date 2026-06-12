@@ -148,8 +148,10 @@ async function addTeamMember(ownerToken, teamId, participantId) {
   });
 }
 
-async function listTeamMemberIds(teamId) {
-  const data = await httpJson(`${TEAMS_URL}/teams/${teamId}`);
+async function listTeamMemberIds(teamId, ownerToken) {
+  const data = await httpJson(`${TEAMS_URL}/teams/${teamId}`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
   return (data.members || []).map((m) => Number(m.id));
 }
 
@@ -795,7 +797,7 @@ Ejemplo:
   for (let i = 0; i < teamRows.length; i += 1) {
     const { token, teamId, name } = teamRows[i];
     const pid = assignCycle[i];
-    const existing = await listTeamMemberIds(teamId);
+    const existing = await listTeamMemberIds(teamId, token);
     if (existing.includes(pid)) {
       console.log(`  "${name}" ya incluye participant_id=${pid}`);
     } else {

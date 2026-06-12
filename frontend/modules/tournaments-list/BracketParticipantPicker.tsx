@@ -538,8 +538,8 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
   }, [groupCluster, phaseSec?.sectionLabel, phaseSec?.entries, vi]);
 
   const safeGroupIx =
-    groupCluster.mode === 'tabs'
-      ? Math.min(Math.max(0, groupTabIx), Math.max(0, groupCluster.tabs.length - 1))
+    groupCluster.mode === 'tabs' && groupCluster.tabs.length > 0
+      ? Math.min(Math.max(0, groupTabIx), groupCluster.tabs.length - 1)
       : 0;
 
   React.useEffect(() => {
@@ -551,7 +551,9 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
   const visibleEntries =
     groupCluster.mode === 'flat'
       ? groupCluster.entries
-      : groupCluster.tabs[safeGroupIx]?.entries ?? [];
+      : groupCluster.mode === 'tabs' && groupCluster.tabs.length > 0
+        ? groupCluster.tabs[safeGroupIx]?.entries ?? []
+        : [];
 
   const searchRows = React.useMemo(
     () => buildSearchRows(safeSections),
@@ -633,39 +635,57 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
   );
 
   const inputClass =
-    'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100';
+    'w-full rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs text-text-primary outline-none transition focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/30';
+
+  function clearAssignment() {
+    onChange('');
+    setExpanded(false);
+    setSearch('');
+  }
 
   return (
     <div className="relative mt-1 w-full" aria-label={ariaLabel}>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setExpanded((e) => !e)}
-        className={`flex w-full items-center justify-between rounded-xl border border-border-subtle bg-surface-1 px-3 py-2.5 text-left transition hover:bg-surface-2 disabled:opacity-60 ${
-          expanded ? 'ring-2 ring-emerald-100/70 border-accent-primary/55' : ''
-        }`}
-        aria-expanded={expanded}
-        aria-haspopup="listbox"
-        aria-controls={expanded ? `${String(resetSignal)}-panel` : undefined}
-        title={triggerDisplay.titleAttr}
-      >
-        <div className="min-w-0 flex-1 pr-2">
-          <p
-            className={`truncate text-sm font-semibold tracking-tight ${
-              triggerDisplay.isEmpty ? 'text-text-muted' : 'text-success-base'
-            }`}
+      <div className="flex items-stretch gap-2">
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          onClick={() => !disabled && setExpanded((e) => !e)}
+          className={`flex min-w-0 flex-1 items-center justify-between rounded-xl border border-border-subtle bg-surface-1 px-3 py-2.5 text-left transition hover:bg-surface-2 disabled:opacity-60 ${
+            expanded ? 'ring-2 ring-accent-primary/30 border-accent-primary/55' : ''
+          }`}
+          aria-expanded={expanded}
+          aria-haspopup="listbox"
+          aria-controls={expanded ? `${String(resetSignal)}-panel` : undefined}
+          title={triggerDisplay.titleAttr}
+        >
+          <div className="min-w-0 flex-1 pr-2">
+            <p
+              className={`truncate text-sm font-semibold tracking-tight ${
+                triggerDisplay.isEmpty ? 'text-text-muted' : 'text-success-base'
+              }`}
+            >
+              {triggerDisplay.headline}
+            </p>
+            {triggerDisplay.subline ? (
+              <p className="mt-0.5 truncate text-[11px] leading-snug text-text-subtle">{triggerDisplay.subline}</p>
+            ) : null}
+          </div>
+          <span className="shrink-0 text-xs text-text-subtle" aria-hidden>
+            {expanded ? 'v' : '>'}
+          </span>
+        </button>
+        {!triggerDisplay.isEmpty && !disabled ? (
+          <button
+            type="button"
+            onClick={clearAssignment}
+            className="shrink-0 rounded-xl border border-border-subtle bg-surface-2 px-2.5 text-[11px] font-medium text-text-muted transition hover:border-danger-base/40 hover:bg-danger-soft hover:text-danger-base"
+            title="Quitar asignación"
           >
-            {triggerDisplay.headline}
-          </p>
-          {triggerDisplay.subline ? (
-            <p className="mt-0.5 truncate text-[11px] leading-snug text-text-subtle">{triggerDisplay.subline}</p>
-          ) : null}
-        </div>
-        <span className="shrink-0 text-xs text-text-subtle" aria-hidden>
-          {expanded ? 'v' : '>'}
-        </span>
-      </button>
+            Quitar
+          </button>
+        ) : null}
+      </div>
 
       {expanded && typeof document !== 'undefined'
         ? createPortal(
@@ -708,8 +728,8 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                       }}
                       className={`min-w-[4rem] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
                         sel
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-surface-3'
+                          ? 'bg-accent-primary text-white shadow-sm'
+                          : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'
                       }`}
                     >
                       {shortPhaseTabTitle(s.sectionLabel)}
@@ -719,13 +739,13 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
               </div>
             ) : (
               phaseSec ? (
-                <p className="text-[11px] text-slate-500">{phaseSec.sectionLabel}</p>
+                <p className="text-[11px] text-text-muted">{phaseSec.sectionLabel}</p>
               ) : null
             )}
 
             {phaseSec && groupCluster.mode === 'tabs' ? (
               <div
-                className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1"
+                className="flex flex-wrap gap-1 rounded-lg border border-border-subtle bg-surface-1 p-1"
                 role="tablist"
                 aria-label="Grupos dentro de la fase"
               >
@@ -741,8 +761,8 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                       onClick={() => setGroupTabIx(ti)}
                       className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                         sel
-                          ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200'
-                          : 'text-slate-600 hover:bg-surface-2'
+                          ? 'bg-accent-soft text-success-base ring-1 ring-accent-primary/30'
+                          : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'
                       }`}
                     >
                       {tb.label}
@@ -764,22 +784,24 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
               />
             </label>
 
-            <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-2" role="listbox">
+            <div className="max-h-56 overflow-auto rounded-lg border border-border-subtle bg-surface-1 p-2" role="listbox">
               <button
                 type="button"
                 disabled={disabled}
                 role="option"
                 aria-selected={!vi}
                 onClick={() => pick(null, '')}
-                className={`mb-1 w-full rounded-md px-2 py-2 text-left text-xs ${
-                  !vi ? 'bg-emerald-50 font-semibold text-slate-800' : 'text-slate-500 hover:bg-slate-50'
+                className={`mb-1 w-full rounded-md px-2 py-2 text-left text-xs transition-colors ${
+                  !vi
+                    ? 'bg-accent-soft font-semibold text-text-primary'
+                    : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'
                 }`}
               >
                 — {emptyText}
               </button>
 
               {safeSections.length === 0 ? (
-                <p className="px-2 py-2 text-[11px] italic text-slate-500">
+                <p className="px-2 py-2 text-[11px] italic text-text-muted">
                   No hay más opciones disponibles para este slot.
                 </p>
               ) : showGlobalSearchHits ? (
@@ -798,24 +820,24 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                           aria-selected={sel}
                           title={lbl}
                           onClick={() => pick(row, id)}
-                          className={`w-full rounded-md px-2 py-2 text-left ${
+                          className={`w-full rounded-md px-2 py-2 text-left transition-colors ${
                             sel
-                              ? 'bg-emerald-50 font-medium text-emerald-900 ring-1 ring-emerald-100'
-                              : 'text-slate-800 hover:bg-slate-50'
+                              ? 'bg-accent-soft font-medium text-text-primary ring-1 ring-accent-primary/25'
+                              : 'text-text-primary hover:bg-surface-3'
                           }`}
                         >
                           <span className="block truncate text-xs font-medium">{lbl}</span>
-                          <span className="block truncate text-[10px] text-slate-500">{hint}</span>
+                          <span className="block truncate text-[10px] text-text-muted">{hint}</span>
                         </button>
                       </li>
                     );
                   })}
                 </ul>
               ) : showGlobalSearchEmpty ? (
-                <p className="px-2 py-2 text-[11px] text-slate-500">
+                <p className="px-2 py-2 text-[11px] text-text-muted">
                   No encontramos ese equipo o plaza en ningún origen.
                 </p>
-              ) : browsingList ? (
+              ) : browsingList && browsingList.length > 0 ? (
                 <ul className="space-y-0.5">
                   {browsingList.map((en) => {
                     const lbl = resolvePoolEntryLabel(en);
@@ -830,10 +852,10 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                           aria-selected={sel}
                           title={lbl}
                           onClick={() => pick(null, id)}
-                          className={`w-full truncate rounded-md px-2 py-1.5 text-left text-xs ${
+                          className={`w-full truncate rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                             sel
-                              ? 'bg-emerald-50 font-semibold text-emerald-900 ring-1 ring-emerald-100'
-                              : 'text-slate-800 hover:bg-slate-50'
+                              ? 'bg-accent-soft font-semibold text-text-primary ring-1 ring-accent-primary/25'
+                              : 'text-text-primary hover:bg-surface-3'
                           }`}
                         >
                           {lbl}
@@ -842,7 +864,11 @@ export const BracketParticipantPicker: React.FC<BracketParticipantPickerProps> =
                     );
                   })}
                 </ul>
-              ) : null}
+              ) : (
+                <p className="px-2 py-2 text-[11px] text-text-muted">
+                  Todas las plazas están asignadas en otras llaves. Podés quitar una asignación con el botón «Quitar».
+                </p>
+              )}
             </div>
               </div>
             </div>,

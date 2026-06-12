@@ -22,6 +22,8 @@ export type TournamentListItem = {
   participantType?: string | null;
   inscriptionMode?: 'public' | 'invitation' | null;
   status?: string | null;
+  season?: string | null;
+  editionLabel?: string | null;
   competitions: TournamentCompetition[];
 };
 
@@ -56,6 +58,8 @@ export async function listTournamentsGraphql(): Promise<TournamentListItem[]> {
         participantType
         inscriptionMode
         status
+        season
+        editionLabel
         competitions {
           id
           name

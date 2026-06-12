@@ -1,6 +1,8 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
 import { TournamentDetail, TournamentsList } from '../../modules/tournaments-list';
+import { TournamentsBrowseLayout } from '../../modules/tournaments-list/browse/TournamentsBrowseLayout';
+import { useTournamentOrganizers } from '../../modules/tournaments-list/browse/useTournamentOrganizers';
 import { SeriesHistoryPage } from '../../modules/tournaments-list/series/SeriesHistoryPage';
 import { SeriesList } from '../../modules/tournaments-list/series/SeriesList';
 import { listCompetitionSeries, type CompetitionSeries } from '../../services/tournaments/series';
@@ -15,7 +17,7 @@ type PublicTournamentTab = 'activos' | 'finalizados' | 'historico';
 function tabPillClass(active: boolean): string {
   return active
     ? 'rounded-xl px-4 py-2 text-sm font-medium bg-[#2E7D32] text-white hover:bg-[#256628] hover:text-white'
-    : 'rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-white hover:text-[#0F2A33]';
+    : 'rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900';
 }
 
 export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }) => {
@@ -28,12 +30,21 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
   const [seriesError, setSeriesError] = React.useState('');
   const [selectedSeries, setSelectedSeries] = React.useState<CompetitionSeries | null>(null);
   const [openEditionAsHistory, setOpenEditionAsHistory] = React.useState(false);
+  const [selectedOrganizer, setSelectedOrganizer] = React.useState<string | null>(null);
+  const { organizers, loading: organizersLoading, error: organizersError } = useTournamentOrganizers();
 
   function switchTab(next: PublicTournamentTab) {
     setSelectedId(null);
     setSelectedSeries(null);
     setOpenEditionAsHistory(false);
     setTab(next);
+  }
+
+  function handleSelectOrganizer(organizer: string | null) {
+    setSelectedOrganizer(organizer);
+    setSelectedId(null);
+    setSelectedSeries(null);
+    setOpenEditionAsHistory(false);
   }
 
   React.useEffect(() => {
@@ -60,14 +71,14 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
   const showSeriesDetail = tab === 'historico' && selectedSeries && !showTournamentDetail;
 
   return (
-    <div className="min-h-screen bg-[#F5F7F9] text-[#0F2A33]">
-      <header className="border-b border-[#22512D] bg-[#163A20] px-6">
-        <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
+    <div className="liga360-light-surface min-h-screen bg-[#F5F7F9] text-[#0F2A33]">
+      <header className="border-b border-[#22512D] bg-[#163A20] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
           <div className="flex items-center gap-3">
             <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
             <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
           </div>
-          <div aria-hidden="true" />
+          <div aria-hidden="true" className="hidden lg:block" />
           <button
             type="button"
             onClick={onGoToAuth}
@@ -78,8 +89,8 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl space-y-4 px-6 py-6">
-        <Card>
+      <main className="w-full space-y-4 px-4 py-6 sm:px-6 lg:px-8">
+        <Card variant="light">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -134,55 +145,69 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
           </div>
         </Card>
 
-        <Card>
-          {showTournamentDetail ? (
-            <TournamentDetail
-              id={selectedId!}
-              onBack={() => {
-                setSelectedId(null);
-                setOpenEditionAsHistory(false);
-              }}
-              defaultDetailView={openEditionAsHistory || tab === 'finalizados' ? 'history' : 'fixture'}
-              onViewSeries={(seriesId) => {
-                setSelectedId(null);
-                setOpenEditionAsHistory(false);
-                setTab('historico');
-                listCompetitionSeries()
-                  .then((rows) => {
-                    setSeriesList(rows);
-                    setSelectedSeries(rows.find((s) => s.id === seriesId) ?? null);
-                  })
-                  .catch(() => setSelectedSeries(null));
-              }}
-            />
-          ) : showSeriesDetail ? (
-            <SeriesHistoryPage
-              series={selectedSeries!}
-              onBack={() => setSelectedSeries(null)}
-              onOpenEdition={(tournamentId) => {
-                setOpenEditionAsHistory(true);
-                setSelectedId(tournamentId);
-              }}
-            />
-          ) : tab === 'historico' ? (
-            <SeriesList
-              series={seriesList}
-              loading={seriesLoading}
-              error={seriesError}
-              onOpen={(seriesId) => {
-                const found = seriesList.find((s) => s.id === seriesId) ?? null;
-                setSelectedSeries(found);
-              }}
-            />
-          ) : (
-            <TournamentsList
-              participantTypeFilter={participantType === 'all' ? undefined : participantType}
-              searchTerm={searchTerm}
-              onOpen={(id) => setSelectedId(id)}
-              hideFinished={tab === 'activos'}
-              onlyFinished={tab === 'finalizados'}
-            />
-          )}
+        <Card variant="light">
+          <TournamentsBrowseLayout
+            showPanel={!showTournamentDetail && !showSeriesDetail}
+            panel={{
+              organizers,
+              loading: organizersLoading,
+              error: organizersError,
+              selectedOrganizer,
+              onSelectOrganizer: handleSelectOrganizer,
+              variant: 'light',
+            }}
+          >
+            {showTournamentDetail ? (
+              <TournamentDetail
+                id={selectedId!}
+                onBack={() => {
+                  setSelectedId(null);
+                  setOpenEditionAsHistory(false);
+                }}
+                defaultDetailView={openEditionAsHistory || tab === 'finalizados' ? 'history' : 'fixture'}
+                onViewSeries={(seriesId) => {
+                  setSelectedId(null);
+                  setOpenEditionAsHistory(false);
+                  setTab('historico');
+                  listCompetitionSeries()
+                    .then((rows) => {
+                      setSeriesList(rows);
+                      setSelectedSeries(rows.find((s) => s.id === seriesId) ?? null);
+                    })
+                    .catch(() => setSelectedSeries(null));
+                }}
+              />
+            ) : showSeriesDetail ? (
+              <SeriesHistoryPage
+                series={selectedSeries!}
+                onBack={() => setSelectedSeries(null)}
+                onOpenEdition={(tournamentId) => {
+                  setOpenEditionAsHistory(true);
+                  setSelectedId(tournamentId);
+                }}
+              />
+            ) : tab === 'historico' ? (
+              <SeriesList
+                series={seriesList}
+                loading={seriesLoading}
+                error={seriesError}
+                organizerFilter={selectedOrganizer ?? undefined}
+                onOpen={(seriesId) => {
+                  const found = seriesList.find((s) => s.id === seriesId) ?? null;
+                  setSelectedSeries(found);
+                }}
+              />
+            ) : (
+              <TournamentsList
+                organizerFilter={selectedOrganizer ?? undefined}
+                participantTypeFilter={participantType === 'all' ? undefined : participantType}
+                searchTerm={searchTerm}
+                onOpen={(id) => setSelectedId(id)}
+                hideFinished={tab === 'activos'}
+                onlyFinished={tab === 'finalizados'}
+              />
+            )}
+          </TournamentsBrowseLayout>
         </Card>
       </main>
     </div>

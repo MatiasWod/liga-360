@@ -231,7 +231,7 @@ export async function findByIds(client, ids) {
   const numericIds = (ids || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
   if (numericIds.length === 0) return [];
   const r = await client.query(
-    `SELECT id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, tournament_rating
+    `SELECT id, tournament_id, competition_id, competitor_kind, display_name, linked_team_id, status, weight, tournament_rating
      FROM "Inscription" WHERE id = ANY($1::int[])
      ORDER BY created_at DESC`,
     [numericIds]

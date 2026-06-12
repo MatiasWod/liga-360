@@ -36,7 +36,11 @@ import {
 } from './incomingTransitionEligibility';
 import { BracketParticipantPicker, displayLabelFromPoolEligible } from './BracketParticipantPicker';
 import type { ParticipantPoolSection, PoolEntry } from './bracketParticipantPool';
-import { filterPoolSectionsForRole, normPoolId } from './bracketParticipantPool';
+import {
+  ensureCurrentSelectionInSections,
+  filterPoolSectionsForRole,
+  normPoolId,
+} from './bracketParticipantPool';
 
 export interface EliminationInitWizardProps {
   tournamentId: string;
@@ -620,23 +624,6 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
           const awayBusy = slotBusyKey === `${m.id}-away`;
 
           const resetKey = `${currentKey}-${m.id}`;
-          const homeSections = filterPoolSectionsForRole(
-            poolSections,
-            'home',
-            m,
-            blockedElsewhere,
-            physicalBlockedElsewhere,
-            resolvePhysical
-          );
-          const awaySections = filterPoolSectionsForRole(
-            poolSections,
-            'away',
-            m,
-            blockedElsewhere,
-            physicalBlockedElsewhere,
-            resolvePhysical
-          );
-
           const resolveSlotLabel = (inscriptionId: string | null | undefined, fallback: string | null | undefined): string | undefined =>
             resolveParticipantDisplayLabel(
               tournament,
@@ -647,6 +634,31 @@ export const EliminationInitWizard: React.FC<EliminationInitWizardProps> = ({
               String(inscriptionId || ''),
               fallback
             );
+
+          const homeSections = ensureCurrentSelectionInSections(
+            filterPoolSectionsForRole(
+              poolSections,
+              'home',
+              m,
+              blockedElsewhere,
+              physicalBlockedElsewhere,
+              resolvePhysical
+            ),
+            homeVal,
+            resolveSlotLabel(m.homeAssignedInscription?.inscriptionId, m.homeAssignedInscription?.displayName)
+          );
+          const awaySections = ensureCurrentSelectionInSections(
+            filterPoolSectionsForRole(
+              poolSections,
+              'away',
+              m,
+              blockedElsewhere,
+              physicalBlockedElsewhere,
+              resolvePhysical
+            ),
+            awayVal,
+            resolveSlotLabel(m.awayAssignedInscription?.inscriptionId, m.awayAssignedInscription?.displayName)
+          );
 
           const homeIsReal = !isSyntheticOrEmpty(m.homeAssignedInscription?.inscriptionId);
           const awayIsReal = !isSyntheticOrEmpty(m.awayAssignedInscription?.inscriptionId);

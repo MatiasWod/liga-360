@@ -6,6 +6,8 @@ import {
   type SeriesRollOfHonorRow,
 } from '../../../services/tournaments/series';
 import { formatKpiNames, topScorersFromSeriesRows, topTitlesFromRows } from './seriesKpis';
+import { Button } from '../../../components/ui/Button';
+import { CreateNextEditionModal } from '../CreateNextEditionModal';
 
 const NOT_AVAILABLE = '—';
 
@@ -58,12 +60,24 @@ export interface SeriesHistoryPageProps {
   series: CompetitionSeries;
   onBack: () => void;
   onOpenEdition: (tournamentId: string) => void;
+  onNextEditionCreated?: (payload: {
+    tournamentId: string;
+    name: string;
+    warnings: string[];
+    inscriptionsCreated: number;
+  }) => void;
 }
 
-export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({ series, onBack, onOpenEdition }) => {
+export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
+  series,
+  onBack,
+  onOpenEdition,
+  onNextEditionCreated,
+}) => {
   const [aggregates, setAggregates] = React.useState<SeriesAggregates | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [nextEditionModalOpen, setNextEditionModalOpen] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -86,17 +100,41 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({ series, on
 
   const topScorers = topScorersFromSeriesRows(aggregates?.topScorers ?? []);
   const topTitles = topTitlesFromRows(aggregates?.titlesByTeam ?? []);
+  const latestFinished = aggregates?.rollOfHonor?.[0] ?? null;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      {latestFinished ? (
+        <CreateNextEditionModal
+          open={nextEditionModalOpen}
+          onClose={() => setNextEditionModalOpen(false)}
+          sourceTournamentId={latestFinished.tournamentId}
+          sourceTournamentName={latestFinished.tournamentName}
+          sourceEditionLabel={latestFinished.editionLabel}
+          seriesId={series.id}
+          onSuccess={(result) => {
+            onNextEditionCreated?.({
+              tournamentId: result.tournament.id,
+              name: result.tournament.name,
+              warnings: result.warnings,
+              inscriptionsCreated: result.inscriptionsCreated,
+            });
+          }}
+        />
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={onBack} className="text-sm text-[#2E7D32] hover:underline">
           ← Volver al histórico
         </button>
-        <div>
+        <div className="flex-1">
           <h3 className="text-lg font-semibold text-[#0F2A33]">{series.name}</h3>
           <p className="text-xs text-slate-500">Histórico agregado cross-edición</p>
         </div>
+        {latestFinished ? (
+          <Button type="button" variant="secondary" onClick={() => setNextEditionModalOpen(true)}>
+            Crear próxima edición
+          </Button>
+        ) : null}
       </div>
 
       {loading ? <p className="text-sm text-slate-600">Cargando palmarés y récords…</p> : null}
@@ -134,7 +172,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({ series, on
                     <button
                       type="button"
                       onClick={() => onOpenEdition(e.tournamentId)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white hover:text-[#0F2A33]"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                     >
                       <span>
                         {e.editionLabel ? `Edición ${e.editionLabel}` : e.name}
@@ -156,7 +194,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({ series, on
                   <button
                     type="button"
                     onClick={() => onOpenEdition(row.tournamentId)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white hover:text-[#0F2A33]"
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                   >
                     <span>
                       {row.editionLabel ? `Edición ${row.editionLabel}` : row.tournamentName}
