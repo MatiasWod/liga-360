@@ -60,7 +60,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <span className="hidden lg:block">{user.fullName}</span>
           </button>
           {open && (
-            <div className="absolute right-0 mt-2 w-44 rounded-xl border border-border-subtle bg-surface-1 p-2 shadow-xl shadow-black/40">
+            <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-surface-1 p-2 shadow-xl shadow-black/40">
               <button
                 type="button"
                 onClick={() => {
