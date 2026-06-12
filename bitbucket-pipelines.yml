@@ -146,6 +146,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Frontend
+              condition:
+                changesets:
+                  includePaths:
+                    - "frontend/**"
               script:
                 - export SVC="liga360-frontend"
                 - export BUILD_CONTEXT="."
@@ -161,6 +165,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Auth Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/auth-svc/**"
               script:
                 - export SVC="liga360-auth-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -174,6 +182,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Gateway
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/gateway/**"
               script:
                 - export SVC="liga360-gateway"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -187,6 +199,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Inscriptions Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/inscriptions-svc/**"
               script:
                 - export SVC="liga360-inscriptions-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -200,6 +216,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Teams Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/teams-svc/**"
               script:
                 - export SVC="liga360-teams-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -213,6 +233,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push MatchEvents Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/matchevents-svc/**"
               script:
                 - export SVC="liga360-matchevents-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -226,6 +250,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push Tournaments Svc
+              condition:
+                changesets:
+                  includePaths:
+                    - "services/tournaments-svc/**"
               script:
                 - export SVC="liga360-tournaments-svc"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
@@ -239,6 +267,10 @@ pipelines:
                 - self.hosted
               <<: *docker-build-push
               name: Build + Push DB Migrator
+              condition:
+                changesets:
+                  includePaths:
+                    - "database/**"
               script:
                 - export SVC="liga360-migrator"
                 - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
