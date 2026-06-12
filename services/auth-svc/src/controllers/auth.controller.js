@@ -11,10 +11,10 @@ export async function register(req, res, next) {
       });
     }
 
-    const { mode, username, password, name, firstName, lastName, nickname, dni } = req.body;
+    const { mode, username, email, password, name } = req.body;
     logger.info({ mode, username }, 'register request');
 
-    const result = await authService.register({ mode, username, password, name, firstName, lastName, nickname, dni });
+    const result = await authService.register({ mode, username, email, password, name });
     return res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -37,5 +37,29 @@ export async function login(req, res, next) {
     return res.json(result);
   } catch (err) {
     next(err);
+  }
+}
+
+export async function verifyEmail(req, res, next) {
+  try {
+    // El id viene como string en la URL; el token lo guarda como number (user.id de Postgres).
+    const userId = Number(req.params.userid);
+    const { token } = req.body; // El frontend enviará { "token": "XYZ..." } en el body
+
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Invalid user id', code: 'BAD_REQUEST' });
+    }
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required', code: 'BAD_REQUEST' });
+    }
+
+    const result = await authService.verifyEmail({ userId, token });
+    return res.status(200).json(result);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      error: error.message,
+      code: error.code || 'INTERNAL_SERVER_ERROR'
+    });
   }
 }

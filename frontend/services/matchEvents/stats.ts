@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from '../config';
+import { authHeaders } from '../http';
 import type { MatchEvent } from './types';
 
 /** Fila de goleadores agregada por matchevents-svc (clave compuesta member:/name:). */
@@ -35,7 +36,7 @@ export interface TeamStatsRow {
 const base = () => API_ENDPOINTS.matchEventsStats;
 
 async function getJson<T>(url: string, fallbackError: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: authHeaders() });
   const json = await res.json().catch(() => null);
   if (!res.ok) throw new Error((json as any)?.error?.message || fallbackError);
   return json as T;

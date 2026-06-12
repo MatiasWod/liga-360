@@ -12,6 +12,7 @@
     "test:integration": "cross-env NODE_ENV=test node --test src/test/http.integration.test.js src/test/elo.integration.test.js"
   },
   "dependencies": {
+    "@liga360/shared": "*",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

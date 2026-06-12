@@ -20,6 +20,7 @@ type RegisterRole = 'team' | 'participant' | 'organizer';
 export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPublic }) => {
   const [mode, setMode] = React.useState<Mode>('login');
   const [role, setRole] = React.useState<RegisterRole>('team');
+  const [email, setEmail] = React.useState('');
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState(''); // Estado para la segunda contraseña
@@ -68,16 +69,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
         if (role === 'participant' && participantDni.trim() && !/^\d{7,8}$/.test(participantDni.replace(/\D/g, ''))) {
           throw new Error('El DNI del participante debe tener 7 u 8 digitos');
         }
-        const participantExtras =
-            role === 'participant'
-                ? {
-                  firstName: participantFirstName.trim(),
-                  lastName: participantLastName.trim(),
-                  nickname: participantNickname.trim() || undefined,
-                  dni: participantDni.replace(/\D/g, '') || undefined,
-                }
-                : undefined;
-        await register(role, username, password, registrationName, participantExtras);
+        await register(role, username, email, password, registrationName);
       }
       onAuthenticated();
     } catch (err: any) {
@@ -243,7 +235,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
                   minLength={mode === 'register' ? 3 : undefined}
               />
             </label>
-
+              {mode === 'register' && (
+                  <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
+                      <input
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                          type="email" /* Buena práctica añadir el tipo */
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                          minLength={3} /* Simplificado: ya estás dentro de la condición 'register' */
+                      />
+                  </label>
+              )}
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">Contraseña</span>
               <div className="relative">

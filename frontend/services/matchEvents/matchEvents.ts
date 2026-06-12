@@ -1,10 +1,6 @@
-import { API_ENDPOINTS } from '../config';
+﻿import { API_ENDPOINTS } from '../config';
+import { authHeaders } from '../http';
 import type { CreateMatchEventPayload, MatchEvent, UpdateMatchEventPayload } from './types';
-
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('liga360:token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function handleResponse<T>(res: Response): Promise<T> {
   const json = await res.json();
@@ -17,7 +13,7 @@ const base = () => API_ENDPOINTS.matchEvents;
 
 export async function listMatchEvents(matchId: string): Promise<MatchEvent[]> {
   const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events`, {
-    headers: { ...getAuthHeaders() },
+    headers: authHeaders(),
   });
   return handleResponse<MatchEvent[]>(res);
 }
@@ -28,7 +24,7 @@ export async function createMatchEvent(
 ): Promise<MatchEvent> {
   const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: authHeaders(),
     body: JSON.stringify(payload),
   });
   return handleResponse<MatchEvent>(res);
@@ -43,7 +39,7 @@ export async function updateMatchEvent(
     `${base()}/${encodeURIComponent(matchId)}/events/${eventId}`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      headers: authHeaders(),
       body: JSON.stringify(payload),
     }
   );
@@ -55,7 +51,7 @@ export async function deleteMatchEvent(matchId: string, eventId: number): Promis
     `${base()}/${encodeURIComponent(matchId)}/events/${eventId}`,
     {
       method: 'DELETE',
-      headers: { ...getAuthHeaders() },
+      headers: authHeaders(),
     }
   );
   if (!res.ok) {

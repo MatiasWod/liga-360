@@ -8,13 +8,16 @@ export const up = (pgm) => {
   pgm.sql(`
     CREATE TABLE IF NOT EXISTS "Users" (
       id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
       username TEXT NOT NULL,
       password TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('team', 'participant', 'organizer')),
+      "isVerified" BOOLEAN NOT NULL DEFAULT false,
+      type TEXT NOT NULL CHECK (type IN ('team', 'participant', 'organizer', 'admin')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT chk_email_valido CHECK (email LIKE '%_@__%._%')
     );
-
+    
     -- Unicidad case-insensitive (el login compara LOWER(username)).
     CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username_lower ON "Users" (LOWER(username));
 

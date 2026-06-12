@@ -1,5 +1,6 @@
 import * as participantService from '../services/participant.service.js';
 import { validateCreateParticipant, validateUpdateParticipant } from '../schema/participant.schema.js';
+import { ROLES } from '@liga360/shared';
 
 function validationError(res, details) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details } });
@@ -9,10 +10,12 @@ export async function create(req, res, next) {
   try {
     const errors = validateCreateParticipant(req.body);
     if (errors.length > 0) return validationError(res, errors);
-    const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, selfProfile } = req.body;
+    const { firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode } = req.body;
+    // Solo una cuenta participant puede vincular el participante a su propio Person_Profile
+    // (flujo de registro); un team creando roster no debe quedar vinculado a sí mismo.
+    const linkToUserProfile = req.body.linkToUserProfile === true && req.user?.type === ROLES.PARTICIPANT;
     res.status(201).json(await participantService.createParticipant({
-      firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode,
-      userId: req.user?.sub, selfProfile: selfProfile === true,
+      firstName, lastName, nickname, avatarUrl, dni, teamId, teamCode, userId: req.user?.sub, linkToUserProfile,
     }));
   } catch (e) {
     next(e);
