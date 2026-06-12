@@ -16,9 +16,12 @@ type PublicTournamentTab = 'activos' | 'finalizados' | 'historico';
 
 function tabPillClass(active: boolean): string {
   return active
-    ? 'rounded-xl px-4 py-2 text-sm font-medium bg-[#2E7D32] text-white hover:bg-[#256628] hover:text-white'
-    : 'rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900';
+    ? 'rounded-xl px-4 py-2 text-sm font-medium bg-accent-primary text-white shadow-sm shadow-black/30'
+    : 'rounded-xl px-4 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary';
 }
+
+const fieldClass =
+  'w-full rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40';
 
 export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }) => {
   const [selectedId, setSelectedId] = useTournamentRoute('torneos');
@@ -71,18 +74,18 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
   const showSeriesDetail = tab === 'historico' && selectedSeries && !showTournamentDetail;
 
   return (
-    <div className="liga360-light-surface min-h-screen bg-[#F5F7F9] text-[#0F2A33]">
-      <header className="border-b border-[#22512D] bg-[#163A20] px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
+    <div className="min-h-screen bg-surface-0 text-text-primary">
+      <header className="border-b border-border-subtle bg-surface-1 px-4 sm:px-6 lg:px-8">
+        <div className="grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
           <div className="flex items-center gap-3">
             <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
-            <span className="text-xl font-semibold tracking-wide text-white">LIGA360</span>
+            <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
           </div>
           <div aria-hidden="true" className="hidden lg:block" />
           <button
             type="button"
             onClick={onGoToAuth}
-            className="justify-self-end rounded-xl border border-[#66BB6A] bg-[#2E7D32] px-4 py-2 text-sm font-medium text-white hover:bg-[#256628]"
+            className="justify-self-end rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
           >
             Iniciar sesión
           </button>
@@ -90,16 +93,16 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
       </header>
 
       <main className="w-full space-y-4 px-4 py-6 sm:px-6 lg:px-8">
-        <Card variant="light">
+        <Card>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-[#0F2A33]">Torneos públicos</h2>
-                <p className="mt-1 text-sm text-slate-600">
+                <h2 className="text-xl font-semibold text-text-primary">Torneos públicos</h2>
+                <p className="mt-1 text-sm text-text-muted">
                   Consultá torneos en curso, finalizados o el histórico agregado por competición.
                 </p>
               </div>
-              <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              <div className="inline-flex rounded-xl bg-surface-2 p-1">
                 <button type="button" onClick={() => switchTab('activos')} className={tabPillClass(tab === 'activos')}>
                   Activos
                 </button>
@@ -115,25 +118,25 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
             {tab !== 'historico' ? (
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <label className="w-full md:max-w-xl">
-                  <span className="mb-1 block text-sm text-slate-600">Buscar por equipo, organización o participante</span>
+                  <span className="mb-1 block text-sm text-text-muted">Buscar por equipo, organización o participante</span>
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Ej: Club Sur, Liga Metropolitana, Mundial Qatar"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className={fieldClass}
                   />
                 </label>
 
                 <label className="w-full md:w-64">
-                  <span className="mb-1 block text-sm text-slate-600">Tipo de torneo</span>
+                  <span className="mb-1 block text-sm text-text-muted">Tipo de torneo</span>
                   <select
                     value={participantType}
                     onChange={(e) => {
                       setSelectedId(null);
                       setParticipantType(e.target.value as 'all' | 'teams' | 'individuals');
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className={fieldClass}
                   >
                     <option value="all">Todos</option>
                     <option value="teams">Equipos</option>
@@ -145,7 +148,7 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
           </div>
         </Card>
 
-        <Card variant="light">
+        <Card>
           <TournamentsBrowseLayout
             showPanel={!showTournamentDetail && !showSeriesDetail}
             panel={{
@@ -154,7 +157,7 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
               error: organizersError,
               selectedOrganizer,
               onSelectOrganizer: handleSelectOrganizer,
-              variant: 'light',
+              variant: 'dark',
             }}
           >
             {showTournamentDetail ? (

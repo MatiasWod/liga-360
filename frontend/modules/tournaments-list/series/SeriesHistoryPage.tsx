@@ -17,9 +17,9 @@ function entryLabel(entry: { displayName?: string } | null | undefined): string 
 
 function KpiCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border border-slate-200 p-3 ${accent ? 'bg-green-50' : 'bg-slate-50'}`}>
-      <p className="text-[11px] font-medium text-slate-500">{label}</p>
-      <p className={`mt-1 text-lg font-semibold leading-snug ${accent ? 'text-[#2E7D32]' : 'text-[#0F2A33]'}`}>
+    <div className={`rounded-xl border border-border-subtle p-3 ${accent ? 'bg-accent-soft' : 'bg-surface-2'}`}>
+      <p className="text-[11px] font-medium text-text-muted">{label}</p>
+      <p className={`mt-1 text-lg font-semibold leading-snug ${accent ? 'text-success-base' : 'text-text-primary'}`}>
         {value}
       </p>
     </div>
@@ -28,12 +28,12 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
 
 function RollOfHonorTable({ rows }: { rows: SeriesRollOfHonorRow[] }) {
   if (!rows.length) {
-    return <p className="text-sm text-slate-600">Todavía no hay ediciones finalizadas en esta serie.</p>;
+    return <p className="text-sm text-text-muted">Todavía no hay ediciones finalizadas en esta serie.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div className="overflow-x-auto rounded-xl border border-border-subtle">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs text-slate-500">
+        <thead className="bg-surface-2 text-left text-xs text-text-muted">
           <tr>
             <th className="px-3 py-2">Edición</th>
             <th className="px-3 py-2">Campeón</th>
@@ -41,7 +41,7 @@ function RollOfHonorTable({ rows }: { rows: SeriesRollOfHonorRow[] }) {
             <th className="px-3 py-2">3.er puesto</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-border-subtle">
           {rows.map((row) => (
             <tr key={row.tournamentId}>
               <td className="px-3 py-2 font-medium">{row.editionLabel || row.tournamentName}</td>
@@ -123,12 +123,12 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
         />
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onBack} className="text-sm text-[#2E7D32] hover:underline">
+        <button type="button" onClick={onBack} className="text-sm text-success-base hover:underline">
           ← Volver al histórico
         </button>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-[#0F2A33]">{series.name}</h3>
-          <p className="text-xs text-slate-500">Histórico agregado cross-edición</p>
+          <h3 className="text-lg font-semibold text-text-primary">{series.name}</h3>
+          <p className="text-xs text-text-muted">Histórico agregado cross-edición</p>
         </div>
         {latestFinished ? (
           <Button type="button" variant="secondary" onClick={() => setNextEditionModalOpen(true)}>
@@ -137,8 +137,8 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
         ) : null}
       </div>
 
-      {loading ? <p className="text-sm text-slate-600">Cargando palmarés y récords…</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {loading ? <p className="text-sm text-text-muted">Cargando palmarés y récords…</p> : null}
+      {error ? <p className="text-sm text-danger-base">{error}</p> : null}
 
       {aggregates ? (
         <>
@@ -159,26 +159,26 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">Palmarés</p>
+            <p className="text-xs font-medium text-text-muted">Palmarés</p>
             <RollOfHonorTable rows={aggregates.rollOfHonor} />
           </div>
 
           {aggregates.editionsInProgress.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-500">Ediciones en curso</p>
-              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              <p className="text-xs font-medium text-text-muted">Ediciones en curso</p>
+              <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle">
                 {aggregates.editionsInProgress.map((e) => (
                   <li key={e.tournamentId}>
                     <button
                       type="button"
                       onClick={() => onOpenEdition(e.tournamentId)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
                     >
                       <span>
                         {e.editionLabel ? `Edición ${e.editionLabel}` : e.name}
-                        <span className="ml-2 text-xs text-slate-400">{e.status}</span>
+                        <span className="ml-2 text-xs text-text-subtle">{e.status}</span>
                       </span>
-                      <span className="text-[#2E7D32]">Ver →</span>
+                      <span className="text-success-base">Ver →</span>
                     </button>
                   </li>
                 ))}
@@ -187,20 +187,20 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
           ) : null}
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">Ediciones finalizadas</p>
-            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+            <p className="text-xs font-medium text-text-muted">Ediciones finalizadas</p>
+            <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle">
               {aggregates.rollOfHonor.map((row) => (
                 <li key={row.tournamentId}>
                   <button
                     type="button"
                     onClick={() => onOpenEdition(row.tournamentId)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
                   >
                     <span>
                       {row.editionLabel ? `Edición ${row.editionLabel}` : row.tournamentName}
                       {row.champion ? ` · 🏆 ${row.champion.displayName}` : ''}
                     </span>
-                    <span className="text-[#2E7D32]">Detalle →</span>
+                    <span className="text-success-base">Detalle →</span>
                   </button>
                 </li>
               ))}
