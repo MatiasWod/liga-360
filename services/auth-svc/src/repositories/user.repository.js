@@ -9,7 +9,7 @@ const pool = new Pool({
 
 export async function findByUsername(username) {
   const r = await pool.query(
-    'SELECT id, username, password, type, "isVerified" FROM "Users" WHERE LOWER(username) = LOWER($1)',
+    'SELECT id, username, password, type, "isVerified", banned_at FROM "Users" WHERE LOWER(username) = LOWER($1)',
     [username]
   );
   return r.rows[0] || null;
@@ -17,10 +17,17 @@ export async function findByUsername(username) {
 
 export async function findById(id) {
   const r = await pool.query(
-      'SELECT id, username, type, "isVerified" FROM "Users" WHERE id = $1',
+      'SELECT id, username, email, type, "isVerified", banned_at FROM "Users" WHERE id = $1',
       [id]
   );
   return r.rows[0] || null;
+}
+
+export async function findAll() {
+  const r = await pool.query(
+      'SELECT id, username, email, type, "isVerified", banned_at FROM "Users" ORDER BY id'
+  );
+  return r.rows;
 }
 
 export async function create({ username, email, password, type, isVerified = false }) {
@@ -35,6 +42,23 @@ export async function create({ username, email, password, type, isVerified = fal
 export async function markVerified(id) {
   const r = await pool.query(
       'UPDATE "Users" SET "isVerified" = true WHERE id = $1 AND NOT "isVerified" RETURNING id, username, type, "isVerified"',
+      [id]
+  );
+  return r.rows[0] || null;
+}
+
+// COALESCE preserva el timestamp del primer baneo: re-banear es un no-op idempotente.
+export async function ban(id) {
+  const r = await pool.query(
+      'UPDATE "Users" SET banned_at = COALESCE(banned_at, now()) WHERE id = $1 RETURNING id, username, email, type, "isVerified", banned_at',
+      [id]
+  );
+  return r.rows[0] || null;
+}
+
+export async function unban(id) {
+  const r = await pool.query(
+      'UPDATE "Users" SET banned_at = NULL WHERE id = $1 RETURNING id, username, email, type, "isVerified", banned_at',
       [id]
   );
   return r.rows[0] || null;

@@ -103,6 +103,10 @@ services:
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_auth
       - TEAMS_SVC_URL=http://teams-svc:4002
       - NODE_ENV=production
+      # Bootstrap del admin (sin registro). Defaults solo para dev local.
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@liga360.com.ar}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
     depends_on:
       postgres:
         condition: service_healthy

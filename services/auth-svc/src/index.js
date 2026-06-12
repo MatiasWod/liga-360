@@ -1,6 +1,8 @@
 import { env } from './config/env.js';
 import { createApp } from './app.js';
 import { logger } from './logger.js';
+import { bootstrapAdmin } from './services/auth.service.js';
+import { closePool } from './repositories/user.repository.js';
 import client from 'prom-client';
 import promBundle from 'express-prom-bundle';
 const app = createApp();
@@ -29,7 +31,18 @@ app.get('/metrics', async (req, res) => {
   }
 });
 
-app.listen(env.port, () => {
+// No fatal si falla (p. ej. carrera entre réplicas por el índice único de username):
+// el servicio sigue levantando y el admin se crea en el próximo boot.
+try {
+  await bootstrapAdmin();
+} catch (err) {
+  logger.error({ err }, 'admin bootstrap failed');
+}
+
+const server = app.listen(env.port, () => {
   logger.info({ port: env.port, env: env.nodeEnv }, 'auth-svc running');
 });
+
+export default server;
+export { app, closePool };
 
