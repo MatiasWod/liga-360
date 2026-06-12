@@ -14,4 +14,3 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=15s \
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 CMD ["node", "services/auth-svc/src/index.js"]
-

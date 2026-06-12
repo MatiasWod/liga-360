@@ -10,4 +10,3 @@ COPY database/migrations-matchevents ./migrations-matchevents
 ENV NODE_ENV=production
 # El comando concreto lo fija cada Job/servicio (migrate:auth | migrate:teams | migrate:inscriptions).
 CMD ["npm", "run", "migrate:teams"]
-
