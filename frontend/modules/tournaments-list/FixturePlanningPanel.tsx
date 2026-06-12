@@ -21,6 +21,7 @@ import { isByeFromInscriptionSlots } from '../../components/tournament-schedule/
 import { bothTeamsResolvedFromSlots } from '../../components/tournament-schedule/matchParticipantUtils';
 import { useFixtureSchedulingPrefs } from './useFixtureSchedulingPrefs';
 import type { TournamentEntity, TournamentMatchRow } from './types';
+import { resolveSportScoreLabels } from './sportScoreLabels';
 import {
   isNextEditionTransition,
   parseTransitionPlacementSnapshot,
@@ -40,6 +41,10 @@ export const FixturePlanningPanel: React.FC<{
   setSaving: (v: boolean) => void;
   setError: (v: string) => void;
 }> = ({ tournament, inscriptionById, onRefresh, setSaving, setError }) => {
+  const scoreLabels = React.useMemo(
+    () => resolveSportScoreLabels(tournament.sport, tournament.participantType),
+    [tournament.sport, tournament.participantType],
+  );
   const [competitionId, setCompetitionId] = React.useState(tournament.competitions[0]?.id || '');
   const [stageId, setStageId] = React.useState('');
   const [matchIdDrawerOpen, setMatchIdDrawerOpen] = React.useState<string | null>(null);
@@ -717,7 +722,7 @@ export const FixturePlanningPanel: React.FC<{
               {stage.format === 'league' ? (
                 <div className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold text-text-primary">Tabla de posiciones</h3>
-                  <StandingsTable rows={displayStage?.standings ?? []} zones={classificationZones} />
+                  <StandingsTable rows={displayStage?.standings ?? []} zones={classificationZones} scoreLabels={scoreLabels} />
                 </div>
               ) : null}
               {stage.format === 'groups' ? (
@@ -730,7 +735,7 @@ export const FixturePlanningPanel: React.FC<{
                         <h3 className="text-sm font-semibold text-text-primary">
                           Tabla · {group.name}
                         </h3>
-                        <StandingsTable rows={group.standings ?? []} zones={classificationZones} />
+                        <StandingsTable rows={group.standings ?? []} zones={classificationZones} scoreLabels={scoreLabels} />
                       </div>
                     ))}
                 </div>
@@ -881,6 +886,7 @@ export const FixturePlanningPanel: React.FC<{
           <MatchEditDrawer
             matchId={matchIdDrawerOpen}
             tournamentId={tournament.id}
+            scoreLabels={scoreLabels}
             competitionId={competitionId || null}
             homeSlot={matchRow?.homeAssignedInscription}
             awaySlot={matchRow?.awayAssignedInscription}

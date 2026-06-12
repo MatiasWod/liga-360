@@ -216,6 +216,7 @@ services:
       - POSTGRES_URL=postgresql://${POSTGRES_USER:-liga}:${POSTGRES_PASSWORD:-liga}@postgres:5432/liga360_matchevents
       - INSCRIPTIONS_SVC_URL=http://inscriptions-svc:4004
       - TEAMS_SVC_URL=http://teams-svc:4002
+      - TOURNAMENTS_GRAPHQL_URL=http://gateway:4000/graphql
       - NODE_ENV=production
     depends_on:
       postgres:

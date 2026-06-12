@@ -11,7 +11,7 @@ import jwt from 'jsonwebtoken';
 import { createApp } from '../app.js';
 import { pool, closePool } from '../config/db.js';
 
-const organizerToken = jwt.sign({ sub: 1, type: 'organizer' }, 'devsecret');
+const organizerToken = jwt.sign({ sub: 1, type: 'organizer', isVerified: true }, 'devsecret');
 const TID = `t-itest-${Date.now()}`;
 const TID2 = `t-itest-b-${Date.now()}`;
 const CID = `c-itest-${Date.now()}`;
@@ -262,6 +262,25 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
       assert.equal(guest.is_guest, true);
       assert.equal(guest.linked_member_id, null);
       assert.equal(guest.inscription_id, 11);
+    })();
+  });
+
+  test('GET events incluye tennis_set con extra_json (lectura pública)', (t) => {
+    if (!dbAvailable) return t.skip('sin DB');
+    const MATCH_T = `m-itest-tennis-${Date.now()}`;
+    return (async () => {
+      await pool.query(
+        `INSERT INTO "MatchEvent"(match_id, tournament_id, competition_id, event_type, display_name, extra_json)
+         VALUES ($1, $2, $3, 'tennis_set', 'Set 1', $4::jsonb)`,
+        [MATCH_T, TID, CID, JSON.stringify({ setNumber: 1, homeGames: 6, awayGames: 4 })]
+      );
+      const r = await req('GET', `/matches/${MATCH_T}/events`);
+      assert.equal(r.status, 200);
+      const setEv = r.body.find((e) => e.event_type === 'tennis_set');
+      assert.ok(setEv);
+      assert.equal(setEv.extra_json.homeGames, 6);
+      assert.equal(setEv.extra_json.awayGames, 4);
+      await pool.query('DELETE FROM "MatchEvent" WHERE match_id = $1', [MATCH_T]);
     })();
   });
 });

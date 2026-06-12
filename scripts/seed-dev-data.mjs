@@ -2,6 +2,7 @@
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { demoEmailForUsername, ensureAuthDemoUsersVerified } from './seed-lib.mjs';
 
 /**
  * Carga datos de demo en auth, teams-svc y tournaments (GraphQL vía gateway).
@@ -77,10 +78,11 @@ async function httpJson(url, { method = 'GET', headers = {}, body } = {}) {
 }
 
 async function registerOrSkip({ mode, username, name }) {
+  const email = demoEmailForUsername(username);
   try {
     await httpJson(`${AUTH_URL}/register`, {
       method: 'POST',
-      body: { mode, username, password: DEFAULT_PASSWORD, name },
+      body: { mode, username, email, password: DEFAULT_PASSWORD, name },
     });
     console.log(`  registro: ${username} (${mode})`);
   } catch (e) {
@@ -109,6 +111,27 @@ async function loginWithUser(username) {
   });
   if (!data?.token) throw new Error(`login sin token: ${username}`);
   return { token: data.token, user: data.user };
+}
+
+/** Crea Participant en teams-svc si el registro saltó verifyEmail (seed local). */
+async function ensureParticipantProfile(username, name) {
+  const { token, user } = await loginWithUser(username);
+  const existing = participantIdForUserId(user.id);
+  if (existing != null) {
+    console.log(`  ya tiene Participant: ${username} (id=${existing})`);
+    return existing;
+  }
+  const parts = String(name).trim().split(/\s+/);
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ') || parts[0];
+  await httpJson(`${TEAMS_URL}/participants`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: { firstName, lastName, linkToUserProfile: true },
+  });
+  const created = participantIdForUserId(user.id);
+  console.log(`  Participant creado: ${username}${created ? ` (id=${created})` : ''}`);
+  return created;
 }
 
 /** Resuelve Participant.id creado al registrarse (auth → teams-svc). Solo dev local con Docker. */
@@ -606,7 +629,7 @@ async function seedIndividualsTournament(orgToken, participants) {
 
   const indiv = await gql(orgToken, MUT_CREATE_TOURNAMENT, {
     name: SEED_INDIV_TOURNAMENT,
-    sport: 'tenis de mesa',
+    sport: 'tennis',
     season: '2026',
     venue: 'Club Social',
     participantType: 'individuals',
@@ -748,6 +771,19 @@ Ejemplo:
   console.log('\n1) Usuarios (auth)...');
   for (const u of USERS) {
     await registerOrSkip(u);
+  }
+
+  console.log('\n1b) Email + isVerified en cuentas demo...');
+  const verifiedRows = ensureAuthDemoUsersVerified(USERS.map((u) => u.username));
+  if (verifiedRows != null) {
+    console.log(`  usuarios demo listos para login: ${verifiedRows} fila(s) actualizada(s)`);
+  } else {
+    console.log('  omitido (sin Docker/postgres) — corré: npm run seed:fix-auth');
+  }
+
+  console.log('\n1c) Perfiles participant en teams-svc (LIGA-164: ya no se crean en /register)...');
+  for (const { username, name } of USERS.filter((u) => u.mode === 'participant')) {
+    await ensureParticipantProfile(username, name);
   }
 
   console.log('\n2) Equipos en teams-svc (usuarios tipo team)...');

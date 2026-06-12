@@ -6,11 +6,17 @@ import {
   createMatchEvent,
   deleteMatchEvent,
   listMatchEvents,
-  updateMatchEvent,
 } from '../../services/matchEvents/matchEvents';
 import type { MatchEvent, MatchEventType } from '../../services/matchEvents/types';
 import { EventAttributionFields } from './EventAttributionFields';
-import { buildAttribution, parseInscriptionSlot, type RosterMember } from './eventAttribution';
+import { TennisScoreForm } from './TennisScoreForm';
+import {
+  buildAttribution,
+  parseInscriptionSlot,
+  type RosterMember,
+} from './eventAttribution';
+import type { SportScoreLabels } from '../../modules/tournaments-list/sportScoreLabels';
+import { resolveSportScoreLabels } from '../../modules/tournaments-list/sportScoreLabels';
 
 // ---------------------------------------------------------------------------
 // updateMatchResult — mutación GraphQL inline (sin servicio propio aún)
@@ -91,6 +97,7 @@ export interface MatchEditDrawerProps {
   defaultTab?: 'schedule' | 'result' | 'events';
   /** Si false, solo programación (fecha/cancha); resultado y eventos requieren equipos. */
   teamsResolved?: boolean;
+  scoreLabels?: SportScoreLabels;
   onClose: () => void;
   onSaved?: () => void | Promise<void>;
 }
@@ -110,11 +117,14 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
   presetTimes,
   defaultTab,
   teamsResolved = true,
+  scoreLabels = resolveSportScoreLabels(),
   onClose,
   onSaved,
 }) => {
   const drawerSections = teamsResolved
-    ? (['schedule', 'result', 'events'] as const)
+    ? scoreLabels.hideGoalEvents
+      ? (['schedule', 'result'] as const)
+      : (['schedule', 'result', 'events'] as const)
     : (['schedule'] as const);
   const initialSection = defaultTab ?? 'result';
   const [activeSection, setActiveSection] = React.useState<'schedule' | 'result' | 'events'>(() => {
@@ -191,9 +201,21 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
           {activeSection === 'schedule' && (
             <ScheduleSection matchId={matchId} initialData={initialData} presetTimes={presetTimes} onSaved={onSaved} />
           )}
-          {activeSection === 'result' && (
-            <ResultSection matchId={matchId} initialData={initialData} onSaved={onSaved} />
-          )}
+          {activeSection === 'result' &&
+            (scoreLabels.sportKey === 'tennis' ? (
+              <TennisScoreForm
+                matchId={matchId}
+                tournamentId={tournamentId}
+                competitionId={competitionId}
+                homeDisplayName={initialData?.homeDisplayName}
+                awayDisplayName={initialData?.awayDisplayName}
+                initialStatus={initialData?.status}
+                scoreLabels={scoreLabels}
+                onSaved={onSaved}
+              />
+            ) : (
+              <ResultSection matchId={matchId} initialData={initialData} onSaved={onSaved} scoreLabels={scoreLabels} />
+            ))}
           {activeSection === 'events' && (
             <EventsSection
               matchId={matchId}
@@ -325,10 +347,12 @@ function ResultSection({
   matchId,
   initialData,
   onSaved,
+  scoreLabels = resolveSportScoreLabels(),
 }: {
   matchId: string;
   initialData?: MatchEditDrawerProps['initialData'];
   onSaved?: () => void;
+  scoreLabels?: SportScoreLabels;
 }) {
   const [homeScore, setHomeScore] = React.useState<string>(
     initialData?.homeScore != null ? String(initialData.homeScore) : ''
@@ -375,6 +399,9 @@ function ResultSection({
 
   return (
     <div className="space-y-4">
+      <p className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-muted">
+        Marcador en <span className="font-medium text-text-primary">{scoreLabels.scoreUnit}</span>. {scoreLabels.scoreHint}
+      </p>
       <div className="flex items-end gap-3">
         <div className="flex-1 space-y-1">
           <label className="block text-xs font-medium text-text-secondary truncate" title={homeName}>

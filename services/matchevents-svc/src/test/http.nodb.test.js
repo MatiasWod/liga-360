@@ -10,7 +10,7 @@ import { createApp } from '../app.js';
 
 let server;
 let baseUrl;
-const organizerToken = jwt.sign({ sub: 1, type: 'organizer' }, 'devsecret');
+const organizerToken = jwt.sign({ sub: 1, type: 'organizer', isVerified: true }, 'devsecret');
 
 function req(method, path, body, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -135,6 +135,36 @@ describe('matchevents-svc HTTP (sin DB)', () => {
 
   test('POST con organizer + sin display_name ni linked_member_id → 400', async () => {
     const r = await req('POST', '/matches/m1/events', { event_type: 'goal', tournament_id: 't1' }, { Authorization: `Bearer ${organizerToken}` });
+    assert.equal(r.status, 400);
+  });
+
+  test('PUT /tennis-score sin token → 401', async () => {
+    const r = await req('PUT', '/matches/m1/tennis-score', { tournament_id: 't1', status: 'completed', sets: [] });
+    assert.equal(r.status, 401);
+  });
+
+  test('PUT /tennis-score con sets empatados → 400', async () => {
+    const r = await req(
+      'PUT',
+      '/matches/m1/tennis-score',
+      {
+        tournament_id: 't1',
+        status: 'completed',
+        sets: [{ setNumber: 1, homeGames: 6, awayGames: 6 }],
+      },
+      { Authorization: `Bearer ${organizerToken}` }
+    );
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'VALIDATION_ERROR');
+  });
+
+  test('PUT /tennis-score sin tournament_id → 400', async () => {
+    const r = await req(
+      'PUT',
+      '/matches/m1/tennis-score',
+      { status: 'completed', sets: [{ setNumber: 1, homeGames: 6, awayGames: 4 }] },
+      { Authorization: `Bearer ${organizerToken}` }
+    );
     assert.equal(r.status, 400);
   });
 });

@@ -10,6 +10,7 @@ function assertRequired(name) {
 if (process.env.NODE_ENV === 'production') {
   assertRequired('JWT_SECRET');
   assertRequired('POSTGRES_URL');
+  assertRequired('TOURNAMENTS_GRAPHQL_URL');
 }
 
 export const env = {
@@ -19,6 +20,7 @@ export const env = {
   // Servicios downstream para resolver propiedad de presencias (inscription → team → owner)
   inscriptionsSvcUrl: process.env.INSCRIPTIONS_SVC_URL || 'http://localhost:4004',
   teamsSvcUrl: process.env.TEAMS_SVC_URL || 'http://localhost:4002',
+  tournamentsGraphqlUrl: process.env.TOURNAMENTS_GRAPHQL_URL || 'http://localhost:4000/graphql',
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
