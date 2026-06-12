@@ -69,7 +69,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
         if (role === 'participant' && participantDni.trim() && !/^\d{7,8}$/.test(participantDni.replace(/\D/g, ''))) {
           throw new Error('El DNI del participante debe tener 7 u 8 digitos');
         }
-        await register(role, username, email, password, registrationName);
+        await register(role, username, email, password, registrationName, participantNickname, participantDni);
       }
       onAuthenticated();
     } catch (err: any) {

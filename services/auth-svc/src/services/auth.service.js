@@ -18,7 +18,7 @@ function signToken(user) {
   );
 }
 
-export async function register({ mode, username, email, password, name }) {
+export async function register({ mode, username, email, password, name, nickname, dni }) {
   if (!PUBLIC_ROLES.includes(mode)) {
     throw Object.assign(new Error('Invalid user role requested'), { statusCode: 400, code: 'INVALID_ROLE' });
   }
@@ -37,7 +37,7 @@ export async function register({ mode, username, email, password, name }) {
   });
 
   const verificationToken = jwt.sign(
-      { userId: user.id, purpose: 'email_verification', name: name.trim(), mode },
+      { userId: user.id, purpose: 'email_verification', name: name.trim(), mode, nickname: nickname, dni: dni },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
   );
@@ -104,7 +104,7 @@ export async function verifyEmail({ userId, token }) {
     throw Object.assign(new Error('User is already verified'), { statusCode: 400, code: 'ALREADY_VERIFIED' });
   }
 
-  const { mode, name } = decoded;
+  const { mode, name, nickname, dni } = decoded;
   const authToken = signToken(updatedUser); // Generamos el token de sesión real
 
   if (mode === 'team') {
@@ -119,7 +119,7 @@ export async function verifyEmail({ userId, token }) {
 
   if (mode === 'participant') {
     try {
-      await teamsClient.createParticipant({ name, token: authToken });
+      await teamsClient.createParticipant({ name, nickname, dni, token: authToken });
     } catch (err) {
       logger.error({ err: err.message, userId: user.id }, 'failed to create participant in teams-svc during verification, rolling back');
       await userRepository.deleteById(user.id);

@@ -18,7 +18,7 @@ export async function createTeam({ name, token }) {
   return response.json();
 }
 
-export async function createParticipant({ name, token }) {
+export async function createParticipant({ name, nickname, dni, token }) {
   const parts = name.trim().split(/\s+/);
   const firstName = parts[0];
   const lastName = parts.slice(1).join(' ') || parts[0];
@@ -29,7 +29,7 @@ export async function createParticipant({ name, token }) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ firstName, lastName, linkToUserProfile: true }),
+    body: JSON.stringify({ firstName, lastName, nickname, dni, linkToUserProfile: true }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

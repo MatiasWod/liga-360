@@ -16,11 +16,11 @@ export async function login(username: string, password: string) {
   return readSessionUser();
 }
 
-export async function register(mode: 'team' | 'participant' | 'organizer', username: string, email: string, password: string, name: string) {
+export async function register(mode: 'team' | 'participant' | 'organizer', username: string, email: string, password: string, name: string, nickname?: string | null, dni?: string | null) {
   const res = await fetch(`${AUTH_BASE}/register`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ mode, username, email, password, name }),
+    body: JSON.stringify({ mode, username, email, password, name, nickname, dni }),
   });
   const json = await parseJsonResponse(res, 'Error de registro');
   if (mode === 'team') {
