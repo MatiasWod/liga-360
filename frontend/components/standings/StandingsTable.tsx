@@ -1,5 +1,7 @@
 import React from 'react';
 import { TeamNameLink } from '../team/TeamNameLink';
+import type { SportScoreLabels } from '../../modules/tournaments-list/sportScoreLabels';
+import { resolveSportScoreLabels } from '../../modules/tournaments-list/sportScoreLabels';
 import type { ClassificationZone, StandingsRow } from './types';
 
 const ZONE_STYLES = [
@@ -19,6 +21,7 @@ type StandingsTableProps = {
   zones?: ClassificationZone[];
   theme?: 'light' | 'dark';
   className?: string;
+  scoreLabels?: SportScoreLabels;
 };
 
 export const StandingsTable: React.FC<StandingsTableProps> = ({
@@ -26,6 +29,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
   zones = [],
   theme = 'dark',
   className = '',
+  scoreLabels = resolveSportScoreLabels(),
 }) => {
   if (rows.length === 0) return null;
 
@@ -51,14 +55,18 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
           <thead>
             <tr className={`${headerClass} border-b ${rowClass}`}>
               <th className="px-3 py-2 text-left font-semibold">Pos</th>
-              <th className="px-3 py-2 text-left font-semibold">Equipo</th>
+              <th className="px-3 py-2 text-left font-semibold">{scoreLabels.entityColumn}</th>
               <th className="px-3 py-2 text-center font-semibold">PJ</th>
               <th className="px-3 py-2 text-center font-semibold">G</th>
               <th className="px-3 py-2 text-center font-semibold">E</th>
               <th className="px-3 py-2 text-center font-semibold">P</th>
-              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell">GF</th>
-              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell">GC</th>
-              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell">DG</th>
+              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell" title={scoreLabels.scoreUnit}>
+                {scoreLabels.forShort}
+              </th>
+              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell" title={scoreLabels.scoreUnit}>
+                {scoreLabels.againstShort}
+              </th>
+              <th className="hidden px-3 py-2 text-center font-semibold sm:table-cell">{scoreLabels.diffShort}</th>
               <th className="px-3 py-2 text-center font-semibold">Pts</th>
             </tr>
           </thead>

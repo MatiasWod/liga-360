@@ -3,6 +3,7 @@ import { requireAuthMiddleware, requireOrganizer } from '../middleware/auth.js';
 import * as matchEvent from '../controllers/matchEvent.controller.js';
 import * as stats from '../controllers/stats.controller.js';
 import * as presence from '../controllers/presence.controller.js';
+import * as tennisScore from '../controllers/tennisScore.controller.js';
 import {verifyToken, requireRole, ROLES} from '@liga360/shared';
 
 export function createRouter() {
@@ -13,6 +14,7 @@ export function createRouter() {
   router.get('/matches/:matchId/events', matchEvent.list);
   router.patch('/matches/:matchId/events/:eventId', verifyToken, requireRole([ROLES.ORGANIZER]), matchEvent.update);
   router.delete('/matches/:matchId/events/:eventId', verifyToken, requireRole([ROLES.ORGANIZER]), matchEvent.remove);
+  router.put('/matches/:matchId/tennis-score', verifyToken, requireRole([ROLES.ORGANIZER]), tennisScore.replace);
 
   // Presencias por partido (ADR-0002): lectura pública; escritura solo dueño del equipo
   // (la matriz de autorización vive en presence.service, no alcanza con el rol del token)

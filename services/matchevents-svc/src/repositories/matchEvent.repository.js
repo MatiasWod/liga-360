@@ -64,3 +64,28 @@ export async function deleteByIdInMatch(client, eventId, matchId) {
   );
   return r.rows.length > 0;
 }
+
+/**
+ * Reemplaza atómicamente todos los eventos tennis_set de un partido.
+ * La transacción queda abierta hasta COMMIT/ROLLBACK del caller.
+ */
+export async function replaceTennisSets(client, {
+  matchId, tournamentId, competitionId = null, sets, createdByUserId = null,
+}) {
+  await client.query(
+    `DELETE FROM "MatchEvent" WHERE match_id = $1 AND event_type = 'tennis_set'`,
+    [matchId]
+  );
+  const inserted = [];
+  for (const set of sets) {
+    const r = await client.query(
+      `INSERT INTO "MatchEvent"(match_id, tournament_id, competition_id, event_type, inscription_id, linked_member_id, display_name,
+         minute, suspension_matches, notes, extra_json, created_by_user_id, created_at, updated_at)
+       VALUES ($1, $2, $3, 'tennis_set', NULL, NULL, $4, NULL, NULL, NULL, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [matchId, tournamentId, competitionId, set.displayName, JSON.stringify(set.extraJson), createdByUserId]
+    );
+    inserted.push(r.rows[0]);
+  }
+  return inserted;
+}

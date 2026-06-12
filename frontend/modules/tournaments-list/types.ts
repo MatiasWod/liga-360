@@ -93,6 +93,7 @@ export type TournamentCompetition = {
 export type TournamentEntity = {
   id: string;
   name: string;
+  sport?: string | null;
   venue?: string | null;
   organizer?: string | null;
   participantType?: string | null;

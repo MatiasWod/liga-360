@@ -3,7 +3,8 @@ export type MatchEventType =
   | 'yellow_card'
   | 'red_card'
   | 'suspension'
-  | 'other_sanction';
+  | 'other_sanction'
+  | 'tennis_set';
 
 export interface MatchEvent {
   id: number;

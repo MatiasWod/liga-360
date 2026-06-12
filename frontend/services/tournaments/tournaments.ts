@@ -144,6 +144,7 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
         tournament(id: $id) {
           id
           name
+          sport
           venue
           organizer
           participantType

@@ -1,5 +1,5 @@
 import * as matchEventService from '../services/matchEvent.service.js';
-import { VALID_EVENT_TYPES, isValidEventType, sanitizeEventForViewer } from '../domain/matchEvent.js';
+import { VALID_EVENT_TYPES, TENNIS_SET_EVENT_TYPE, isValidEventType, sanitizeEventForViewer } from '../domain/matchEvent.js';
 
 function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -12,6 +12,9 @@ export async function create(req, res, next) {
     if (!matchId) return validationError(res, 'matchId requerido');
     if (!isValidEventType(event_type)) {
       return validationError(res, `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}`);
+    }
+    if (event_type === TENNIS_SET_EVENT_TYPE) {
+      return validationError(res, 'Usá PUT /matches/:matchId/tennis-score para cargar sets de tenis');
     }
     if (!tournament_id) return validationError(res, 'tournament_id requerido');
     if (!display_name && !linked_member_id) {
@@ -48,6 +51,9 @@ export async function update(req, res, next) {
     const { event_type, inscription_id, linked_member_id, display_name, minute, suspension_matches, notes, extra_json, competition_id } = req.body || {};
     if (event_type !== undefined && !isValidEventType(event_type)) {
       return validationError(res, `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}`);
+    }
+    if (event_type === TENNIS_SET_EVENT_TYPE) {
+      return validationError(res, 'Usá PUT /matches/:matchId/tennis-score para cargar sets de tenis');
     }
     const event = await matchEventService.update({
       matchId, eventId, eventType: event_type, competitionId: competition_id, inscriptionId: inscription_id, linkedMemberId: linked_member_id,

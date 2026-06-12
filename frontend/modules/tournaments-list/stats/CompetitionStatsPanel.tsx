@@ -7,6 +7,8 @@ import {
   type ScorerStatsRow,
   type TeamStatsRow,
 } from '../../../services/matchEvents/stats';
+import type { SportScoreLabels } from '../sportScoreLabels';
+import { resolveSportScoreLabels } from '../sportScoreLabels';
 import type { TournamentCompetition } from '../types';
 import { ScorersTable } from './ScorersTable';
 import { CardsTable } from './CardsTable';
@@ -25,6 +27,7 @@ export interface CompetitionStatsPanelProps {
   nameById: Map<string, string>;
   /** Lookup inscriptionId → imagen (escudo/avatar) ya armado por TournamentDetail. */
   imageById?: ReadonlyMap<string, string>;
+  scoreLabels?: SportScoreLabels;
 }
 
 /**
@@ -37,6 +40,7 @@ export const CompetitionStatsPanel: React.FC<CompetitionStatsPanelProps> = ({
   competition,
   nameById,
   imageById,
+  scoreLabels = resolveSportScoreLabels(),
 }) => {
   const competitionId = competition?.id ?? null;
   const [scorers, setScorers] = React.useState<ScorerStatsRow[]>([]);
@@ -92,39 +96,49 @@ export const CompetitionStatsPanel: React.FC<CompetitionStatsPanelProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-1.5">
-          <p className="text-xs text-text-muted font-medium">Goleadores</p>
-          <ScorersTable rows={scorers} nameById={nameById} onSelectTeam={setSelectedTeamId} />
+      {scoreLabels.hideGoalEvents ? (
+        <p className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-muted">
+          En tenis el marcador son <span className="font-medium text-text-primary">sets ganados</span>. Goleadores y tarjetas no aplican.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="space-y-1.5">
+            <p className="text-xs text-text-muted font-medium">Goleadores</p>
+            <ScorersTable rows={scorers} nameById={nameById} onSelectTeam={setSelectedTeamId} />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-text-muted font-medium">Amonestados y sanciones</p>
+            <CardsTable rows={cards} nameById={nameById} onSelectTeam={setSelectedTeamId} />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <p className="text-xs text-text-muted font-medium">Amonestados y sanciones</p>
-          <CardsTable rows={cards} nameById={nameById} onSelectTeam={setSelectedTeamId} />
-        </div>
-      </div>
+      )}
 
       <div className="space-y-1.5">
-        <p className="text-xs text-text-muted font-medium">Tabla por equipo</p>
+        <p className="text-xs text-text-muted font-medium">Tabla por {scoreLabels.entityColumn.toLowerCase()}</p>
         {teamRows.length === 0 ? (
-          <p className="py-3 text-xs text-text-muted">Todavía no hay datos de equipos en esta competencia.</p>
+          <p className="py-3 text-xs text-text-muted">Todavía no hay datos de {scoreLabels.entityColumn.toLowerCase()}s en esta competencia.</p>
         ) : (
           <div className="rounded-xl border border-border-subtle bg-surface-1 overflow-hidden">
             <table className="w-full text-xs text-text-primary">
               <thead>
                 <tr className="text-text-muted border-b border-border-subtle">
-                  <th className="px-2 py-1 text-left font-medium">Equipo</th>
+                  <th className="px-2 py-1 text-left font-medium">{scoreLabels.entityColumn}</th>
                   <th className="px-2 py-1 text-center font-medium w-8">PJ</th>
                   <th className="px-2 py-1 text-center font-medium w-8">PG</th>
                   <th className="px-2 py-1 text-center font-medium w-8">PE</th>
                   <th className="px-2 py-1 text-center font-medium w-8">PP</th>
-                  <th className="px-2 py-1 text-center font-medium w-8">GF</th>
-                  <th className="px-2 py-1 text-center font-medium w-8">GC</th>
-                  <th className="px-2 py-1 text-center font-medium w-10" title="Tarjetas amarillas">
-                    <span className="inline-block h-2.5 w-2 rounded-[2px] bg-amber-400 align-middle" />
-                  </th>
-                  <th className="px-2 py-1 text-center font-medium w-10" title="Tarjetas rojas">
-                    <span className="inline-block h-2.5 w-2 rounded-[2px] bg-red-500 align-middle" />
-                  </th>
+                  <th className="px-2 py-1 text-center font-medium w-8" title={scoreLabels.scoreUnit}>{scoreLabels.forShort}</th>
+                  <th className="px-2 py-1 text-center font-medium w-8" title={scoreLabels.scoreUnit}>{scoreLabels.againstShort}</th>
+                  {!scoreLabels.hideGoalEvents ? (
+                    <>
+                      <th className="px-2 py-1 text-center font-medium w-10" title="Tarjetas amarillas">
+                        <span className="inline-block h-2.5 w-2 rounded-[2px] bg-amber-400 align-middle" />
+                      </th>
+                      <th className="px-2 py-1 text-center font-medium w-10" title="Tarjetas rojas">
+                        <span className="inline-block h-2.5 w-2 rounded-[2px] bg-red-500 align-middle" />
+                      </th>
+                    </>
+                  ) : null}
                   <th className="px-2 py-1 text-center font-semibold w-10">Pts</th>
                 </tr>
               </thead>
@@ -146,8 +160,12 @@ export const CompetitionStatsPanel: React.FC<CompetitionStatsPanelProps> = ({
                     <td className="px-2 py-1 text-center">{row.lost}</td>
                     <td className="px-2 py-1 text-center">{row.goalsFor}</td>
                     <td className="px-2 py-1 text-center">{row.goalsAgainst}</td>
-                    <td className="px-2 py-1 text-center tabular-nums">{row.yellowCards || ''}</td>
-                    <td className="px-2 py-1 text-center tabular-nums">{row.redCards || ''}</td>
+                    {!scoreLabels.hideGoalEvents ? (
+                      <>
+                        <td className="px-2 py-1 text-center tabular-nums">{row.yellowCards || ''}</td>
+                        <td className="px-2 py-1 text-center tabular-nums">{row.redCards || ''}</td>
+                      </>
+                    ) : null}
                     <td className="px-2 py-1 text-center font-bold">{row.points}</td>
                   </tr>
                 ))}

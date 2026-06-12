@@ -4,7 +4,7 @@ import { VALID_EVENT_TYPES, isValidEventType, sanitizeEventForViewer } from '../
 
 describe('matchEvent domain', () => {
   test('VALID_EVENT_TYPES contiene los tipos esperados', () => {
-    assert.deepEqual(VALID_EVENT_TYPES, ['goal', 'yellow_card', 'red_card', 'suspension', 'other_sanction']);
+    assert.deepEqual(VALID_EVENT_TYPES, ['goal', 'yellow_card', 'red_card', 'suspension', 'other_sanction', 'tennis_set']);
   });
 
   test('isValidEventType acepta tipos válidos', () => {
