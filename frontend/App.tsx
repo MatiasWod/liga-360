@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppLayout } from './components/layout/AppLayout';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AuthPage } from './pages/auth/AuthPage';
 import { VerificationPendingPage } from './pages/auth/VerificationPendingPage';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
@@ -39,7 +40,7 @@ export const App: React.FC = () => {
     if (mode === 'general_with_account' || mode === 'team_claim') return mode;
     return null;
   });
-  const NAV_IDS: NavItemId[] = ['inicio', 'agenda', 'torneos', 'equipos', 'participantes', 'perfil'];
+  const NAV_IDS: NavItemId[] = ['inicio', 'agenda', 'torneos', 'equipos', 'participantes', 'perfil', 'usuarios'];
   const [activeNav, setActiveNav] = React.useState<NavItemId>(() => {
     const seg = window.location.pathname.replace(/^\//, '').split('/')[0] as NavItemId;
     return NAV_IDS.includes(seg) ? seg : 'inicio';
@@ -105,6 +106,9 @@ export const App: React.FC = () => {
 
   const currentRole: UserRole = (user?.type as UserRole) || 'participant';
   const navItems = React.useMemo<NavItem[]>(() => {
+    if (currentRole === 'admin') {
+      return [{ id: 'usuarios', label: 'Usuarios' }];
+    }
     if (currentRole === 'organizer') {
       return [
         { id: 'torneos', label: 'Torneos' },
@@ -133,6 +137,7 @@ export const App: React.FC = () => {
   React.useEffect(() => {
     if (!user) return;
     if (!user.isVerified) return;
+    if (currentRole === 'admin') return; // el admin no tiene equipos ni perfil en teams-svc
     (async () => {
       try {
         let teamList = await getMyTeams();
@@ -418,6 +423,9 @@ export const App: React.FC = () => {
   }
 
   function renderPage() {
+    if (currentRole === 'admin') {
+      return <AdminUsersPage />;
+    }
     if (viewTeamId) {
       return (
         <TeamPublicViewPage

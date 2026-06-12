@@ -1,5 +1,5 @@
-export type NavItemId = 'inicio' | 'agenda' | 'equipos' | 'participantes' | 'torneos' | 'perfil';
-export type UserRole = 'organizer' | 'team' | 'participant';
+export type NavItemId = 'inicio' | 'agenda' | 'equipos' | 'participantes' | 'torneos' | 'perfil' | 'usuarios';
+export type UserRole = 'organizer' | 'team' | 'participant' | 'admin';
 
 export interface NavItem {
   id: NavItemId;
