@@ -88,9 +88,10 @@ definitions:
           # Las suites unit/integration no requieren Postgres (los servicios SQL aíslan el acceso
           # a datos en repos y se testean sin DB). Las migraciones por servicio viven en
           # database/migrations-{auth,teams,inscriptions} y corren en deploy (Jobs db-migrate-*).
+          # NOTA: npm ci en la raíz ya instala todos los workspaces (packages/*, services/*),
+          # incluyendo @liga360/shared. No usar npm install --prefix porque rompe la resolución
+          # de workspaces locales e intenta buscar @liga360/shared en el registry.
           - npm ci --cache .npm --prefer-offline
-          - npm install --prefix services/inscriptions-svc
-          - npm install --prefix services/tournaments-svc
           - npm run test:ci
 
     - step: &docker-build-push
