@@ -15,3 +15,4 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 CMD ["node", "services/matchevents-svc/src/index.js"]
 
+
