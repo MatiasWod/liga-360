@@ -47,6 +47,7 @@ const EVENT_TYPE_LABELS: Record<MatchEventType, string> = {
   red_card: 'Tarjeta roja',
   suspension: 'Suspensión',
   other_sanction: 'Otra sanción',
+  tennis_set: 'Set',
 };
 
 const MATCH_STATUS_OPTIONS = [
