@@ -89,7 +89,7 @@ export const RoundSelector: React.FC<RoundSelectorProps> = ({
     <div ref={rootRef} className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
       <span
         id={`${triggerId}-label`}
-        className={`text-sm font-medium ${isDark ? 'text-white/70' : 'text-text-muted'}`}
+        className={`text-sm font-medium ${isDark ? 'text-text-primary' : 'text-text-muted'}`}
       >
         Fecha
       </span>
