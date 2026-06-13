@@ -12,7 +12,7 @@ export async function getInscription(inscriptionId) {
 export async function listTeamInscriptions(teamId) {
   let response;
   try {
-    response = await fetch(`${env.inscriptionsSvcUrl}/teams/${Number(teamId)}/inscriptions`, {
+    response = await fetch(`${env.inscriptionsSvcUrl}/inscriptions?teamId=${Number(teamId)}`, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(Number(process.env.DOWNSTREAM_TIMEOUT_MS || 3000)),
     });

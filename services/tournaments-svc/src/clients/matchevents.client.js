@@ -12,7 +12,7 @@ export async function getMultiTournamentScorers(tournamentIds, { limit = 20 } = 
   if (!ids.length) return [];
   const qs = new URLSearchParams({ tournamentIds: ids.join(','), limit: String(limit) });
   try {
-    const response = await fetch(`${env.matcheventsSvcUrl}/tournaments/stats/scorers?${qs}`, {
+    const response = await fetch(`${env.matcheventsSvcUrl}/stats/scorers?${qs}`, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });

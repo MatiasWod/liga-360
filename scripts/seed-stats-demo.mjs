@@ -47,7 +47,7 @@ function matchBetween(m, idA, idB) {
 }
 
 async function listTeamInscriptions(teamId) {
-  const data = await httpJson(`${INSCRIPTIONS_URL}/teams/${teamId}/inscriptions`);
+  const data = await httpJson(`${INSCRIPTIONS_URL}/inscriptions?teamId=${teamId}`);
   return data.inscriptions || [];
 }
 

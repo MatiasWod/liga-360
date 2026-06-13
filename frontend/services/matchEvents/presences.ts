@@ -89,7 +89,7 @@ export interface ParticipantStats {
 
 export async function getParticipantStats(memberId: number, options?: { teamId?: number }): Promise<ParticipantStats> {
   const params = options?.teamId ? `?teamId=${Number(options.teamId)}` : '';
-  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/participants/${memberId}/stats${params}`, {
+  const res = await fetch(`${API_ENDPOINTS.matchEventsStats}/stats/participants/${memberId}${params}`, {
     headers: authHeaders(),
   });
   return handleResponse<ParticipantStats>(res);

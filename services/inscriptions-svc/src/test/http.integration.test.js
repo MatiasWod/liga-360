@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -100,22 +100,34 @@ test('GET /inscriptions/:id con token de servicio responde 404 para id inexisten
   assert.equal(response.statusCode, 404);
 });
 
-test('GET /teams/:teamId/inscriptions sin token responde 200 con lista vacía para equipo sin historia', async (t) => {
+test('GET /inscriptions?teamId= sin token responde 200 con lista vacía para equipo sin historia', async (t) => {
   try {
     const { pool } = await import('../config/db.js');
     await pool.query('SELECT 1');
   } catch {
     return t.skip('DB no disponible');
   }
-  const response = await request(app).get('/teams/999999999/inscriptions');
+  const response = await request(app).get('/inscriptions?teamId=999999999');
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.teamId, 999999999);
   assert.deepEqual(response.body.inscriptions, []);
 });
 
-test('GET /teams/:teamId/inscriptions con teamId invalido responde 400', async () => {
-  const response = await request(app).get('/teams/abc/inscriptions');
+test('GET /inscriptions?teamId= con teamId invalido responde 400', async () => {
+  const response = await request(app).get('/inscriptions?teamId=abc');
   assert.equal(response.statusCode, 400);
+});
+
+test('GET /inscriptions sin filtros responde 400', async () => {
+  const response = await request(app).get('/inscriptions');
+  assert.equal(response.statusCode, 400);
+  assert.match(extractCode(response.body), /VALIDATION_ERROR/);
+});
+
+test('GET /inscriptions?tournamentId= sin token responde 401', async () => {
+  const response = await request(app).get('/inscriptions?tournamentId=t-1');
+  assert.equal(response.statusCode, 401);
+  assert.match(extractCode(response.body), /UNAUTHORIZED/);
 });
 
 test('PATCH /inscriptions/:id/weight sin token responde 401', async () => {
@@ -144,33 +156,33 @@ test('PATCH /inscriptions/:id/weight con peso invalido responde 400', async () =
   assert.match(extractCode(response.body), /VALIDATION_ERROR/);
 });
 
-test('PATCH /internal/inscriptions/:id/tournament-rating sin token responde 401', async () => {
-  const response = await request(app).patch('/internal/inscriptions/1/tournament-rating').send({ tournamentRating: 1200 });
+test('PATCH /inscriptions/:id/tournament-rating sin token responde 401', async () => {
+  const response = await request(app).patch('/inscriptions/1/tournament-rating').send({ tournamentRating: 1200 });
   assert.equal(response.statusCode, 401);
   assert.match(response.body.error?.code || '', /UNAUTHORIZED/);
 });
 
-test('PATCH /internal/inscriptions/:id/tournament-rating con token organizer responde 403', async () => {
+test('PATCH /inscriptions/:id/tournament-rating con token organizer responde 403', async () => {
   const token = jwt.sign({ sub: 1, type: 'organizer' }, JWT_SECRET, { expiresIn: '1h' });
   const response = await request(app)
-    .patch('/internal/inscriptions/1/tournament-rating')
+    .patch('/inscriptions/1/tournament-rating')
     .set('Authorization', `Bearer ${token}`)
     .send({ tournamentRating: 1200 });
   assert.equal(response.statusCode, 403);
   assert.match(response.body.error?.code || '', /FORBIDDEN/);
 });
 
-test('PATCH /internal/inscriptions/:id/tournament-rating con rating invalido responde 400', async () => {
+test('PATCH /inscriptions/:id/tournament-rating con rating invalido responde 400', async () => {
   const token = jwt.sign({ type: 'service', iss: 'teams-svc' }, JWT_SECRET, { expiresIn: '1h' });
   const response = await request(app)
-    .patch('/internal/inscriptions/1/tournament-rating')
+    .patch('/inscriptions/1/tournament-rating')
     .set('Authorization', `Bearer ${token}`)
     .send({ tournamentRating: 12.5 });
   assert.equal(response.statusCode, 400);
   assert.match(response.body.error?.code || '', /VALIDATION_ERROR/);
 });
 
-test('PATCH /internal/inscriptions/:id/tournament-rating fantasma actualiza rating', async (t) => {
+test('PATCH /inscriptions/:id/tournament-rating fantasma actualiza rating', async (t) => {
   try {
     const { pool } = await import('../config/db.js');
     await pool.query('SELECT 1');
@@ -192,7 +204,7 @@ test('PATCH /internal/inscriptions/:id/tournament-rating fantasma actualiza rati
   try {
     const token = jwt.sign({ type: 'service', iss: 'teams-svc' }, JWT_SECRET, { expiresIn: '1h' });
     const response = await request(app)
-      .patch(`/internal/inscriptions/${inscriptionId}/tournament-rating`)
+      .patch(`/inscriptions/${inscriptionId}/tournament-rating`)
       .set('Authorization', `Bearer ${token}`)
       .send({ tournamentRating: 1350 });
     assert.equal(response.statusCode, 200);
@@ -202,14 +214,14 @@ test('PATCH /internal/inscriptions/:id/tournament-rating fantasma actualiza rati
   }
 });
 
-test('GET /inscriptions/lookup sin ids responde 200 con lista vacía', async (t) => {
+test('GET /inscriptions?ids= inexistentes responde 200 con lista vacía', async (t) => {
   try {
     const { pool } = await import('../config/db.js');
     await pool.query('SELECT 1');
   } catch {
     return t.skip('DB no disponible');
   }
-  const response = await request(app).get('/inscriptions/lookup');
+  const response = await request(app).get('/inscriptions?ids=999999998,999999999');
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body.inscriptions, []);
 });

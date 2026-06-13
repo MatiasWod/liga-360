@@ -34,7 +34,9 @@ export function createApp() {
   app.use('/teams', teamRoutes);
   app.use('/participants', participantRoutes);
   app.use('/profiles', profileRoutes);
-  app.use('/internal/elo', eloRoutes);
+  // ELO como sub-recurso del partido (service-to-service): PUT /matches/:matchId/elo.
+  // El token de servicio marca lo interno, no el path.
+  app.use('/matches', eloRoutes);
 
   app.use(errorHandler);
 

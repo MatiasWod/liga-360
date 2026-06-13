@@ -20,9 +20,9 @@ function serviceHeaders() {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 }
 
-async function processMatch(payload) {
-  const res = await fetch(`${TEAMS_URL}/internal/elo/process-match`, {
-    method: 'POST',
+async function processMatch({ matchId, ...payload }) {
+  const res = await fetch(`${TEAMS_URL}/matches/${encodeURIComponent(String(matchId))}/elo`, {
+    method: 'PUT',
     headers: serviceHeaders(),
     body: JSON.stringify(payload),
   });

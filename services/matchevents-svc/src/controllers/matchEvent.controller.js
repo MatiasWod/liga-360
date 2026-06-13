@@ -1,5 +1,6 @@
 import * as matchEventService from '../services/matchEvent.service.js';
 import { VALID_EVENT_TYPES, TENNIS_SET_EVENT_TYPE, isValidEventType, sanitizeEventForViewer } from '../domain/matchEvent.js';
+import { validateTennisSetExtra } from '../domain/tennisScore.js';
 
 function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -13,10 +14,20 @@ export async function create(req, res, next) {
     if (!isValidEventType(event_type)) {
       return validationError(res, `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}`);
     }
-    if (event_type === TENNIS_SET_EVENT_TYPE) {
-      return validationError(res, 'Usá PUT /matches/:matchId/tennis-score para cargar sets de tenis');
-    }
     if (!tournament_id) return validationError(res, 'tournament_id requerido');
+
+    // Un set de tenis es el marcador de un set, no un evento atribuido a un jugador:
+    // sin inscripción ni display_name de jugador; el detalle va en extra_json.
+    if (event_type === TENNIS_SET_EVENT_TYPE) {
+      const set = validateTennisSetExtra(extra_json);
+      if (!set.ok) return validationError(res, set.error);
+      const event = await matchEventService.create({
+        matchId, tournamentId: tournament_id, competitionId: competition_id, eventType: event_type,
+        displayName: `Set ${set.value.setNumber}`, extraJson: set.value, createdByUserId: req.user?.sub,
+      });
+      return res.status(201).json(event);
+    }
+
     if (!display_name && !linked_member_id) {
       return validationError(res, 'display_name es requerido cuando no hay linked_member_id');
     }
@@ -53,7 +64,13 @@ export async function update(req, res, next) {
       return validationError(res, `event_type invalido. Valores aceptados: ${VALID_EVENT_TYPES.join(', ')}`);
     }
     if (event_type === TENNIS_SET_EVENT_TYPE) {
-      return validationError(res, 'Usá PUT /matches/:matchId/tennis-score para cargar sets de tenis');
+      const set = validateTennisSetExtra(extra_json);
+      if (!set.ok) return validationError(res, set.error);
+      const updated = await matchEventService.update({
+        matchId, eventId, eventType: event_type, competitionId: competition_id,
+        displayName: `Set ${set.value.setNumber}`, extraJson: set.value,
+      });
+      return res.json(updated);
     }
     const event = await matchEventService.update({
       matchId, eventId, eventType: event_type, competitionId: competition_id, inscriptionId: inscription_id, linkedMemberId: linked_member_id,

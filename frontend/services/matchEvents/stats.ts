@@ -43,11 +43,10 @@ async function getJson<T>(url: string, fallbackError: string): Promise<T> {
 }
 
 function statsUrl(tournamentId: string, path: string, competitionId?: string | null, extra?: Record<string, string>) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ tournamentId });
   if (competitionId) params.set('competitionId', competitionId);
   for (const [k, v] of Object.entries(extra || {})) params.set(k, v);
-  const qs = params.toString();
-  return `${base()}/tournaments/${encodeURIComponent(tournamentId)}${path}${qs ? `?${qs}` : ''}`;
+  return `${base()}${path}?${params}`;
 }
 
 export async function getScorerStats(
@@ -69,7 +68,7 @@ export async function getMultiScorerStats(
     limit: String(limit),
   });
   return getJson(
-    `${base()}/tournaments/stats/scorers?${params}`,
+    `${base()}/stats/scorers?${params}`,
     'No se pudieron cargar los goleadores históricos'
   );
 }
@@ -84,7 +83,7 @@ export async function getTeamStats(tournamentId: string, competitionId?: string 
 
 export async function getEventsByInscription(tournamentId: string, inscriptionId: number): Promise<MatchEvent[]> {
   return getJson(
-    statsUrl(tournamentId, '/events', null, { inscriptionId: String(inscriptionId) }),
+    statsUrl(tournamentId, '/stats', null, { inscriptionId: String(inscriptionId) }),
     'No se pudieron cargar los eventos del equipo'
   );
 }

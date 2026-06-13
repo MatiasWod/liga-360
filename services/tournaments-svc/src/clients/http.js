@@ -102,25 +102,33 @@ export async function userPatch(baseUrl, path, body, authHeader) {
   return userFetch(baseUrl, path, { method: 'PATCH', body, authHeader });
 }
 
-export async function svcPost(baseUrl, path, body) {
+async function svcSend(method, baseUrl, path, body) {
   let response;
   try {
     response = await resilientFetch(
       `${baseUrl}${path}`,
       {
-        method: 'POST',
+        method,
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...serviceAuthHeader() },
         body: JSON.stringify(body ?? {}),
       },
       { retries: 0 }
     );
   } catch (err) {
-    logger.warn({ err: err.message, baseUrl, path }, 'downstream POST failed');
+    logger.warn({ err: err.message, baseUrl, path, method }, `downstream ${method} failed`);
     return null;
   }
   if (!response.ok) {
-    logger.warn({ status: response.status, baseUrl, path }, 'downstream POST non-ok');
+    logger.warn({ status: response.status, baseUrl, path, method }, `downstream ${method} non-ok`);
     return null;
   }
   return response.json();
+}
+
+export async function svcPost(baseUrl, path, body) {
+  return svcSend('POST', baseUrl, path, body);
+}
+
+export async function svcPut(baseUrl, path, body) {
+  return svcSend('PUT', baseUrl, path, body);
 }

@@ -6,9 +6,8 @@ import { svcGet, userPatch, userPost } from './http.js';
 export async function lookupLinkedTeamIds(inscriptionIds) {
   const ids = [...new Set(inscriptionIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) return new Map();
-  const qs = ids.map((id) => `ids=${encodeURIComponent(String(id))}`).join('&');
   try {
-    const json = await svcGet(env.inscriptionsSvcUrl, `/inscriptions/lookup?${qs}`);
+    const json = await svcGet(env.inscriptionsSvcUrl, `/inscriptions?ids=${encodeURIComponent(ids.join(','))}`);
     const rows = json?.inscriptions ?? [];
     const map = new Map();
     for (const row of rows) {
@@ -26,9 +25,8 @@ export async function lookupLinkedTeamIds(inscriptionIds) {
 export async function lookupInscriptionsByIds(inscriptionIds) {
   const ids = [...new Set(inscriptionIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) return new Map();
-  const qs = ids.map((id) => `ids=${encodeURIComponent(String(id))}`).join('&');
   try {
-    const json = await svcGet(env.inscriptionsSvcUrl, `/inscriptions/lookup?${qs}`);
+    const json = await svcGet(env.inscriptionsSvcUrl, `/inscriptions?ids=${encodeURIComponent(ids.join(','))}`);
     const rows = json?.inscriptions ?? [];
     const map = new Map();
     for (const row of rows) {
@@ -41,7 +39,7 @@ export async function lookupInscriptionsByIds(inscriptionIds) {
 }
 
 export async function listTournamentInscriptions(tournamentId) {
-  const json = await svcGet(env.inscriptionsSvcUrl, `/tournaments/${encodeURIComponent(tournamentId)}/inscriptions`);
+  const json = await svcGet(env.inscriptionsSvcUrl, `/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}`);
   return json?.inscriptions ?? [];
 }
 

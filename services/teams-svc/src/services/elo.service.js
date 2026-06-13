@@ -1,5 +1,5 @@
 /** Orquestación ELO: process-match idempotente, global Team + ghost local vía inscriptions-svc. */
-import { pool, withTransaction } from '../config/db.js';
+import { withTransaction } from '../config/db.js';
 import { DEFAULT_ELO, computeMatchElo } from '../domain/elo/eloCalculator.js';
 import * as eloRepo from '../repositories/elo.repository.js';
 import * as inscriptionsClient from '../clients/inscriptions.client.js';
@@ -10,9 +10,11 @@ function normalizeRating(value) {
   return Number.isFinite(n) ? Math.trunc(n) : DEFAULT_ELO;
 }
 
-async function resolveSideRating(side, teamId, tournamentRating) {
+// Lee con el client de la transacción: tras revertir un evento previo (re-proceso),
+// el elo restaurado todavía no está commiteado y leer del pool vería el valor viejo.
+async function resolveSideRating(client, teamId, tournamentRating) {
   if (teamId) {
-    const elo = await eloRepo.getTeamElo(pool, teamId);
+    const elo = await eloRepo.getTeamElo(client, teamId);
     return normalizeRating(elo ?? DEFAULT_ELO);
   }
   return normalizeRating(tournamentRating ?? DEFAULT_ELO);
@@ -72,8 +74,8 @@ export async function processMatch({
         await eloRepo.deleteEventByMatchId(client, matchId);
       }
 
-      const homeRating = await resolveSideRating('home', homeTeamId, homeRow.tournament_rating);
-      const awayRating = await resolveSideRating('away', awayTeamId, awayRow.tournament_rating);
+      const homeRating = await resolveSideRating(client, homeTeamId, homeRow.tournament_rating);
+      const awayRating = await resolveSideRating(client, awayTeamId, awayRow.tournament_rating);
       const computed = computeMatchElo({
         homeRating,
         awayRating,

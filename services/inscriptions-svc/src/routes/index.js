@@ -15,18 +15,19 @@ import {verifyToken, requireRole, ROLES} from '@liga360/shared';
 export function createRouter() {
   const router = Router();
 
-  // Inscriptions (rutas literales antes de /:id para evitar que "lookup" matchee como id)
+  // Inscriptions: colección propia del servicio. Los listados se filtran por query params
+  // (?ids, ?teamId públicos; ?tournamentId, ?competitionId con token — el controller decide),
+  // sin sub-recursos con prefijos ajenos (/tournaments, /teams pertenecen a otros servicios).
   router.post('/inscriptions', verifyToken, inscription.create);
-  router.get('/inscriptions/lookup', inscription.lookupByIds);
-  router.patch('/internal/inscriptions/:id/tournament-rating', requireServiceToken, inscription.updateTournamentRating);
+  router.get('/inscriptions', inscription.list);
   router.patch('/inscriptions/:id/status', verifyToken, requireRole([ROLES.ORGANIZER]), inscription.updateStatus);
   router.patch('/inscriptions/:id/competition', verifyToken, requireRole([ROLES.ORGANIZER]), inscription.moveCompetition);
   router.patch('/inscriptions/:id/weight', verifyToken, requireRole([ROLES.ORGANIZER]), inscription.updateWeight);
+  // Interno service-to-service (teams-svc actualiza el rating local tras procesar ELO)
+  router.patch('/inscriptions/:id/tournament-rating', requireServiceToken, inscription.updateTournamentRating);
   router.post('/inscriptions/:id/associate', verifyToken, requireRole([ROLES.TEAM,ROLES.PARTICIPANT]), inscription.associate);
   // Endpoint interno service-to-service (matchevents-svc resuelve inscription → linked_team_id)
   router.get('/inscriptions/:id', requireServiceToken, inscription.getById);
-  router.get('/tournaments/:id/inscriptions', verifyToken, inscription.listByTournament);
-  router.get('/competitions/:id/inscriptions', verifyToken, inscription.listByCompetition);
 
   // Invites (rutas específicas antes de /:token)
   router.get('/invites', verifyToken, requireRole([ROLES.ORGANIZER]), invite.list);
@@ -34,9 +35,6 @@ export function createRouter() {
   router.post('/invites/claims', verifyToken, invite.claimByCode);
   router.get('/invites/:token', invite.getByToken);
   router.post('/invites/:token/use', verifyToken, invite.use);
-
-  // Team inscriptions (historial cross-torneo, público — antes de /teams/me/*)
-  router.get('/teams/:teamId/inscriptions', inscription.listByTeam);
 
   // Team invites
   router.get('/teams/me/invites', verifyToken, requireRole([ROLES.TEAM]), teamInvite.list);
