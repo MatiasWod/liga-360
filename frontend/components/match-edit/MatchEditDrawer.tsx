@@ -144,7 +144,7 @@ export const MatchEditDrawer: React.FC<MatchEditDrawerProps> = ({
       />
 
       {/* Panel */}
-      <div className="relative z-10 flex h-full w-full max-w-md flex-col bg-surface-1 shadow-2xl shadow-black/40">
+      <div className="relative z-10 flex h-full w-full max-w-lg flex-col bg-surface-1 shadow-2xl shadow-black/40">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
           <div>
@@ -397,39 +397,44 @@ function ResultSection({
 
   const homeName = initialData?.homeDisplayName ?? 'Local';
   const awayName = initialData?.awayDisplayName ?? 'Visitante';
+  const scoreBoxCls =
+    'w-14 rounded-lg border border-border-subtle bg-surface-2 px-2 py-2 text-center text-xl font-bold tabular-nums text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40';
 
   return (
     <div className="space-y-4">
       <p className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-muted">
         Marcador en <span className="font-medium text-text-primary">{scoreLabels.scoreUnit}</span>. {scoreLabels.scoreHint}
       </p>
-      <div className="flex items-end gap-3">
-        <div className="flex-1 space-y-1">
-          <label className="block text-xs font-medium text-text-secondary truncate" title={homeName}>
+
+      <div className="rounded-xl border border-border-subtle bg-surface-2 p-4">
+        <div className="grid items-center gap-3" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+          <p className="truncate text-right text-sm font-semibold text-text-primary" title={homeName}>
             {homeName}
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={homeScore}
-            onChange={(e) => setHomeScore(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-center text-lg font-bold text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
-          />
-        </div>
-        <span className="mb-2 text-sm font-semibold text-text-muted">—</span>
-        <div className="flex-1 space-y-1">
-          <label className="block text-xs font-medium text-text-secondary truncate" title={awayName}>
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={homeScore}
+              onChange={(e) => setHomeScore(e.target.value)}
+              placeholder="0"
+              aria-label={`Marcador ${homeName}`}
+              className={scoreBoxCls}
+            />
+            <span className="text-sm font-semibold text-text-muted">:</span>
+            <input
+              type="number"
+              min="0"
+              value={awayScore}
+              onChange={(e) => setAwayScore(e.target.value)}
+              placeholder="0"
+              aria-label={`Marcador ${awayName}`}
+              className={scoreBoxCls}
+            />
+          </div>
+          <p className="truncate text-left text-sm font-semibold text-text-primary" title={awayName}>
             {awayName}
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={awayScore}
-            onChange={(e) => setAwayScore(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-center text-lg font-bold text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
-          />
+          </p>
         </div>
       </div>
 
@@ -491,6 +496,35 @@ function EventsSection({
 
   const homeOption = parseInscriptionSlot(homeSlot);
   const awayOption = parseInscriptionSlot(awaySlot);
+  const homeInscriptionId = homeOption?.inscriptionId ?? null;
+  const awayInscriptionId = awayOption?.inscriptionId ?? null;
+
+  const displayEvents = React.useMemo(
+    () => events.filter((ev) => ev.event_type !== 'tennis_set'),
+    [events]
+  );
+
+  const eventsBySide = React.useMemo(() => {
+    const home: MatchEvent[] = [];
+    const away: MatchEvent[] = [];
+    const other: MatchEvent[] = [];
+    const homeId = homeInscriptionId != null ? String(homeInscriptionId) : '';
+    const awayId = awayInscriptionId != null ? String(awayInscriptionId) : '';
+
+    for (const ev of displayEvents) {
+      const evId = ev.inscription_id != null ? String(ev.inscription_id) : '';
+      if (homeId && evId === homeId) {
+        home.push(ev);
+        continue;
+      }
+      if (awayId && evId === awayId) {
+        away.push(ev);
+        continue;
+      }
+      other.push(ev);
+    }
+    return { home, away, other };
+  }, [displayEvents, homeInscriptionId, awayInscriptionId]);
 
   // Formulario nuevo evento
   const [newType, setNewType] = React.useState<MatchEventType>('goal');
@@ -567,6 +601,57 @@ function EventsSection({
     }
   }
 
+  function renderEventItem(ev: MatchEvent, align: 'left' | 'right') {
+    return (
+      <li
+        key={ev.id}
+        className={`flex items-start justify-between gap-2 rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 ${
+          align === 'right' ? 'text-right' : 'text-left'
+        }`}
+      >
+        <div className={`min-w-0 flex-1 ${align === 'right' ? 'order-2' : ''}`}>
+          <div className={`flex flex-wrap items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}>
+            <span className="inline-flex items-center rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+              {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
+            </span>
+            <span className="text-xs font-medium text-text-primary">{ev.display_name}</span>
+            {ev.minute != null ? <span className="text-xs text-text-muted">· {ev.minute}&apos;</span> : null}
+          </div>
+          {ev.notes ? <p className="mt-0.5 truncate text-xs text-text-muted">{ev.notes}</p> : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => handleDelete(ev.id)}
+          className={`shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-red-400 ${
+            align === 'right' ? 'order-1' : ''
+          }`}
+          aria-label="Eliminar evento"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </li>
+    );
+  }
+
+  function renderEventColumn(title: string, items: MatchEvent[], align: 'left' | 'right') {
+    return (
+      <div className="min-w-0 space-y-2">
+        <p className={`text-[11px] font-semibold uppercase tracking-wide text-text-muted ${align === 'right' ? 'text-right' : 'text-left'}`}>
+          {title}
+        </p>
+        {items.length === 0 ? (
+          <p className={`text-[11px] italic text-text-muted ${align === 'right' ? 'text-right' : 'text-left'}`}>
+            Sin eventos
+          </p>
+        ) : (
+          <ul className="space-y-2">{items.map((ev) => renderEventItem(ev, align))}</ul>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Lista de eventos existentes */}
@@ -574,40 +659,21 @@ function EventsSection({
         <p className="text-xs text-text-muted">Cargando eventos…</p>
       ) : error ? (
         <p className="text-xs text-red-400">{error}</p>
-      ) : events.length === 0 ? (
+      ) : displayEvents.length === 0 ? (
         <p className="text-xs text-text-muted">No hay eventos registrados para este partido.</p>
       ) : (
-        <ul className="space-y-2">
-          {events.map((ev) => (
-            <li
-              key={ev.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <span className="inline-flex items-center rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-medium text-text-secondary mr-1.5">
-                  {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
-                </span>
-                <span className="text-xs font-medium text-text-primary">{ev.display_name}</span>
-                {ev.minute != null ? (
-                  <span className="ml-1.5 text-xs text-text-muted">· {ev.minute}'</span>
-                ) : null}
-                {ev.notes ? (
-                  <p className="mt-0.5 text-xs text-text-muted truncate">{ev.notes}</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(ev.id)}
-                className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-red-400"
-                aria-label="Eliminar evento"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            {renderEventColumn(homeOption?.displayName ?? 'Local', eventsBySide.home, 'left')}
+            {renderEventColumn(awayOption?.displayName ?? 'Visitante', eventsBySide.away, 'right')}
+          </div>
+          {eventsBySide.other.length > 0 ? (
+            <div className="space-y-2 border-t border-border-subtle pt-3">
+              <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-text-muted">Sin equipo</p>
+              <ul className="space-y-2">{eventsBySide.other.map((ev) => renderEventItem(ev, 'left'))}</ul>
+            </div>
+          ) : null}
+        </div>
       )}
 
       {/* Formulario para agregar nuevo evento */}

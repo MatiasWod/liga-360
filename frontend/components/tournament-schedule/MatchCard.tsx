@@ -1,6 +1,8 @@
 import React from 'react';
 import { TeamNameLink } from '../team/TeamNameLink';
+import type { TennisSetDetail } from '../../services/matchEvents/tennisScore';
 import { bothMatchTeamsResolved, isByeMatchRecord, isByeMatchTeam } from './matchParticipantUtils';
+import { MatchDetailsToggle, MatchSidesFooter, matchHasExtras } from './matchSideDisplay';
 import type { MatchRecord, MatchStatus, TeamRef } from './types';
 
 // ---------------------------------------------------------------------------
@@ -10,6 +12,7 @@ import type { MatchRecord, MatchStatus, TeamRef } from './types';
 export interface GoalRecord {
   display_name: string;
   minute?: number | null;
+  inscription_id?: number | null;
 }
 
 export type MatchQuickAction =
@@ -24,6 +27,7 @@ interface MatchCardProps {
   /** Acciones rápidas: guardar marcador (en vivo), iniciar o finalizar partido. */
   onQuickMatchAction?: (matchId: string, action: MatchQuickAction) => Promise<void>;
   goals?: GoalRecord[];
+  tennisSets?: TennisSetDetail[];
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +268,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   onEdit,
   onQuickMatchAction,
   goals,
+  tennisSets,
 }) => {
   const isDark = theme === 'dark';
   const [expanded, setExpanded] = React.useState(false);
@@ -366,7 +371,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
   const busy = scoreSaving || lifecycleLoading != null;
 
-  const hasDetail = !!(match.venue || match.referee || (goals && goals.length > 0));
+  const hasExtras = matchHasExtras(goals, tennisSets);
+  const hasMeta = !!(match.venue || match.referee);
+  const hasExpandableDetail = hasExtras || hasMeta;
 
   const homeWins =
     match.status === 'completed' &&
@@ -382,7 +389,10 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       {canEditMatch ? (
         <button
           type="button"
-          onClick={() => onEdit!(match.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit!(match.id);
+          }}
           aria-label="Editar partido"
           className={`absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-md opacity-50 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60 ${
             isDark ? 'text-white/70 hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'
@@ -470,6 +480,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         </div>
       </div>
 
+      {expanded && hasExtras ? (
+        <MatchSidesFooter
+          homeInscriptionId={match.homeTeam.id}
+          awayInscriptionId={match.awayTeam.id}
+          goals={goals}
+          tennisSets={tennisSets}
+          isDark={isDark}
+        />
+      ) : null}
+
       {/* Acciones de ciclo de vida del partido */}
       {showLifecycleBar ? (
         <div
@@ -519,13 +539,12 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       ) : null}
 
       {/* Footer: fecha (scheduled) y toggle de detalle */}
-      {(match.status === 'scheduled' && match.scheduledAt) || hasDetail ? (
+      {(match.status === 'scheduled' && match.scheduledAt) || hasExpandableDetail ? (
         <div
           className={`mt-2.5 flex items-center justify-between border-t pt-2 text-xs ${
             isDark ? 'border-white/10' : 'border-slate-100'
           }`}
         >
-          {/* Fecha completa en scheduled */}
           {match.status === 'scheduled' && match.scheduledAt ? (
             <span className={isDark ? 'text-white/50' : 'text-slate-400'}>
               {formatDateTime(match.scheduledAt)}
@@ -533,26 +552,18 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           ) : (
             <span />
           )}
-
-          {/* Toggle detalle */}
-          {hasDetail ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
-                isDark
-                  ? 'text-white/40 hover:bg-white/5 hover:text-white/70'
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-              }`}
-            >
-              {expanded ? 'Ocultar ▴' : 'Ver detalles ▾'}
-            </button>
+          {hasExpandableDetail ? (
+            <MatchDetailsToggle
+              expanded={expanded}
+              onToggle={() => setExpanded((v) => !v)}
+              isDark={isDark}
+            />
           ) : null}
         </div>
       ) : null}
 
-      {/* Sección de detalle expandible */}
-      {expanded && hasDetail ? (
+      {/* Meta: sede y árbitro (al expandir el partido) */}
+      {expanded && hasMeta ? (
         <div
           className={`mt-2 space-y-1.5 border-t pt-2 text-xs ${
             isDark ? 'border-white/10 text-white/60' : 'border-slate-100 text-slate-500'
@@ -574,20 +585,6 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
               </svg>
               <span>{match.referee}</span>
-            </div>
-          ) : null}
-
-          {goals && goals.length > 0 ? (
-            <div className="space-y-1 pt-0.5">
-              {goals.map((g, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <span className="text-[11px]">⚽</span>
-                  <span>{g.display_name}</span>
-                  {g.minute != null ? (
-                    <span className={isDark ? 'text-white/35' : 'text-slate-400'}>{g.minute}'</span>
-                  ) : null}
-                </div>
-              ))}
             </div>
           ) : null}
         </div>

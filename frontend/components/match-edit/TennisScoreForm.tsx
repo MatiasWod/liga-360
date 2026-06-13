@@ -23,6 +23,9 @@ function normalizeStatusForForm(raw: string | null | undefined): string {
   return 'scheduled';
 }
 
+const scoreInputCls =
+  'w-full rounded-lg border border-border-subtle bg-surface-1 px-2 py-2 text-center text-sm font-bold tabular-nums text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40';
+
 export type TennisScoreFormProps = {
   matchId: string;
   tournamentId: string;
@@ -118,39 +121,40 @@ export const TennisScoreForm: React.FC<TennisScoreFormProps> = ({
       {loading ? (
         <p className="text-xs text-text-muted">Cargando sets…</p>
       ) : (
-        <div className="space-y-3">
+        <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface-2">
+          <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 border-b border-border-subtle bg-surface-3 px-3 py-2 text-xs font-semibold text-text-secondary">
+            <span className="w-10">Set</span>
+            <span className="truncate text-center" title={homeDisplayName}>
+              {homeDisplayName}
+            </span>
+            <span className="truncate text-center" title={awayDisplayName}>
+              {awayDisplayName}
+            </span>
+          </div>
           {sets.map((row, index) => (
-            <div key={row.setNumber} className="rounded-lg border border-border-subtle bg-surface-2 p-3">
-              <p className="mb-2 text-xs font-semibold text-text-secondary">Set {row.setNumber}</p>
-              <div className="flex items-end gap-3">
-                <div className="flex-1 space-y-1">
-                  <label className="block truncate text-xs text-text-muted" title={homeDisplayName}>
-                    {homeDisplayName}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={row.homeGames}
-                    onChange={(e) => updateSet(index, 'homeGames', e.target.value)}
-                    placeholder="—"
-                    className="w-full rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-center text-sm font-semibold text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
-                  />
-                </div>
-                <span className="mb-2 text-sm font-semibold text-text-muted">–</span>
-                <div className="flex-1 space-y-1">
-                  <label className="block truncate text-xs text-text-muted" title={awayDisplayName}>
-                    {awayDisplayName}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={row.awayGames}
-                    onChange={(e) => updateSet(index, 'awayGames', e.target.value)}
-                    placeholder="—"
-                    className="w-full rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-center text-sm font-semibold text-text-primary focus:border-accent-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
-                  />
-                </div>
-              </div>
+            <div
+              key={row.setNumber}
+              className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 border-b border-border-subtle/70 px-3 py-2 last:border-b-0"
+            >
+              <span className="w-10 text-xs font-semibold text-text-muted">S{row.setNumber}</span>
+              <input
+                type="number"
+                min="0"
+                value={row.homeGames}
+                onChange={(e) => updateSet(index, 'homeGames', e.target.value)}
+                placeholder="—"
+                aria-label={`Games local set ${row.setNumber}`}
+                className={scoreInputCls}
+              />
+              <input
+                type="number"
+                min="0"
+                value={row.awayGames}
+                onChange={(e) => updateSet(index, 'awayGames', e.target.value)}
+                placeholder="—"
+                aria-label={`Games visitante set ${row.setNumber}`}
+                className={scoreInputCls}
+              />
             </div>
           ))}
         </div>
