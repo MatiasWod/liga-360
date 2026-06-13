@@ -24,6 +24,7 @@ export type TournamentListItem = {
   status?: string | null;
   season?: string | null;
   editionLabel?: string | null;
+  categoryLabel?: string | null;
   competitions: TournamentCompetition[];
 };
 
@@ -60,6 +61,8 @@ export async function listTournamentsGraphql(): Promise<TournamentListItem[]> {
         status
         season
         editionLabel
+        seriesName
+        categoryLabel
         competitions {
           id
           name
@@ -151,6 +154,8 @@ export async function getTournamentDetailById(tournamentId: string): Promise<any
           status
           seriesId
           editionLabel
+          seriesName
+          categoryLabel
           competitions {
             id
             name

@@ -101,6 +101,8 @@ export type TournamentEntity = {
   status?: string | null;
   season?: string | null;
   seriesId?: string | null;
+  seriesName?: string | null;
   editionLabel?: string | null;
+  categoryLabel?: string | null;
   competitions: TournamentCompetition[];
 };

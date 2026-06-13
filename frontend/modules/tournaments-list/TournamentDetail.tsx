@@ -21,6 +21,8 @@ import { CompetitionStatsPanel } from './stats/CompetitionStatsPanel';
 import { CompetitionHistoryPanel } from './history/CompetitionHistoryPanel';
 import { dedupeCompetitionsByName } from '../team-presences/matchDedupe';
 import type { TournamentEntity, TournamentMatchRow, TournamentStage, StandingsRow } from './types';
+import { CategoryLabelBadge } from './CategoryLabelBadge';
+import { SeriesEditionBadge } from './SeriesEditionBadge';
 import {
   resolveSportScoreLabels,
   sportDisplayName,
@@ -731,6 +733,13 @@ export const TournamentDetail: React.FC<{
 								<TournamentIcon />
 							</span>
 							<h2 className="text-2xl font-semibold text-text-primary">{t.name}</h2>
+							<SeriesEditionBadge
+								seriesName={t.seriesName}
+								editionLabel={t.editionLabel}
+								season={t.season}
+								className="text-xs"
+							/>
+							<CategoryLabelBadge label={t.categoryLabel} />
 						</div>
 						<div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-text-muted">
 							<div><span className="opacity-70">Ubicación:</span> {t.venue || 'N/D'}</div>

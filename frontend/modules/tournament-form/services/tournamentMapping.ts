@@ -92,6 +92,7 @@ export const TOURNAMENT_FOR_EDIT_QUERY = `
             status
             seriesId
             editionLabel
+            categoryLabel
             competitions {
                 id
                 name
@@ -141,6 +142,7 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
     status: 'draft' | 'published' | 'finished';
     seriesId: string | null;
     editionLabel: string;
+    categoryLabel: string;
   };
   competitions: CompetitionMeta[];
   existingCompetitionIds: Set<string>;
@@ -187,6 +189,7 @@ export function deriveFormStateFromGraphqlTournament(t: any): {
       status: normalizeTournamentStatus(t.status),
       seriesId: t.seriesId ? String(t.seriesId) : null,
       editionLabel: String(t.editionLabel || ''),
+      categoryLabel: String(t.categoryLabel || ''),
     },
     competitions:
       nextCompetitions.length > 0

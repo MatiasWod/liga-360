@@ -218,4 +218,6 @@ test('schema incluye CompetitionSeries y queries de histórico agregado', async 
   const tournamentFields = new Set(tournamentType.fields?.map((field) => field.name.value) || []);
   assert.equal(tournamentFields.has('seriesId'), true);
   assert.equal(tournamentFields.has('editionLabel'), true);
+  assert.equal(tournamentFields.has('categoryLabel'), true);
+  assert.equal(tournamentFields.has('seriesName'), true);
 });

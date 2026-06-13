@@ -27,8 +27,8 @@ export const SeriesList: React.FC<SeriesListProps> = ({
     return (
       <p className="py-3 text-sm text-text-muted">
         {organizerFilter?.trim()
-          ? 'Este organizador no tiene series con histórico publicado.'
-          : 'No hay series públicas con ediciones publicadas o finalizadas.'}
+          ? 'Este organizador no tiene series con torneos asociados.'
+          : 'No hay series con torneos asociados.'}
       </p>
     );
   }

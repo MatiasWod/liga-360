@@ -7,7 +7,11 @@
     "migrate:auth": "node-pg-migrate up --migrations-dir migrations-auth",
     "migrate:teams": "node-pg-migrate up --migrations-dir migrations-teams",
     "migrate:inscriptions": "node-pg-migrate up --migrations-dir migrations-inscriptions",
-    "migrate:matchevents": "node-pg-migrate up --migrations-dir migrations-matchevents"
+    "migrate:matchevents": "node-pg-migrate up --migrations-dir migrations-matchevents",
+    "migrate:auth:local": "DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_auth node-pg-migrate up --migrations-dir migrations-auth",
+    "migrate:teams:local": "DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_teams node-pg-migrate up --migrations-dir migrations-teams",
+    "migrate:inscriptions:local": "DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_inscriptions node-pg-migrate up --migrations-dir migrations-inscriptions",
+    "migrate:matchevents:local": "DATABASE_URL=postgresql://liga:liga@localhost:55432/liga360_matchevents node-pg-migrate up --migrations-dir migrations-matchevents"
   },
   "dependencies": {
     "node-pg-migrate": "^8.0.4"

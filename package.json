@@ -26,6 +26,8 @@
     "test:e2e:all": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "seed:dev": "node scripts/seed-dev-data.mjs",
+    "seed:fix-auth": "node scripts/fix-auth-demo-users.mjs",
+    "migrate:auth:local": "npm run migrate:auth:local --prefix database",
     "elo:backfill": "node scripts/elo-backfill.mjs",
     "seed:stats-demo": "node scripts/seed-stats-demo.mjs",
     "seed:world-cup-2022": "node scripts/seed-world-cup-2022.mjs",
