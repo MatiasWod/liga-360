@@ -294,8 +294,8 @@ pipelines:
           name: Update GitOps Tags
           image: alpine:3.20
           script:
-            - apk add --no-cache git python3
-            - "python3 -c \"import os;from pathlib import Path;path=Path('deploy/k8s/overlays/dev/kustomization.yaml');content=path.read_text(encoding='utf-8');commit=os.environ.get('BITBUCKET_COMMIT','latest');lines=[(line[:len(line)-len(line.lstrip(' '))]+'newTag: '+commit) if line.strip().startswith('newTag:') else line for line in content.splitlines()];updated='\\n'.join(lines)+'\\n';path.write_text(updated,encoding='utf-8') if updated!=content else None\""
+            - apk add --no-cache git python3 py3-pip
+            - python3 scripts/update-gitops-tags.py
             - git status --porcelain
             - export GIT_AUTHOR_NAME="bitbucket-pipelines"
             - export GIT_AUTHOR_EMAIL="pipelines@bitbucket"
