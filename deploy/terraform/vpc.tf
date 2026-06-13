@@ -27,6 +27,3 @@ module "vpc" {
     Environment = var.environment
   }
 }
-
-
-
