@@ -10,10 +10,10 @@ resources:
 images:
   - name: liga360-migrator
     newName: bcanevaro/liga360-migrator
-    newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
+    newTag: 04d1364dd398412118caa81b47c3395804451a5d
   - name: liga360-frontend
     newName: bcanevaro/liga360-frontend
-    newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
+    newTag: 04d1364dd398412118caa81b47c3395804451a5d
   - name: liga360-gateway
     newName: bcanevaro/liga360-gateway
     newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
@@ -25,7 +25,7 @@ images:
     newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
   - name: liga360-tournaments-svc
     newName: bcanevaro/liga360-tournaments-svc
-    newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
+    newTag: 04d1364dd398412118caa81b47c3395804451a5d
   - name: liga360-inscriptions-svc
     newName: bcanevaro/liga360-inscriptions-svc
     newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
