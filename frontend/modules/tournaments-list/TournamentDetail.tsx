@@ -1,6 +1,7 @@
 import React from 'react';
 import { TeamNameLink } from '../../components/team/TeamNameLink';
 import type { GoalRecord } from '../../components/tournament-schedule/MatchCard';
+import { MatchDetailsToggle, MatchSidesFooter, matchHasExtras } from '../../components/tournament-schedule/matchSideDisplay';
 import { RoundSelector } from '../../components/tournament-schedule/RoundSelector';
 import type { ClassificationZone } from '../../components/standings';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
@@ -13,7 +14,6 @@ import {
 } from './teamDisplayName';
 import { listMatchEvents } from '../../services/matchEvents/matchEvents';
 import {
-  formatTennisSetLine,
   parseTennisSetEvents,
   type TennisSetDetail,
 } from '../../services/matchEvents/tennisScore';
@@ -165,7 +165,10 @@ function TeamRowBadge({ url, name }: { url?: string; name: string }) {
 	);
 }
 
-// Tasks 3.1–3.4: compact match row — flex layout so team names always truncate correctly
+// Ancho máximo del bloque fecha + partidos (evita filas estiradas en pantallas anchas).
+const FIXTURE_MATCH_STACK = 'w-full max-w-md';
+
+// Tasks 3.1–3.4: compact match row — scoreboard compacto, sin estirar a todo el panel
 function CompactMatchRow({ match, goals, tennisSets, badgeById }: {
 	match: TournamentMatchRow;
 	goals?: GoalRecord[];
@@ -179,59 +182,57 @@ function CompactMatchRow({ match, goals, tennisSets, badgeById }: {
 	const status = mapMatchStatus(match.status);
 	const isCompleted = status === 'completed';
 	const isLive = status === 'live';
-	const [setsExpanded, setSetsExpanded] = React.useState(false);
+	const hasExtras = matchHasExtras(goals, tennisSets);
+	const [expanded, setExpanded] = React.useState(false);
 
 	return (
-		<div className="px-3 py-1.5">
-			<div className="flex items-center gap-1 text-xs">
-				{/* Local: escudo a la izquierda del nombre */}
-				<span className="flex-1 min-w-0 flex items-center justify-end gap-1.5 text-text-primary">
+		<div className="px-3 py-2">
+			<div
+				className="grid items-center gap-x-2 text-xs"
+				style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)' }}
+			>
+				<div className="flex min-w-0 items-center justify-end gap-1.5 text-text-primary">
 					<TeamRowBadge url={homeBadge} name={homeName} />
-					{match.homeAssignedInscription ? <TeamNameLink teamName={homeName} className="min-w-0 truncate" /> : <span className="truncate">{homeName}</span>}
-				</span>
-				<span className={`flex-none w-11 text-center font-bold tabular-nums ${isLive ? 'text-emerald-400' : isCompleted ? 'text-text-primary' : 'text-text-muted font-normal'}`}>
+					{match.homeAssignedInscription ? (
+						<TeamNameLink teamName={homeName} className="min-w-0 truncate font-medium" />
+					) : (
+						<span className="truncate font-medium">{homeName}</span>
+					)}
+				</div>
+				<span
+					className={`min-w-[2.5rem] text-center text-sm font-bold tabular-nums ${
+						isLive ? 'text-success-base' : isCompleted ? 'text-brand-greenAccent' : 'text-text-muted font-normal text-xs'
+					}`}
+				>
 					{isCompleted || isLive ? `${match.homeScore ?? 0}–${match.awayScore ?? 0}` : 'vs'}
 				</span>
-				{/* Visitante: escudo a la derecha del nombre */}
-				<span className="flex-1 min-w-0 flex items-center justify-start gap-1.5 text-text-primary">
-					{match.awayAssignedInscription ? <TeamNameLink teamName={awayName} className="min-w-0 truncate" /> : <span className="truncate">{awayName}</span>}
+				<div className="flex min-w-0 items-center justify-start gap-1.5 text-text-primary">
+					{match.awayAssignedInscription ? (
+						<TeamNameLink teamName={awayName} className="min-w-0 truncate font-medium" />
+					) : (
+						<span className="truncate font-medium">{awayName}</span>
+					)}
 					<TeamRowBadge url={awayBadge} name={awayName} />
-				</span>
+				</div>
 			</div>
 			{match.scheduledAt && !isCompleted && !isLive && (
-				<p className="text-center text-[10px] text-text-muted mt-0.5">{formatScheduledAt(match.scheduledAt)}</p>
+				<p className="mt-0.5 text-center text-[10px] text-text-muted">{formatScheduledAt(match.scheduledAt)}</p>
 			)}
-			{tennisSets && tennisSets.length > 0 && (
-				<div className="mt-1 text-center">
-					<button
-						type="button"
-						onClick={() => setSetsExpanded((v) => !v)}
-						className="text-[10px] text-accent-primary hover:underline"
-					>
-						{setsExpanded ? 'Ocultar sets' : 'Ver sets'}
-					</button>
-					{setsExpanded ? (
-						<p className="mt-0.5 text-[10px] text-text-muted">
-							{tennisSets.map((set, i) => (
-								<span key={set.setNumber}>
-									{formatTennisSetLine(set)}
-									{i < tennisSets.length - 1 ? ' · ' : ''}
-								</span>
-							))}
-						</p>
-					) : null}
+			{hasExtras && expanded ? (
+				<MatchSidesFooter
+					homeInscriptionId={match.homeAssignedInscription?.inscriptionId}
+					awayInscriptionId={match.awayAssignedInscription?.inscriptionId}
+					goals={goals}
+					tennisSets={tennisSets}
+					isDark
+					embedded
+				/>
+			) : null}
+			{hasExtras ? (
+				<div className="mt-0.5 flex justify-end">
+					<MatchDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} isDark />
 				</div>
-			)}
-			{goals && goals.length > 0 && (
-				<p className="text-center text-[10px] text-text-muted mt-0.5">
-					{goals.map((g, i) => (
-						<span key={i}>
-							{g.minute ? `${g.display_name} ${g.minute}'` : g.display_name}
-							{i < goals.length - 1 ? ' · ' : ''}
-						</span>
-					))}
-				</p>
-			)}
+			) : null}
 		</div>
 	);
 }
@@ -606,6 +607,7 @@ export const TournamentDetail: React.FC<{
 								goalMap[r.value.matchId] = r.value.goals.map((e) => ({
 									display_name: e.display_name,
 									minute: e.minute,
+									inscription_id: e.inscription_id,
 								}));
 							}
 							if (r.value.tennisSets.length > 0) {
@@ -839,12 +841,14 @@ export const TournamentDetail: React.FC<{
 								const rounds = stage?.format === 'league' ? leagueRounds : stage?.format === 'groups' ? groupRounds : [];
 								if (rounds.length === 0) return null;
 								return (
-									<RoundSelector
-										rounds={rounds.map((r) => ({ id: r.key, label: r.label }))}
-										selectedId={groupRoundKey || rounds[0]?.key || null}
-										onChange={setGroupRoundKey}
-										theme="dark"
-									/>
+									<div className={FIXTURE_MATCH_STACK}>
+										<RoundSelector
+											rounds={rounds.map((r) => ({ id: r.key, label: r.label }))}
+											selectedId={groupRoundKey || rounds[0]?.key || null}
+											onChange={setGroupRoundKey}
+											theme="dark"
+										/>
+									</div>
 								);
 							})()}
 
@@ -853,31 +857,23 @@ export const TournamentDetail: React.FC<{
 								<p className="text-sm text-text-muted py-2">Sin partidos generados aún</p>
 							)}
 
-							{/* League — misma lógica que grupos: fecha seleccionada, partidos en columnas equilibradas */}
+							{/* League — fecha seleccionada, partidos en columna compacta */}
 							{detailView === 'fixture' && stage?.format === 'league' && hasMatches && (() => {
 								const activeKey = groupRoundKey || leagueRounds[0]?.key || '';
 								const activeMatches = groupMatchesByRound(stage.matches || []).find((b) => b.key === activeKey)?.matches ?? [];
-								const chunks = splitBalanced(activeMatches, 4);
-								const nCols = Math.max(1, chunks.length);
 								return (
 									<div className="space-y-3">
-										{chunks.length > 0 && (
-											<div className="rounded-xl border border-border-subtle overflow-hidden bg-surface-2">
-												<div className="grid" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
-													{chunks.map((chunk, ci) => (
-														<div key={ci} className={`divide-y divide-border-subtle${ci < chunks.length - 1 ? ' border-r border-dashed border-border-subtle' : ''}`}>
-															{chunk.map((m) => (
-																<CompactMatchRow
-																	key={m.id}
-																	match={m}
-																	goals={goalsByMatchId[m.id]}
-																	tennisSets={tennisSetsByMatchId[m.id]}
-																	badgeById={inscriptionBadgeById}
-																/>
-															))}
-														</div>
-													))}
-												</div>
+										{activeMatches.length > 0 && (
+											<div className={`${FIXTURE_MATCH_STACK} rounded-xl border border-border-subtle overflow-hidden bg-surface-2 divide-y divide-border-subtle`}>
+												{activeMatches.map((m) => (
+													<CompactMatchRow
+														key={m.id}
+														match={m}
+														goals={goalsByMatchId[m.id]}
+														tennisSets={tennisSetsByMatchId[m.id]}
+														badgeById={inscriptionBadgeById}
+													/>
+												))}
 											</div>
 										)}
 										{(stage.standings ?? []).length > 0 && (
