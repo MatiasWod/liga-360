@@ -9,8 +9,11 @@ export async function getTournamentConfigurationById(tournamentId: string) {
         name
         sport
         status
+        organizer
         seriesId
         editionLabel
+        seriesName
+        categoryLabel
         participantType
         competitions {
           id

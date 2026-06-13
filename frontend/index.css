@@ -213,3 +213,43 @@ input::placeholder,
 textarea::placeholder {
 	color: theme('colors.text.subtle');
 }
+
+/* react-select (SelectField): forzar tema oscuro; los estilos inline a veces no ganan en cascada */
+.liga-select__control {
+	background-color: color-mix(in srgb, theme('colors.surface.2') 90%, transparent) !important;
+	border-color: theme('colors.border.subtle') !important;
+	box-shadow: none !important;
+	min-height: 42px;
+	border-radius: 0.5rem !important;
+}
+.liga-select__control:hover {
+	border-color: theme('colors.accent.primary') !important;
+}
+.liga-select__control--is-focused {
+	border-color: theme('colors.accent.primary') !important;
+	box-shadow: 0 0 0 2px color-mix(in srgb, theme('colors.accent.primary') 45%, transparent) !important;
+}
+.liga-select__single-value {
+	color: theme('colors.text.primary') !important;
+}
+.liga-select__placeholder {
+	color: theme('colors.text.subtle') !important;
+}
+.liga-select__dropdown-indicator {
+	color: theme('colors.text.muted') !important;
+}
+.liga-select__menu {
+	background-color: theme('colors.surface.1') !important;
+	border: 1px solid theme('colors.border.subtle') !important;
+}
+.liga-select__option {
+	color: theme('colors.text.primary') !important;
+	background-color: transparent !important;
+}
+.liga-select__option--is-focused {
+	background-color: theme('colors.accent.soft') !important;
+}
+.liga-select__option--is-selected {
+	background-color: theme('colors.accent.primary') !important;
+	color: #fff !important;
+}

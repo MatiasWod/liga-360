@@ -252,6 +252,8 @@ services:
       start_period: 10s
 
   frontend:
+    profiles:
+      - prod
     build:
       context: .
       dockerfile: deploy/frontend/Dockerfile
@@ -269,7 +271,7 @@ services:
         condition: service_started
     restart: unless-stopped
     ports:
-      - '5173:80'
+      - '8080:80'
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80 || exit 1"]
       interval: 10s

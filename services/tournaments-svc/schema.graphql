@@ -14,8 +14,8 @@ type Query {
   myCompetitionSeries: [CompetitionSeries!]!
   """Palmarés derivado de ediciones finished de la serie."""
   seriesRollOfHonor(seriesId: ID!): [SeriesRollOfHonorRow!]!
-  """Histórico agregado: palmarés, títulos, goleadores cross-edición."""
-  seriesAggregates(seriesId: ID!): SeriesAggregates!
+  """Histórico agregado: palmarés, títulos, goleadores cross-edición. categoryLabel filtra por categoría."""
+  seriesAggregates(seriesId: ID!, categoryLabel: String): SeriesAggregates!
 }
 
 enum TournamentStatus {
@@ -41,6 +41,7 @@ type Mutation {
     status: TournamentStatus!
     seriesId: ID
     editionLabel: String
+    categoryLabel: String
   ): Tournament!
   updateTournament(
     id: ID!
@@ -53,6 +54,7 @@ type Mutation {
     status: TournamentStatus!
     seriesId: ID
     editionLabel: String
+    categoryLabel: String
   ): Tournament!
   deleteTournament(id: ID!): Boolean!
   createCompetitionSeries(name: String!, slug: String!, sport: String!): CompetitionSeries!
@@ -205,6 +207,10 @@ type Tournament {
   """Serie a la que pertenece esta edición (opcional)."""
   seriesId: ID
   editionLabel: String
+  """Nombre de la serie vinculada (si existe)."""
+  seriesName: String
+  """Etiqueta opcional de categoría/modalidad (Femenino, Sub-23, etc.). No es una Competencia."""
+  categoryLabel: String
   competitions: [Competition!]!
 }
 
@@ -223,6 +229,7 @@ type SeriesEdition {
   status: TournamentStatus!
   editionLabel: String
   season: String
+  categoryLabel: String
 }
 
 type SeriesPodiumEntry {

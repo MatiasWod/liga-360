@@ -20,7 +20,6 @@ describe('TournamentFlipCard edition display', () => {
       />
     );
 
-    expect(screen.getAllByText('2026').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Edición 2026/).length).toBeGreaterThan(0);
   });
 
@@ -39,5 +38,22 @@ describe('TournamentFlipCard edition display', () => {
     );
 
     expect(screen.getAllByText(/Edición 2022/).length).toBeGreaterThan(0);
+  });
+
+  it('combina serie y edición en la etiqueta', () => {
+    render(
+      <TournamentFlipCard
+        tournament={{
+          id: 't-3',
+          name: 'Mundial Qatar',
+          seriesName: 'Mundial FIFA',
+          editionLabel: '2022',
+          status: 'finished',
+          competitions: [],
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('Mundial FIFA · Edición 2022').length).toBeGreaterThan(0);
   });
 });

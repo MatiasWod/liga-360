@@ -13,12 +13,13 @@ export interface TournamentGeneralPayload {
   status?: TournamentStatusValue;
   seriesId?: string | null;
   editionLabel?: string | null;
+  categoryLabel?: string | null;
 }
 
 export async function createTournamentDraft(general: TournamentGeneralPayload) {
   return gql(
-    `mutation CreateTournament($name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String) {
-        createTournament(name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel) { id name season seriesId editionLabel }
+    `mutation CreateTournament($name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String, $categoryLabel: String) {
+        createTournament(name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel, categoryLabel: $categoryLabel) { id name season seriesId editionLabel categoryLabel }
     }`,
     {
       name: general.name,
@@ -30,14 +31,15 @@ export async function createTournamentDraft(general: TournamentGeneralPayload) {
       status: 'draft',
       seriesId: general.seriesId || null,
       editionLabel: general.editionLabel || null,
+      categoryLabel: general.categoryLabel ?? null,
     }
   ).then((response: any) => response.createTournament);
 }
 
 export async function updateTournamentDraft(tournamentId: string, general: TournamentGeneralPayload) {
   return gql(
-    `mutation UpdateTournament($id: ID!, $name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String) {
-        updateTournament(id: $id, name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel) { id name season seriesId editionLabel }
+    `mutation UpdateTournament($id: ID!, $name: String!, $sport: String!, $season: String, $venue: String, $pt: String, $inscriptionMode: InscriptionMode!, $status: TournamentStatus!, $seriesId: ID, $editionLabel: String, $categoryLabel: String) {
+        updateTournament(id: $id, name: $name, sport: $sport, season: $season, venue: $venue, participantType: $pt, inscriptionMode: $inscriptionMode, status: $status, seriesId: $seriesId, editionLabel: $editionLabel, categoryLabel: $categoryLabel) { id name season seriesId editionLabel categoryLabel }
     }`,
     {
       id: tournamentId,
@@ -50,6 +52,7 @@ export async function updateTournamentDraft(tournamentId: string, general: Tourn
       status: general.status ?? 'draft',
       seriesId: general.seriesId ?? null,
       editionLabel: general.editionLabel || null,
+      categoryLabel: general.categoryLabel ?? null,
     }
   ).then((response: any) => response.updateTournament);
 }

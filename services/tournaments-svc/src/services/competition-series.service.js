@@ -68,6 +68,7 @@ function mapEdition(t) {
     status: t.status ?? 'draft',
     editionLabel: t.editionLabel ?? null,
     season: t.season ?? null,
+    categoryLabel: t.categoryLabel ?? null,
   };
 }
 
@@ -105,8 +106,8 @@ export async function update(driver, id, { name, sport }) {
   }
 }
 
-/** Valida y persiste vínculo torneo↔serie (editionLabel único por serie). */
-export async function assignTournamentToSeries(driver, { tournamentId, seriesId, editionLabel }) {
+/** Valida y persiste vínculo torneo↔serie. La unicidad es por (seriesId, editionLabel, categoryLabel). */
+export async function assignTournamentToSeries(driver, { tournamentId, seriesId, editionLabel, categoryLabel = null }) {
   const session = driver.session();
   try {
     const tournament = await tournamentRepo.findRawById(session, tournamentId);
@@ -123,8 +124,8 @@ export async function assignTournamentToSeries(driver, { tournamentId, seriesId,
     const label = seriesRepo.normalizeEditionLabel(editionLabel);
     if (!label) conflict('CONFLICT: editionLabel requerido cuando hay seriesId');
 
-    if (await seriesRepo.editionLabelTaken(session, seriesId, label, tournamentId)) {
-      conflict('CONFLICT: editionLabel ya existe en la serie');
+    if (await seriesRepo.editionLabelTaken(session, seriesId, label, tournamentId, categoryLabel)) {
+      conflict('CONFLICT: editionLabel ya existe en la serie para esta categoría');
     }
 
     await seriesRepo.linkTournament(session, { tournamentId, seriesId, editionLabel: label });

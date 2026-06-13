@@ -1,7 +1,90 @@
 /**
  * Utilidades compartidas para scripts de seed (HTTP + GraphQL).
  */
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
 export const DEFAULT_PASSWORD = process.env.SEED_PASSWORD || 'SeedLiga360!';
+
+/** Usernames creados por seed:dev (cuentas locales de demo). */
+export const SEED_DEMO_USERNAMES = [
+  'organizador',
+  'equipo_alpha',
+  'equipo_beta',
+  'equipo_gamma',
+  'equipo_delta',
+  'participante_ana',
+  'participante_luis',
+  'participante_mia',
+];
+
+export function demoEmailForUsername(username) {
+  return `${String(username).trim().toLowerCase()}@demo.liga360.local`;
+}
+
+function authDemoUsersSql(usernames) {
+  const whereIn = usernames
+    .map((u) => `LOWER('${String(u).replace(/'/g, "''")}')`)
+    .join(', ');
+  return `UPDATE "Users" SET email = LOWER(username) || '@demo.liga360.local', "isVerified" = true WHERE LOWER(username) IN (${whereIn});`;
+}
+
+function parseUpdateCount(output) {
+  const match = String(output || '').match(/UPDATE\s+(\d+)/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function ensureEnvFileHint() {
+  const envPath = path.join(REPO_ROOT, '.env');
+  if (!fs.existsSync(envPath) && fs.existsSync(path.join(REPO_ROOT, '.env.example'))) {
+    console.warn('  tip: falta .env — corré desde la raíz: cp .env.example .env');
+  }
+}
+
+/**
+ * Backfill email + isVerified=true para cuentas demo en liga360_auth.
+ * Intenta Docker (postgres) y, si falla, psql directo a localhost:55432.
+ * @returns {number|null} filas actualizadas, o null si falló
+ */
+export function ensureAuthDemoUsersVerified(usernames = SEED_DEMO_USERNAMES) {
+  if (!usernames?.length) return 0;
+  const sql = authDemoUsersSql(usernames);
+  ensureEnvFileHint();
+
+  try {
+    const out = execSync(
+      `docker compose exec -T postgres psql -U liga -d liga360_auth -c "${sql.replace(/"/g, '\\"')}"`,
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ).trim();
+    return parseUpdateCount(out);
+  } catch (dockerErr) {
+    const dockerMsg = dockerErr?.stderr?.toString?.() || dockerErr?.message || String(dockerErr);
+    if (/\.env/i.test(dockerMsg)) {
+      console.warn('  docker compose requiere .env en la raíz (cp .env.example .env)');
+    }
+  }
+
+  const authDbUrl =
+    process.env.AUTH_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    'postgresql://liga:liga@localhost:55432/liga360_auth';
+  try {
+    const out = execSync(`psql "${authDbUrl}" -c "${sql.replace(/"/g, '\\"')}"`, {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    return parseUpdateCount(out);
+  } catch (psqlErr) {
+    const msg = psqlErr?.stderr?.toString?.() || psqlErr?.message || String(psqlErr);
+    console.warn(`  auth demo: no se pudo actualizar Users (${msg.trim()})`);
+    return null;
+  }
+}
 export const AUTH_URL = (process.env.AUTH_URL || 'http://localhost:4003').replace(/\/$/, '');
 export const TEAMS_URL = (process.env.TEAMS_URL || 'http://localhost:4002').replace(/\/$/, '');
 export const INSCRIPTIONS_URL = (process.env.INSCRIPTIONS_URL || 'http://localhost:4004').replace(/\/$/, '');

@@ -34,9 +34,17 @@ function mapPodiumEntry(entry, linkedTeamMap) {
   };
 }
 
-export async function seriesRollOfHonor(driver, seriesId) {
+function filterByCategory(editions, categoryLabel) {
+  if (!categoryLabel) return editions;
+  const needle = String(categoryLabel).trim().toLowerCase();
+  return editions.filter((e) => String(e.categoryLabel ?? '').trim().toLowerCase() === needle);
+}
+
+export async function seriesRollOfHonor(driver, seriesId, categoryLabel = null) {
   const editions = await seriesService.getEditions(driver, seriesId);
-  const finished = editions.filter((e) => String(e.status).toLowerCase() === 'finished').slice(0, MAX_EDITIONS);
+  const finished = filterByCategory(editions, categoryLabel)
+    .filter((e) => String(e.status).toLowerCase() === 'finished')
+    .slice(0, MAX_EDITIONS);
   const rows = [];
 
   for (const edition of finished) {
@@ -60,16 +68,16 @@ export async function seriesRollOfHonor(driver, seriesId) {
   return rows;
 }
 
-export async function editionsInProgress(driver, seriesId) {
+export async function editionsInProgress(driver, seriesId, categoryLabel = null) {
   const editions = await seriesService.getEditions(driver, seriesId);
-  return editions.filter((e) => {
+  return filterByCategory(editions, categoryLabel).filter((e) => {
     const s = String(e.status).toLowerCase();
     return s === 'published' || s === 'draft';
   });
 }
 
-export async function titlesByTeam(driver, seriesId) {
-  const roll = await seriesRollOfHonor(driver, seriesId);
+export async function titlesByTeam(driver, seriesId, categoryLabel = null) {
+  const roll = await seriesRollOfHonor(driver, seriesId, categoryLabel);
   const counts = new Map();
 
   for (const row of roll) {
@@ -102,17 +110,17 @@ function mapScorerRow(row) {
   };
 }
 
-export async function seriesAggregates(driver, seriesId) {
+export async function seriesAggregates(driver, seriesId, categoryLabel = null) {
   const editions = await seriesService.getEditions(driver, seriesId);
-  const finishedIds = editions
+  const finishedIds = filterByCategory(editions, categoryLabel)
     .filter((e) => String(e.status).toLowerCase() === 'finished')
     .map((e) => e.tournamentId)
     .slice(0, MAX_EDITIONS);
 
   const [rollOfHonor, inProgress, titles, rawScorers] = await Promise.all([
-    seriesRollOfHonor(driver, seriesId),
-    editionsInProgress(driver, seriesId),
-    titlesByTeam(driver, seriesId),
+    seriesRollOfHonor(driver, seriesId, categoryLabel),
+    editionsInProgress(driver, seriesId, categoryLabel),
+    titlesByTeam(driver, seriesId, categoryLabel),
     matcheventsClient.getMultiTournamentScorers(finishedIds, { limit: 50 }),
   ]);
 

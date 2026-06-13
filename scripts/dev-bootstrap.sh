@@ -10,6 +10,16 @@ log()  { echo -e "${CYAN}[bootstrap]${RESET} $*"; }
 ok()   { echo -e "${GREEN}[bootstrap]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[bootstrap]${RESET} $*"; }
 
+if [[ ! -f .env ]]; then
+  if [[ -f .env.example ]]; then
+    cp .env.example .env
+    ok "Creado .env desde .env.example (requerido por docker compose)"
+  else
+    warn "Falta .env — docker compose puede fallar. Creá uno en la raíz del repo."
+    exit 1
+  fi
+fi
+
 if ! docker info >/dev/null 2>&1; then
   warn "Docker no está corriendo. Abrí Docker Desktop y volvé a ejecutar:"
   echo "  ./scripts/dev-bootstrap.sh"
@@ -45,6 +55,7 @@ docker compose run --rm migrate-inscriptions
 docker compose run --rm migrate-matchevents
 
 log "Construyendo y levantando servicios (puede tardar unos minutos la primera vez)..."
+docker compose stop frontend 2>/dev/null || true
 docker compose up -d --build \
   auth-svc teams-svc tournaments-svc inscriptions-svc matchevents-svc gateway
 
@@ -76,7 +87,8 @@ echo ""
 ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ok "  Stack listo. Iniciá el frontend en otra terminal:"
 ok "    npm run dev"
-ok "  UI: http://localhost:5173"
+ok "  UI dev (Vite + HMR): http://localhost:5173"
+ok "  UI docker (solo perfil prod): http://localhost:8080"
 ok "  Clave demo: SeedLiga360!"
 ok "  Equipo: equipo_alpha | Organizador: organizador"
 ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

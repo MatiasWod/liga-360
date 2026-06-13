@@ -1,6 +1,8 @@
 import React from 'react';
 import { getTournamentDetailById } from '../../services/tournamentsApi';
-import { resolveEditionDisplay } from './editionDisplay';
+import { formatSeriesEditionBadge } from './editionDisplay';
+import { CategoryLabelBadge } from './CategoryLabelBadge';
+import { SeriesEditionBadge } from './SeriesEditionBadge';
 import type { TournamentCompetition, TournamentEntity, TournamentStage, TournamentTransition } from './types';
 
 interface TournamentFlipCardProps {
@@ -380,7 +382,7 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
   const [detailData, setDetailData]           = React.useState<any | null>(null);
   const [detailLoading, setDetailLoading]     = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
-  const editionDisplay = resolveEditionDisplay(t.editionLabel, t.season);
+  const editionBadge = formatSeriesEditionBadge(t.seriesName, t.editionLabel, t.season);
 
   const isOrganizer =
     !!currentOrganizer &&
@@ -503,28 +505,28 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
                 <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                 <span className={status.text}>{status.label}</span>
               </span>
-              {editionDisplay ? (
-                <span
-                  className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-brand-greenAccent/40 bg-accent-soft text-brand-greenAccent"
-                  title={`Edición ${editionDisplay}`}
-                >
-                  Edición {editionDisplay}
-                </span>
-              ) : null}
+              <SeriesEditionBadge
+                seriesName={t.seriesName}
+                editionLabel={t.editionLabel}
+                season={t.season}
+              />
+              <CategoryLabelBadge label={t.categoryLabel} />
             </div>
           </div>
 
           {/* Body 2 cols */}
           <div className="flex-1 px-5 py-4 grid grid-cols-2 gap-x-4 gap-y-2.5 content-start">
-            {editionDisplay && (
+            {editionBadge ? (
               <div className="flex items-start gap-1.5 min-w-0">
                 <span className="mt-0.5 text-brand-greenAccent"><IconCalendar /></span>
                 <div className="min-w-0">
-                  <p className="text-[10px] text-text-subtle uppercase tracking-wider leading-none mb-0.5">Edición</p>
-                  <p className="text-xs font-semibold text-brand-greenAccent">{editionDisplay}</p>
+                  <p className="text-[10px] text-text-subtle uppercase tracking-wider leading-none mb-0.5">
+                    {t.seriesName ? 'Serie · Edición' : 'Edición'}
+                  </p>
+                  <p className="text-xs font-semibold text-brand-greenAccent">{editionBadge.text}</p>
                 </div>
               </div>
-            )}
+            ) : null}
             {t.venue && (
               <div className="flex items-start gap-1.5 min-w-0">
                 <span className="mt-0.5 text-text-subtle"><IconPin /></span>
@@ -587,8 +589,8 @@ export const TournamentFlipCard: React.FC<TournamentFlipCardProps> = ({
           <div className="px-4 pt-3.5 pb-3 border-b border-border-subtle/60 flex items-center justify-between gap-2 flex-shrink-0">
             <div className="min-w-0">
               <h3 className="text-xs font-semibold text-text-primary truncate" title={t.name}>{t.name}</h3>
-              {editionDisplay ? (
-                <p className="mt-0.5 text-[10px] font-medium text-brand-greenAccent truncate">Edición {editionDisplay}</p>
+              {editionBadge ? (
+                <p className="mt-0.5 text-[10px] font-medium text-brand-greenAccent truncate">{editionBadge.text}</p>
               ) : null}
             </div>
             <button

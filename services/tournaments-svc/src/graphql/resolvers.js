@@ -41,7 +41,7 @@ const resolvers = {
       return seriesService.listByOrganizer(context.driver, organizer);
     },
     seriesRollOfHonor: (_p, { seriesId }, { driver }) => seriesHistoryService.seriesRollOfHonor(driver, seriesId),
-    seriesAggregates: (_p, { seriesId }, { driver }) => seriesHistoryService.seriesAggregates(driver, seriesId),
+    seriesAggregates: (_p, { seriesId, categoryLabel }, { driver }) => seriesHistoryService.seriesAggregates(driver, seriesId, categoryLabel ?? null),
   },
   Mutation: {
     createTournament: (_p, args, context) => {
@@ -178,6 +178,10 @@ const resolvers = {
       parent.editionLabel != null
         ? parent.editionLabel
         : seriesService.getEditionLabel(driver, parent.id),
+    seriesName: (parent, _args, { driver }) =>
+      parent.seriesName != null
+        ? parent.seriesName
+        : seriesService.getSeriesForTournament(driver, parent.id).then((s) => s?.name ?? null),
     competitions: (parent, _args, { driver }) => tournamentService.getCompetitions(driver, parent.id),
   },
 

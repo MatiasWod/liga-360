@@ -3,26 +3,23 @@ import { Section } from './atoms/Section';
 import { TextField } from './atoms/TextField';
 import { SelectField } from './atoms/SelectField';
 import { CompetitionsBuilder, type CompetitionMeta } from './CompetitionsBuilder';
+import { CategoryLabelChips } from './CategoryLabelChips';
+import { SeriesSelectField } from './SeriesSelectField';
 import {
     collectRemovedTransitionIds,
     deriveFormStateFromGraphqlTournament,
-    mapStageKindToFormat,
-    selectionToVariables,
-    strOrNull,
 } from '../services/tournamentMapping';
 import {
-    createCompetition,
-    createStage,
     createTournamentDraft,
-    createTransition,
     deleteTransition,
-    generateEliminationBracket,
     getTournamentForEdit,
-    updateCompetition,
-    updateStage,
     updateTournamentDraft,
 } from '../services/tournamentStructureApi';
-import { trimEliminationBracketAfterRound } from '../../../services/tournaments/configuration';
+import { persistTournamentStructure } from '../services/persistTournamentStructure';
+import {
+    normalizeCategoryLabelInput,
+    resolveCategoryLabelsForCreate,
+} from '../utils/categoryLabel';
 import { listOrganizerSeries, type CompetitionSeries } from '../../../services/tournaments/series';
 
 interface TournamentFormProps {
@@ -48,6 +45,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         status: TournamentStatus;
         seriesId: string;
         editionLabel: string;
+        categoryLabel: string;
     }
 
     interface FormErrors {
@@ -66,7 +64,9 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         status: 'draft',
         seriesId: '',
         editionLabel: '',
+        categoryLabel: '',
     });
+    const [categoryLabelsChips, setCategoryLabelsChips] = React.useState<string[]>([]);
     const [seriesOptions, setSeriesOptions] = React.useState<CompetitionSeries[]>([]);
     const [competitions, setCompetitions] = React.useState<CompetitionMeta[]>(
         initialCompetitions ?? [{ id: crypto.randomUUID(), name: 'Competición 1', stages: [] }]
@@ -85,9 +85,10 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return;
-            const parsed = JSON.parse(raw) as { general?: GeneralInfo; competitions?: CompetitionMeta[] };
+            const parsed = JSON.parse(raw) as { general?: GeneralInfo; competitions?: CompetitionMeta[]; categoryLabelsChips?: string[] };
             if (parsed?.general) setGeneral(parsed.general);
             if (parsed?.competitions && parsed.competitions.length > 0) setCompetitions(parsed.competitions);
+            if (Array.isArray(parsed?.categoryLabelsChips)) setCategoryLabelsChips(parsed.categoryLabelsChips);
         } catch {}
     }, [mode]);
 
@@ -108,10 +109,10 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
     React.useEffect(() => {
         if (mode !== 'create') return;
         try {
-            const payload = JSON.stringify({ general, competitions });
+            const payload = JSON.stringify({ general, competitions, categoryLabelsChips });
             localStorage.setItem(STORAGE_KEY, payload);
         } catch {}
-    }, [general, competitions, mode]);
+    }, [general, competitions, categoryLabelsChips, mode]);
 
     React.useEffect(() => {
         if (mode !== 'edit' || !tournamentId) return;
@@ -131,6 +132,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
                     seriesId: derived.general.seriesId || '',
                     editionLabel: derived.general.editionLabel || '',
+                    categoryLabel: derived.general.categoryLabel || '',
                 });
                 setCompetitions(derived.competitions);
                 existingCompetitionIdsRef.current = derived.existingCompetitionIds;
@@ -165,8 +167,12 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
         setSubmitMsg('');
         try {
             const isEdit = mode === 'edit' && Boolean(tournamentId);
-            const workingTournament = isEdit
-                ? await updateTournamentDraft(String(tournamentId), {
+            const editCategoryLabel = isEdit
+                ? normalizeCategoryLabelInput(general.categoryLabel)
+                : null;
+
+            if (isEdit) {
+                const workingTournament = await updateTournamentDraft(String(tournamentId), {
                     name: general.name,
                     sport: general.sport,
                     venue: general.venue,
@@ -175,146 +181,19 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                     status: general.status,
                     seriesId: general.seriesId || null,
                     editionLabel: general.editionLabel || null,
-                })
-                : await createTournamentDraft({
-                    name: general.name,
-                    sport: general.sport,
-                    venue: general.venue,
-                    participantType: general.participantType,
-                    inscriptionMode: general.inscriptionMode,
-                    seriesId: general.seriesId || null,
-                    editionLabel: general.editionLabel || null,
+                    categoryLabel: editCategoryLabel,
                 });
 
-            const competitionIdMap = new Map<string, string>();
-            const stageIdMap = new Map<string, string>();
-            const existingCompetitionIds = existingCompetitionIdsRef.current;
-            const existingStageIds = existingStageIdsRef.current;
-            const existingTransitionIds = existingTransitionIdsRef.current;
+                await persistTournamentStructure({
+                    tournamentId: workingTournament.id,
+                    competitions,
+                    isEdit: true,
+                    existingCompetitionIds: existingCompetitionIdsRef.current,
+                    existingStageIds: existingStageIdsRef.current,
+                    existingTransitionIds: existingTransitionIdsRef.current,
+                });
 
-            // 1) Crear todas las competiciones
-            for (let i = 0; i < competitions.length; i++) {
-                const comp = competitions[i];
-                if (isEdit && existingCompetitionIds.has(comp.id)) {
-                    const updatedComp = await updateCompetition(
-                        comp.id,
-                        comp.name,
-                        i + 1,
-                        comp.maxSlots ?? null
-                    );
-                    competitionIdMap.set(comp.id, updatedComp.id);
-                } else {
-                    const createdComp = await createCompetition(
-                        workingTournament.id,
-                        comp.name,
-                        i + 1,
-                        comp.maxSlots ?? null
-                    );
-                    competitionIdMap.set(comp.id, createdComp.id);
-                }
-            }
-
-            // 2) Crear todas las etapas (con config/children completos)
-            for (let i = 0; i < competitions.length; i++) {
-                const comp = competitions[i];
-                const createdCompetitionId = competitionIdMap.get(comp.id);
-                if (!createdCompetitionId) continue;
-                for (let j = 0; j < (comp.stages ?? []).length; j++) {
-                    const st = comp.stages[j];
-                    const format = mapStageKindToFormat(st.kind);
-                    if (isEdit && existingStageIds.has(st.id)) {
-                        const updatedStage = await updateStage(
-                            st.id,
-                            st.name,
-                            j + 1,
-                            format,
-                            st.config ?? {},
-                            st.children ?? []
-                        );
-                        stageIdMap.set(st.id, updatedStage.id);
-                    } else {
-                        const createdStage = await createStage(
-                            createdCompetitionId,
-                            st.name,
-                            j + 1,
-                            format,
-                            st.config ?? {},
-                            st.children ?? []
-                        );
-                        stageIdMap.set(st.id, createdStage.id);
-                        if (format === 'elimination') {
-                            const cfg = (st.config as Record<string, unknown>) ?? {};
-                            const numParticipants = Number(cfg.numParticipants);
-                            if (Number.isInteger(numParticipants) && numParticipants >= 2) {
-                                const doubleRound = cfg.matchesPerTie === 'double';
-                                await generateEliminationBracket(createdStage.id, doubleRound);
-                                const numAdvancing = Number(cfg.numAdvancing);
-                                if (Number.isInteger(numAdvancing) && numAdvancing > 1 && numParticipants > numAdvancing) {
-                                    const lastRound = Math.round(Math.log2(numParticipants / numAdvancing));
-                                    if (lastRound >= 1) {
-                                        await trimEliminationBracketAfterRound({
-                                            stageId: createdStage.id,
-                                            tournamentId: workingTournament.id,
-                                            lastRoundInclusive: lastRound,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3) Crear relaciones nuevas (internas/cross/externas y top/range/bottom).
-            // Nota: las relaciones existentes se preservan; sólo se añaden nuevas.
-            for (const comp of competitions) {
-                for (const st of comp.stages ?? []) {
-                    for (const rel of st.relations ?? []) {
-                        if (isEdit && existingTransitionIds.has(rel.id)) continue;
-                        const fromId = stageIdMap.get(st.id);
-                        if (!fromId) continue;
-
-                        // Resolver destino interno/cross dentro del torneo creado.
-                        let toId: string | null = null;
-                        if (rel.toStageId) {
-                            toId = stageIdMap.get(rel.toStageId) ?? null;
-                        } else if (rel.toExternal?.tournamentId === 'this' && rel.toExternal?.stageId) {
-                            toId = stageIdMap.get(rel.toExternal.stageId) ?? null;
-                        }
-
-                        if (rel.toStageId && !toId) {
-                            throw new Error(
-                                `No se pudo resolver la etapa destino para la relación "${rel.label}". Revisá que la etapa siga existiendo.`
-                            );
-                        }
-                        if (rel.toExternal?.tournamentId === 'this' && rel.toExternal?.stageId && !toId) {
-                            throw new Error(
-                                `No se pudo resolver el destino entre competiciones para "${rel.label}" (etapa destino no encontrada). Guardá primero todas las etapas y volvé a intentar.`
-                            );
-                        }
-
-                        const selectionVars = selectionToVariables(rel.selection);
-                        const extTid = strOrNull(rel.toExternal?.tournamentId ?? null);
-                        const extSid = strOrNull(rel.toExternal?.stageId ?? null);
-                        const extName = strOrNull(rel.toExternal?.tournamentName ?? null);
-                        await createTransition({
-                            from: fromId,
-                            to: toId,
-                            label: rel.label || 'avance',
-                            selectionKind: rel.selection.kind,
-                            ...selectionVars,
-                            toExternalTournamentId: toId ? null : extTid,
-                            toExternalStageId: toId ? null : extSid,
-                            toExternalTournamentName: toId ? null : extName,
-                            carryOverJson: rel.carryOver ? JSON.stringify(rel.carryOver) : null,
-                            timing: rel.timing ?? 'in_season',
-                        });
-                    }
-                }
-            }
-
-            if (isEdit && tournamentId) {
-                const tr = await getTournamentForEdit(tournamentId);
+                const tr = await getTournamentForEdit(String(tournamentId));
                 if (tr) {
                     const derived = deriveFormStateFromGraphqlTournament(tr);
                     setGeneral({
@@ -323,22 +202,58 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
                         seriesId: derived.general.seriesId || '',
                         editionLabel: derived.general.editionLabel || '',
+                        categoryLabel: derived.general.categoryLabel || '',
                     });
                     setCompetitions(derived.competitions);
                     existingCompetitionIdsRef.current = derived.existingCompetitionIds;
                     existingStageIdsRef.current = derived.existingStageIds;
                     existingTransitionIdsRef.current = derived.existingTransitionIds;
                 }
+
+                setSubmitState('success');
+                setSubmitMsg(`Estructura actualizada. Torneo: ${workingTournament.id}`);
+                onUpdated?.({ id: workingTournament.id, name: workingTournament.name });
+                return;
+            }
+
+            const labels = resolveCategoryLabelsForCreate(categoryLabelsChips);
+            const createdTournaments: Array<{ id: string; name: string; categoryLabel?: string | null }> = [];
+
+            for (const categoryLabel of labels) {
+                const workingTournament = await createTournamentDraft({
+                    name: general.name,
+                    sport: general.sport,
+                    venue: general.venue,
+                    participantType: general.participantType,
+                    inscriptionMode: general.inscriptionMode,
+                    seriesId: general.seriesId || null,
+                    editionLabel: general.editionLabel || null,
+                    categoryLabel,
+                });
+
+                await persistTournamentStructure({
+                    tournamentId: workingTournament.id,
+                    competitions,
+                    isEdit: false,
+                });
+
+                createdTournaments.push({
+                    id: workingTournament.id,
+                    name: workingTournament.name,
+                    categoryLabel,
+                });
             }
 
             setSubmitState('success');
-            setSubmitMsg(
-                isEdit
-                    ? `Estructura actualizada. Torneo: ${workingTournament.id}`
-                    : `Estructura creada. Torneo: ${workingTournament.id}`
-            );
-            if (isEdit) onUpdated?.({ id: workingTournament.id, name: workingTournament.name });
-            else onCreated?.({ id: workingTournament.id, name: workingTournament.name });
+            if (createdTournaments.length === 1) {
+                setSubmitMsg(`Estructura creada. Torneo: ${createdTournaments[0].id}`);
+            } else {
+                const summary = createdTournaments
+                    .map((row) => (row.categoryLabel ? `${row.categoryLabel} (${row.id})` : row.id))
+                    .join(', ');
+                setSubmitMsg(`Se crearon ${createdTournaments.length} torneos: ${summary}`);
+            }
+            onCreated?.({ id: createdTournaments[0].id, name: createdTournaments[0].name });
         } catch (err: any) {
             setSubmitState('error');
             setSubmitMsg(err?.message || 'Error inesperado');
@@ -348,7 +263,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
     function onSaveDraft() {
         if (mode !== 'create') return;
         try {
-            const payload = JSON.stringify({ general, competitions });
+            const payload = JSON.stringify({ general, competitions, categoryLabelsChips });
             localStorage.setItem(STORAGE_KEY, payload);
             setSubmitState('success');
             setSubmitMsg('Borrador guardado');
@@ -385,6 +300,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                                 inscriptionMode: derived.general.inscriptionMode as InscriptionMode,
                                 seriesId: derived.general.seriesId || '',
                                 editionLabel: derived.general.editionLabel || '',
+                                categoryLabel: derived.general.categoryLabel || '',
                             });
                             setCompetitions(derived.competitions);
                             existingCompetitionIdsRef.current = derived.existingCompetitionIds;
@@ -402,7 +318,7 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
 
     return (
         <form className="space-y-8" onSubmit={onSubmit}>
-            {loadingExisting ? <div className="text-sm text-slate-500">Cargando estructura existente...</div> : null}
+            {loadingExisting ? <div className="text-sm opacity-70">Cargando estructura existente...</div> : null}
             <Section title="Información general" subtitle="Define los datos básicos del torneo">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -450,8 +366,8 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         }}
                     />
                     <div className="space-y-1">
-                        <span className="text-sm font-medium text-slate-700">Organizador</span>
-                        <p className="text-sm font-semibold text-slate-800">
+                        <span className="text-sm font-medium opacity-90">Organizador</span>
+                        <p className="text-sm font-semibold opacity-95">
                             {organizerName?.trim() || 'Organizador'}
                         </p>
                     </div>
@@ -475,17 +391,13 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                         }}
                         options={[{ label: 'Pública', value: 'public' }, { label: 'Por invitación', value: 'invitation' }]}
                     />
-                    <SelectField
+                    <SeriesSelectField
                         label="Serie de competición (opcional)"
-                        name="seriesId"
                         value={general.seriesId}
-                        onChange={(value) => {
-                            setGeneral((g) => ({ ...g, seriesId: value || '' }));
-                        }}
-                        options={[
-                            { label: 'Sin serie', value: '' },
-                            ...seriesOptions.map((s) => ({ label: s.name, value: s.id })),
-                        ]}
+                        sport={general.sport}
+                        seriesOptions={seriesOptions}
+                        onChange={(seriesId) => setGeneral((g) => ({ ...g, seriesId: seriesId || '' }))}
+                        onSeriesOptionsChange={setSeriesOptions}
                     />
                     <TextField
                         label="Etiqueta de edición"
@@ -498,6 +410,21 @@ export const TournamentForm: React.FC<TournamentFormProps> = ({ organizerName, o
                             setGeneral((g) => ({ ...g, editionLabel: target.value ?? '' }));
                         }}
                     />
+                    {mode === 'create' ? (
+                        <CategoryLabelChips value={categoryLabelsChips} onChange={setCategoryLabelsChips} />
+                    ) : (
+                        <TextField
+                            label="Etiqueta de categoría (opcional)"
+                            placeholder='Ej: "Femenino", "Sub-23"'
+                            name="categoryLabel"
+                            value={general.categoryLabel}
+                            onChange={(e) => {
+                                const target = e?.currentTarget;
+                                if (!target) return;
+                                setGeneral((g) => ({ ...g, categoryLabel: target.value ?? '' }));
+                            }}
+                        />
+                    )}
                     {mode === 'edit' && (
                         <SelectField
                             label="Estado del torneo"

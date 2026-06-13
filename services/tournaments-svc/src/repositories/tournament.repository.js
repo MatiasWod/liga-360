@@ -13,6 +13,7 @@ function mapTournament(t) {
     inscriptionMode: t.inscriptionMode ?? 'public',
     status: t.status ?? 'draft',
     editionLabel: t.editionLabel ?? null,
+    categoryLabel: t.categoryLabel ?? null,
   };
 }
 
@@ -34,9 +35,9 @@ export async function findRawById(session, id) {
   return res.records[0].get('t').properties;
 }
 
-export async function create(session, { id, name, sport, season, venue, organizer, participantType, maxSlots, inscriptionMode, status }) {
+export async function create(session, { id, name, sport, season, venue, organizer, participantType, maxSlots, inscriptionMode, status, categoryLabel }) {
   await session.run(
-    `CREATE (t:Tournament {id:$id, name:$name, sport:$sport, season:$season, venue:$venue, organizer:$organizer, participantType:$pt, maxSlots:$maxSlots, inscriptionMode:$inscriptionMode, status:$status}) RETURN t`,
+    `CREATE (t:Tournament {id:$id, name:$name, sport:$sport, season:$season, venue:$venue, organizer:$organizer, participantType:$pt, maxSlots:$maxSlots, inscriptionMode:$inscriptionMode, status:$status, categoryLabel:$categoryLabel}) RETURN t`,
     {
       id,
       name,
@@ -48,12 +49,13 @@ export async function create(session, { id, name, sport, season, venue, organize
       maxSlots,
       inscriptionMode,
       status,
+      categoryLabel: categoryLabel ?? null,
     }
   );
-  return mapTournament({ id, name, sport, season, venue, organizer, participantType, maxSlots, inscriptionMode, status });
+  return mapTournament({ id, name, sport, season, venue, organizer, participantType, maxSlots, inscriptionMode, status, categoryLabel: categoryLabel ?? null });
 }
 
-export async function update(session, id, { name, sport, season, venue, participantType, inscriptionMode, status }) {
+export async function update(session, id, { name, sport, season, venue, participantType, inscriptionMode, status, categoryLabel }) {
   const res = await session.run(
     `MATCH (t:Tournament {id:$id})
      SET t.name = $name,
@@ -62,7 +64,8 @@ export async function update(session, id, { name, sport, season, venue, particip
          t.venue = $venue,
          t.participantType = $participantType,
          t.inscriptionMode = $inscriptionMode,
-         t.status = $status
+         t.status = $status,
+         t.categoryLabel = $categoryLabel
      RETURN t
      LIMIT 1`,
     {
@@ -74,6 +77,7 @@ export async function update(session, id, { name, sport, season, venue, particip
       participantType: participantType || null,
       inscriptionMode,
       status,
+      categoryLabel: categoryLabel ?? null,
     }
   );
   if (res.records.length === 0) return null;

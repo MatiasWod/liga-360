@@ -1,5 +1,6 @@
 /** Lógica de negocio de torneos: validación de cupos y borrado restringido al organizador creador. */
 import { genId } from '../domain/shared/ids.js';
+import { normalizeCategoryLabel } from '../domain/categoryLabel.js';
 import * as tournamentRepo from '../repositories/tournament.repository.js';
 import * as seriesService from './competition-series.service.js';
 
@@ -18,9 +19,9 @@ function rethrowDomain(err) {
   throw err;
 }
 
-async function applySeriesLink(driver, tournamentId, seriesId, editionLabel) {
+async function applySeriesLink(driver, tournamentId, seriesId, editionLabel, categoryLabel = null) {
   try {
-    await seriesService.assignTournamentToSeries(driver, { tournamentId, seriesId: seriesId || null, editionLabel });
+    await seriesService.assignTournamentToSeries(driver, { tournamentId, seriesId: seriesId || null, editionLabel, categoryLabel });
   } catch (err) {
     rethrowDomain(err);
   }
@@ -44,10 +45,11 @@ export async function getById(driver, id) {
   }
 }
 
-export async function create(driver, { name, sport, season, venue, participantType, maxSlots, inscriptionMode, status, organizer, seriesId, editionLabel }) {
+export async function create(driver, { name, sport, season, venue, participantType, maxSlots, inscriptionMode, status, organizer, seriesId, editionLabel, categoryLabel }) {
   const session = driver.session();
   try {
     const id = genId('t');
+    const normalizedCategoryLabel = normalizeCategoryLabel(categoryLabel);
     const created = await tournamentRepo.create(session, {
       id,
       name,
@@ -59,9 +61,10 @@ export async function create(driver, { name, sport, season, venue, participantTy
       maxSlots: safeMaxSlots(maxSlots),
       inscriptionMode,
       status,
+      categoryLabel: normalizedCategoryLabel,
     });
     if (seriesId) {
-      await applySeriesLink(driver, id, seriesId, editionLabel);
+      await applySeriesLink(driver, id, seriesId, editionLabel, normalizedCategoryLabel);
     }
     const linked = await seriesService.getSeriesForTournament(driver, id);
     return { ...created, seriesId: linked?.id ?? null };
@@ -73,7 +76,10 @@ export async function create(driver, { name, sport, season, venue, participantTy
 export async function update(driver, id, updates) {
   const session = driver.session();
   try {
-    const { seriesId, editionLabel, ...tournamentUpdates } = updates;
+    const { seriesId, editionLabel, categoryLabel, ...tournamentUpdates } = updates;
+    if (categoryLabel !== undefined) {
+      tournamentUpdates.categoryLabel = normalizeCategoryLabel(categoryLabel);
+    }
     const updated = await tournamentRepo.update(session, id, tournamentUpdates);
     if (!updated) throw new Error('NOT_FOUND: tournament no existe');
     if (seriesId !== undefined || editionLabel !== undefined) {
@@ -82,7 +88,10 @@ export async function update(driver, id, updates) {
         const current = await seriesService.getSeriesForTournament(driver, id);
         targetSeriesId = current?.id ?? null;
       }
-      await applySeriesLink(driver, id, targetSeriesId, editionLabel);
+      const resolvedCategory = updates.categoryLabel !== undefined
+        ? normalizeCategoryLabel(updates.categoryLabel)
+        : (await tournamentRepo.findRawById(session, id))?.categoryLabel ?? null;
+      await applySeriesLink(driver, id, targetSeriesId, editionLabel, resolvedCategory);
     }
     const linked = await seriesService.getSeriesForTournament(driver, id);
     return { ...updated, seriesId: linked?.id ?? null };

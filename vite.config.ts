@@ -5,6 +5,9 @@ export default defineConfig({
 	plugins: [react()],
 	publicDir: 'frontend/public',
 	server: {
+		host: true,
+		port: 5173,
+		strictPort: true,
 		proxy: {
 			'/api/graphql': {
 				target: 'http://localhost:4000',

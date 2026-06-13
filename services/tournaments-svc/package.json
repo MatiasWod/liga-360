@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "node --test src/test/middleware/auth.test.js src/test/domain/scheduling/roundRobin.test.js src/test/domain/elimination/bracketElimination.test.js src/test/domain/elimination/eliminationSlotAssignment.test.js src/test/repositories/elimination.repository.test.js src/test/repositories/match.repository.test.js src/test/domain/elimination/eliminationAdvance.test.js src/test/domain/standings/standings.test.js src/test/domain/match/winnerSlotRef.test.js src/test/domain/shared/participantLabels.test.js src/test/domain/shared/slotCapacity.test.js src/test/domain/stage/stageTransitionCycle.test.js src/test/domain/stage/stageTransitionTiming.test.js src/test/domain/stage/stageStatus.test.js",
+    "test:unit": "node --test src/test/middleware/auth.test.js src/test/domain/categoryLabel.test.js src/test/domain/scheduling/roundRobin.test.js src/test/domain/elimination/bracketElimination.test.js src/test/domain/elimination/eliminationSlotAssignment.test.js src/test/repositories/elimination.repository.test.js src/test/repositories/match.repository.test.js src/test/domain/elimination/eliminationAdvance.test.js src/test/domain/standings/standings.test.js src/test/domain/match/winnerSlotRef.test.js src/test/domain/shared/participantLabels.test.js src/test/domain/shared/slotCapacity.test.js src/test/domain/stage/stageTransitionCycle.test.js src/test/domain/stage/stageTransitionTiming.test.js src/test/domain/stage/stageStatus.test.js",
     "test:integration": "node --test src/test/graphql/schema.integration.test.js"
   },
   "dependencies": {

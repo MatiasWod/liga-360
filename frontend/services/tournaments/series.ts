@@ -6,6 +6,7 @@ export type SeriesEdition = {
   status: 'draft' | 'published' | 'finished' | string;
   editionLabel?: string | null;
   season?: string | null;
+  categoryLabel?: string | null;
 };
 
 export type CompetitionSeries = {
@@ -72,6 +73,7 @@ export async function listCompetitionSeries(): Promise<CompetitionSeries[]> {
           status
           editionLabel
           season
+          categoryLabel
         }
       }
     }
@@ -95,6 +97,7 @@ export async function getCompetitionSeriesBySlug(slug: string): Promise<Competit
           status
           editionLabel
           season
+          categoryLabel
         }
       }
     }
@@ -120,6 +123,7 @@ export async function getCompetitionSeriesById(id: string): Promise<CompetitionS
           status
           editionLabel
           season
+          categoryLabel
         }
       }
     }
@@ -129,11 +133,11 @@ export async function getCompetitionSeriesById(id: string): Promise<CompetitionS
   return data?.competitionSeries ?? null;
 }
 
-export async function getSeriesAggregates(seriesId: string): Promise<SeriesAggregates | null> {
+export async function getSeriesAggregates(seriesId: string, categoryLabel?: string | null): Promise<SeriesAggregates | null> {
   const data = await gqlRequest<{ seriesAggregates?: SeriesAggregates | null }>(
     `
-    query SeriesAggregates($seriesId: ID!) {
-      seriesAggregates(seriesId: $seriesId) {
+    query SeriesAggregates($seriesId: ID!, $categoryLabel: String) {
+      seriesAggregates(seriesId: $seriesId, categoryLabel: $categoryLabel) {
         seriesId
         finishedTournamentIds
         rollOfHonor {
@@ -150,6 +154,7 @@ export async function getSeriesAggregates(seriesId: string): Promise<SeriesAggre
           status
           editionLabel
           season
+          categoryLabel
         }
         titlesByTeam {
           teamKey
@@ -168,7 +173,7 @@ export async function getSeriesAggregates(seriesId: string): Promise<SeriesAggre
       }
     }
   `,
-    { seriesId }
+    { seriesId, categoryLabel: categoryLabel ?? null }
   );
   return data?.seriesAggregates ?? null;
 }

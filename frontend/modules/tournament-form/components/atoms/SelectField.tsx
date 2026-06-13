@@ -14,6 +14,8 @@ interface SelectFieldProps {
 	onChange: (value: string) => void;
 	required?: boolean;
 	isDisabled?: boolean;
+	/** Valores de opción que se muestran con estilo de acción (ej. crear nuevo). */
+	actionOptionValues?: string[];
 }
 
 export const SelectField: React.FC<SelectFieldProps> = ({
@@ -24,6 +26,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
 	onChange,
 	required,
 	isDisabled,
+	actionOptionValues = [],
 }) => {
 	const id = React.useId();
 	const selected = React.useMemo(
@@ -50,11 +53,11 @@ export const SelectField: React.FC<SelectFieldProps> = ({
 						cursor: 'pointer',
 						minHeight: 42,
 						borderRadius: 8,
-						borderColor: state.isFocused ? '#66BB6A' : '#cbd5e1',
-						backgroundColor: '#ffffff',
-						boxShadow: state.isFocused ? '0 0 0 2px rgba(102, 187, 106, 0.25)' : 'none',
+						borderColor: state.isFocused ? 'rgba(102, 187, 106, 0.8)' : 'rgba(255, 255, 255, 0.1)',
+						backgroundColor: 'rgba(255, 255, 255, 0.1)',
+						boxShadow: state.isFocused ? '0 0 0 2px rgba(46, 125, 50, 0.45)' : 'none',
 						':hover': {
-							borderColor: '#66BB6A',
+							borderColor: 'rgba(102, 187, 106, 0.6)',
 						},
 					}),
 					valueContainer: (base) => ({
@@ -63,52 +66,65 @@ export const SelectField: React.FC<SelectFieldProps> = ({
 					}),
 					singleValue: (base) => ({
 						...base,
-						color: '#0F2A33',
+						color: 'rgba(255, 255, 255, 0.95)',
 						fontSize: '0.875rem',
 						fontWeight: 500,
 					}),
 					placeholder: (base) => ({
 						...base,
-						color: '#64748b',
+						color: 'rgba(255, 255, 255, 0.5)',
 						fontSize: '0.875rem',
 					}),
 					indicatorSeparator: () => ({ display: 'none' }),
 					dropdownIndicator: (base, state) => ({
 						...base,
 						cursor: 'pointer',
-						color: state.isFocused ? '#2E7D32' : '#64748b',
+						color: state.isFocused ? '#66BB6A' : 'rgba(255, 255, 255, 0.55)',
 						':hover': {
 							cursor: 'pointer',
-							color: '#2E7D32',
+							color: '#66BB6A',
 						},
 					}),
 					menu: (base) => ({
 						...base,
 						borderRadius: 10,
 						overflow: 'hidden',
-						border: '1px solid #e2e8f0',
-						boxShadow: '0 8px 20px rgba(15, 42, 51, 0.12)',
+						border: '1px solid rgba(255, 255, 255, 0.12)',
+						backgroundColor: '#0F2A33',
+						boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
 					}),
 					menuList: (base) => ({
 						...base,
 						paddingTop: 4,
 						paddingBottom: 4,
+						backgroundColor: '#0F2A33',
 					}),
-					option: (base, state) => ({
+					option: (base, state) => {
+						const isAction = actionOptionValues.includes(String(state.data?.value ?? ''));
+						return {
 						...base,
 						cursor: 'pointer',
 						fontSize: '0.875rem',
-						fontWeight: state.isSelected ? 600 : 500,
-						color: state.isSelected ? '#ffffff' : '#0F2A33',
-						backgroundColor: state.isSelected
-							? '#2E7D32'
-							: state.isFocused
-								? '#E8F5E9'
-								: '#ffffff',
+						fontWeight: isAction ? 600 : state.isSelected ? 600 : 500,
+						color: isAction
+							? '#66BB6A'
+							: state.isSelected
+								? '#ffffff'
+								: 'rgba(255, 255, 255, 0.9)',
+						backgroundColor: isAction
+							? 'rgba(102, 187, 106, 0.12)'
+							: state.isSelected
+								? '#2E7D32'
+								: state.isFocused
+									? 'rgba(102, 187, 106, 0.18)'
+									: 'transparent',
+						borderTop: isAction ? '1px solid rgba(255, 255, 255, 0.08)' : undefined,
+						marginTop: isAction ? 4 : undefined,
 						':active': {
-							backgroundColor: '#C8E6C9',
+							backgroundColor: 'rgba(102, 187, 106, 0.28)',
 						},
-					}),
+					};
+					},
 				}}
 			/>
 		</label>

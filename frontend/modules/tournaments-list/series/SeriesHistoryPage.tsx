@@ -26,16 +26,23 @@ function KpiCard({ label, value, accent = false }: { label: string; value: strin
   );
 }
 
+function editionTitle(editionLabel: string | null | undefined, categoryLabel: string | null | undefined, tournamentName: string): string {
+  const parts = [editionLabel || tournamentName, categoryLabel].filter(Boolean);
+  return parts.join(' · ');
+}
+
 function RollOfHonorTable({ rows }: { rows: SeriesRollOfHonorRow[] }) {
   if (!rows.length) {
     return <p className="text-sm text-text-muted">Todavía no hay ediciones finalizadas en esta serie.</p>;
   }
+  const hasCategories = rows.some((r) => (r as any).categoryLabel);
   return (
     <div className="overflow-x-auto rounded-xl border border-border-subtle">
       <table className="min-w-full text-sm">
         <thead className="bg-surface-2 text-left text-xs text-text-muted">
           <tr>
             <th className="px-3 py-2">Edición</th>
+            {hasCategories && <th className="px-3 py-2">Categoría</th>}
             <th className="px-3 py-2">Campeón</th>
             <th className="px-3 py-2">Subcampeón</th>
             <th className="px-3 py-2">3.er puesto</th>
@@ -45,6 +52,9 @@ function RollOfHonorTable({ rows }: { rows: SeriesRollOfHonorRow[] }) {
           {rows.map((row) => (
             <tr key={row.tournamentId}>
               <td className="px-3 py-2 font-medium">{row.editionLabel || row.tournamentName}</td>
+              {hasCategories && (
+                <td className="px-3 py-2 text-text-muted">{(row as any).categoryLabel || '—'}</td>
+              )}
               <td className="px-3 py-2">{entryLabel(row.champion)}</td>
               <td className="px-3 py-2">{entryLabel(row.runnerUp)}</td>
               <td className="px-3 py-2">{entryLabel(row.thirdPlace)}</td>
@@ -68,12 +78,25 @@ export interface SeriesHistoryPageProps {
   }) => void;
 }
 
+function deriveCategories(series: CompetitionSeries): string[] {
+  const cats = new Set<string>();
+  for (const e of series.editions) {
+    if (e.categoryLabel?.trim()) cats.add(e.categoryLabel.trim());
+  }
+  return [...cats].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+}
+
 export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
   series,
   onBack,
   onOpenEdition,
   onNextEditionCreated,
 }) => {
+  const categories = React.useMemo(() => deriveCategories(series), [series]);
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
+    () => categories[0] ?? null
+  );
+
   const [aggregates, setAggregates] = React.useState<SeriesAggregates | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -83,7 +106,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
     let cancelled = false;
     setLoading(true);
     setError('');
-    getSeriesAggregates(series.id)
+    getSeriesAggregates(series.id, selectedCategory)
       .then((data) => {
         if (!cancelled) setAggregates(data);
       })
@@ -96,7 +119,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [series.id]);
+  }, [series.id, selectedCategory]);
 
   const topScorers = topScorersFromSeriesRows(aggregates?.topScorers ?? []);
   const topTitles = topTitlesFromRows(aggregates?.titlesByTeam ?? []);
@@ -137,6 +160,25 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
         ) : null}
       </div>
 
+      {categories.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                selectedCategory === cat
+                  ? 'bg-success-base text-white'
+                  : 'bg-surface-2 text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? <p className="text-sm text-text-muted">Cargando palmarés y récords…</p> : null}
       {error ? <p className="text-sm text-danger-base">{error}</p> : null}
 
@@ -175,7 +217,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
                       className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
                     >
                       <span>
-                        {e.editionLabel ? `Edición ${e.editionLabel}` : e.name}
+                        {editionTitle(e.editionLabel, e.categoryLabel, e.name)}
                         <span className="ml-2 text-xs text-text-subtle">{e.status}</span>
                       </span>
                       <span className="text-success-base">Ver →</span>
@@ -197,7 +239,7 @@ export const SeriesHistoryPage: React.FC<SeriesHistoryPageProps> = ({
                     className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
                   >
                     <span>
-                      {row.editionLabel ? `Edición ${row.editionLabel}` : row.tournamentName}
+                      {editionTitle(row.editionLabel, (row as any).categoryLabel, row.tournamentName)}
                       {row.champion ? ` · 🏆 ${row.champion.displayName}` : ''}
                     </span>
                     <span className="text-success-base">Detalle →</span>

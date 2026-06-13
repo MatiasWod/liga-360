@@ -126,7 +126,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
               setTemplateCompetitions(null);
               setSelectedTournamentId(id);
               setSelectedTournamentName(name);
-              setFeedback(`Torneo "${name}" creado con su estructura inicial. Ahora podés terminar de configurarlo.`);
+              setFeedback(`Torneo "${name}" creado con su estructura inicial. Si creaste varias categorías, podés cambiar entre ellas desde la configuración.`);
               setMode('configuracion');
             }}
           />
@@ -164,6 +164,7 @@ export const OrganizerTournamentsPage: React.FC<OrganizerTournamentsPageProps> =
               <TournamentConfiguration
                 tournamentId={selectedTournamentId}
                 onBack={() => setMode('visualizacion')}
+                onSelectVariant={(id) => setSelectedTournamentId(id)}
                 onNextEditionCreated={({ tournamentId, name, warnings, inscriptionsCreated }) => {
                   setSelectedTournamentId(tournamentId);
                   setSelectedTournamentName(name);

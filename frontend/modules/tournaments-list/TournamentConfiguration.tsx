@@ -21,6 +21,7 @@ import {
   syncStageGroups,
   unassignInscriptionFromStage,
 } from '../../services/tournaments/configuration';
+import { listTournamentsGraphql } from '../../services/tournamentsApi';
 import { TEAMS_BASE } from '../../services/teams/client';
 import { FixturePlanningPanel } from './FixturePlanningPanel';
 import { CreateNextEditionModal } from './CreateNextEditionModal';
@@ -42,6 +43,12 @@ import {
   deriveEligibleInscriptionsFromIncomingTransitions,
   type EligibleInscription,
 } from './incomingTransitionEligibility';
+import {
+  categoryVariantPillLabel,
+  findSiblingTournamentVariants,
+  type TournamentVariantRef,
+} from '../tournament-form/utils/categoryLabel';
+import { formatSeriesEditionBadge } from './editionDisplay';
 
 /** Entrada en la grilla de una fase: fila en Postgres o asignación sólo en Neo4j (p. ej. seeds viejos). */
 type StageRosterEntry =
@@ -89,6 +96,7 @@ type Tab = 'gestion' | 'inicializacion' | 'fixture';
 interface TournamentConfigurationProps {
   tournamentId: string;
   onBack: () => void;
+  onSelectVariant?: (tournamentId: string) => void;
   onNextEditionCreated?: (payload: {
     tournamentId: string;
     name: string;
@@ -269,6 +277,7 @@ type GestionParticipantRow =
 export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = ({
   tournamentId,
   onBack,
+  onSelectVariant,
   onNextEditionCreated,
 }) => {
   const [tab, setTab] = React.useState<Tab>('gestion');
@@ -277,6 +286,7 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   const [error, setError] = React.useState('');
 
   const [tournament, setTournament] = React.useState<Tournament | null>(null);
+  const [categoryVariants, setCategoryVariants] = React.useState<TournamentVariantRef[]>([]);
   const [inscriptions, setInscriptions] = React.useState<InscriptionItem[]>([]);
   const [initializationCompetitionId, setInitializationCompetitionId] = React.useState('');
   const [initializationStageId, setInitializationStageId] = React.useState('');
@@ -616,6 +626,13 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   const loadTournament = React.useCallback(async () => {
     const nextTournament = (await getTournamentConfigurationById(tournamentId)) as Tournament | null;
     setTournament(nextTournament);
+    if (nextTournament) {
+      const all = await listTournamentsGraphql();
+      const siblings = findSiblingTournamentVariants(all, nextTournament);
+      setCategoryVariants(siblings.length >= 2 ? siblings : []);
+    } else {
+      setCategoryVariants([]);
+    }
     const firstCompetitionId = nextTournament?.competitions?.[0]?.id || '';
     setInitializationCompetitionId((prev) => prev || firstCompetitionId);
     return nextTournament;
@@ -938,6 +955,12 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
   if (loading) return <Card>Cargando configuración del torneo...</Card>;
   if (!tournament) return <Card>{error || 'No se encontró el torneo'}</Card>;
 
+  const seriesEditionBadge = formatSeriesEditionBadge(
+    tournament.seriesName,
+    tournament.editionLabel,
+    tournament.season
+  );
+
   return (
     <div className="space-y-4">
       <CreateNextEditionModal
@@ -966,8 +989,28 @@ export const TournamentConfiguration: React.FC<TournamentConfigurationProps> = (
             <h2 className="text-2xl font-semibold text-[#0F2A33]">Centro de gestión del torneo</h2>
             <p className="text-sm text-slate-600">
               {tournament.name}
-              {tournament.editionLabel ? ` · Edición ${tournament.editionLabel}` : ''}
+              {seriesEditionBadge ? ` · ${seriesEditionBadge.text}` : ''}
             </p>
+            {categoryVariants.length >= 2 ? (
+              <div className="mt-3 inline-flex flex-wrap rounded-xl bg-slate-100 p-1">
+                {categoryVariants.map((variant) => (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => {
+                      if (variant.id !== tournamentId) onSelectVariant?.(variant.id);
+                    }}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      variant.id === tournamentId
+                        ? 'bg-[#2E7D32] text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {categoryVariantPillLabel(variant.categoryLabel)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           {String(tournament.status || '').toLowerCase() === 'finished' ? (
             <Button type="button" variant="secondary" onClick={() => setNextEditionModalOpen(true)}>

@@ -73,7 +73,6 @@ export async function update(session, id, { name, sport }) {
 export async function listPublic(session) {
   const r = await session.run(
     `MATCH (s:CompetitionSeries)<-[:IN_SERIES]-(t:Tournament)
-     WHERE t.status IN ['published', 'finished']
      RETURN DISTINCT s
      ORDER BY s.name`
   );
@@ -102,15 +101,17 @@ export async function listEditions(session, seriesId) {
   return r.records.map((rec) => rec.get('t').properties);
 }
 
-export async function editionLabelTaken(session, seriesId, editionLabel, excludeTournamentId = null) {
+export async function editionLabelTaken(session, seriesId, editionLabel, excludeTournamentId = null, categoryLabel = null) {
   const label = normalizeEditionLabel(editionLabel).toLowerCase();
   if (!label) return false;
+  const normalizedCategory = categoryLabel ? String(categoryLabel).trim().toLowerCase() : null;
   const r = await session.run(
     `MATCH (s:CompetitionSeries {id:$seriesId})<-[:IN_SERIES]-(t:Tournament)
      WHERE toLower(trim(t.editionLabel)) = $label
        AND ($excludeTournamentId IS NULL OR t.id <> $excludeTournamentId)
+       AND coalesce(toLower(trim(t.categoryLabel)), '') = coalesce($normalizedCategory, '')
      RETURN t LIMIT 1`,
-    { seriesId, label, excludeTournamentId }
+    { seriesId, label, excludeTournamentId, normalizedCategory }
   );
   return r.records.length > 0;
 }
