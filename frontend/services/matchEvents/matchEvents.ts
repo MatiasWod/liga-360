@@ -1,5 +1,6 @@
 ﻿import { API_ENDPOINTS } from '../config';
 import { authHeaders } from '../http';
+import { PAGE_MAX_LIMIT } from '../pagination';
 import type { CreateMatchEventPayload, MatchEvent, UpdateMatchEventPayload } from './types';
 
 async function handleResponse<T>(res: Response): Promise<T> {
@@ -12,7 +13,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 const base = () => API_ENDPOINTS.matchEvents;
 
 export async function listMatchEvents(matchId: string): Promise<MatchEvent[]> {
-  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events`, {
+  // Eventos completos del partido (alimentan tarjetas/forms): pide el tope, no el default.
+  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/events?limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   return handleResponse<MatchEvent[]>(res);

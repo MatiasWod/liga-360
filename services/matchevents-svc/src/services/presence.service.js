@@ -29,8 +29,8 @@ async function assertTeamOwner({ user, inscriptionId }) {
   return inscription;
 }
 
-export async function listByMatch(matchId) {
-  return presenceRepo.listByMatch(pool, matchId);
+export async function listByMatch(matchId, { limit, offset } = {}) {
+  return presenceRepo.listByMatch(pool, matchId, { limit, offset });
 }
 
 export async function replaceForInscription({ user, matchId, tournamentId, competitionId, inscriptionId, entries }) {

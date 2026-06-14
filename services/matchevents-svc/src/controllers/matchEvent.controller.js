@@ -1,6 +1,7 @@
 import * as matchEventService from '../services/matchEvent.service.js';
 import { VALID_EVENT_TYPES, TENNIS_SET_EVENT_TYPE, isValidEventType, sanitizeEventForViewer } from '../domain/matchEvent.js';
 import { validateTennisSetExtra } from '../domain/tennisScore.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -47,7 +48,8 @@ export async function list(req, res, next) {
   try {
     const { matchId } = req.params;
     if (!matchId) return validationError(res, 'matchId requerido');
-    const events = await matchEventService.listByMatch(matchId);
+    const { limit, offset } = parsePagination(req.query);
+    const events = await matchEventService.listByMatch(matchId, { limit, offset });
     const isOrganizer = req.user?.type === 'organizer';
     res.json(events.map((ev) => sanitizeEventForViewer(ev, isOrganizer)));
   } catch (e) {

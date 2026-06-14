@@ -1,5 +1,6 @@
 import * as teamService from '../services/team.service.js';
 import { validateCreateTeam } from '../schema/team.schema.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, details) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details } });
@@ -23,7 +24,8 @@ export async function list(req, res, next) {
     if (!req.user) {
       return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
     }
-    return res.json(await teamService.listTeams({ onlyMine: String(mine || '').toLowerCase() === 'true', userId: req.user.sub }));
+    const { limit, offset } = parsePagination(req.query);
+    return res.json(await teamService.listTeams({ onlyMine: String(mine || '').toLowerCase() === 'true', userId: req.user.sub, limit, offset }));
   } catch (e) {
     next(e);
   }

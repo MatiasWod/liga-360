@@ -13,8 +13,8 @@ function toUserDto(row) {
   };
 }
 
-export async function listUsers() {
-  const rows = await userRepository.findAll();
+export async function listUsers({ limit, offset } = {}) {
+  const rows = await userRepository.findAll({ limit, offset });
   return rows.map(toUserDto);
 }
 

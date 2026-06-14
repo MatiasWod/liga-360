@@ -1,6 +1,7 @@
 import * as inviteService from '../services/invite.service.js';
 import { normalizeCompetitionId } from '../domain/competition.js';
 import { validateCreateInvite } from '../schema/invite.schema.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, details) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details } });
@@ -13,7 +14,8 @@ export async function list(req, res, next) {
     if (!competitionId && !tournamentId) {
       return validationError(res, [{ field: 'query', message: 'competitionId o tournamentId requerido' }]);
     }
-    res.json(await inviteService.listInvites({ competitionId, tournamentId }));
+    const { limit, offset } = parsePagination(req.query);
+    res.json(await inviteService.listInvites({ competitionId, tournamentId, limit, offset }));
   } catch (e) {
     next(e);
   }

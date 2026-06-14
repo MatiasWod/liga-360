@@ -3,10 +3,12 @@
 const COLS = `id, match_id, tournament_id, competition_id, inscription_id, linked_member_id,
   display_name, is_guest, created_by_user_id, created_at, updated_at`;
 
-export async function listByMatch(client, matchId) {
+export async function listByMatch(client, matchId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
-    `SELECT ${COLS} FROM "MatchPresence" WHERE match_id = $1 ORDER BY inscription_id, is_guest, lower(display_name)`,
-    [matchId]
+    `SELECT ${COLS} FROM "MatchPresence" WHERE match_id = $1
+     ORDER BY inscription_id, is_guest, lower(display_name), id
+     LIMIT $2 OFFSET $3`,
+    [matchId, limit, offset]
   );
   return r.rows;
 }

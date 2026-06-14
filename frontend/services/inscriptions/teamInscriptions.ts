@@ -1,4 +1,5 @@
 import { authHeaders, INSCRIPTIONS_BASE, parseResponse } from './client';
+import { PAGE_MAX_LIMIT } from '../pagination';
 
 export interface TeamInscriptionItem {
   id: number;
@@ -20,7 +21,8 @@ export interface InscriptionLookupItem {
 
 /** Historial cross-torneo de un equipo (público). Incluye inscripciones rechazadas. */
 export async function listTeamInscriptions(teamId: number): Promise<TeamInscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?teamId=${Number(teamId)}`, { headers: authHeaders() });
+  // Historial completo (alimenta KPIs/breakdown): pide el tope en vez del default 200.
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?teamId=${Number(teamId)}&limit=${PAGE_MAX_LIMIT}`, { headers: authHeaders() });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones del equipo');
   return json.inscriptions || [];
 }

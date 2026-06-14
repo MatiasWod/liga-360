@@ -1,5 +1,6 @@
 import { API_ENDPOINTS } from '../config';
 import { authHeaders } from '../http';
+import { PAGE_MAX_LIMIT } from '../pagination';
 import type { MatchEvent } from './types';
 
 /** Fila de goleadores agregada por matchevents-svc (clave compuesta member:/name:). */
@@ -46,6 +47,8 @@ function statsUrl(tournamentId: string, path: string, competitionId?: string | n
   const params = new URLSearchParams({ tournamentId });
   if (competitionId) params.set('competitionId', competitionId);
   for (const [k, v] of Object.entries(extra || {})) params.set(k, v);
+  // Rankings/merges se consumen completos: pedir el tope salvo que el caller fije un top-N.
+  if (!params.has('limit')) params.set('limit', String(PAGE_MAX_LIMIT));
   return `${base()}${path}?${params}`;
 }
 

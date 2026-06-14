@@ -48,8 +48,8 @@ export async function create({ matchId, tournamentId, competitionId, eventType, 
   return event;
 }
 
-export async function listByMatch(matchId) {
-  return matchEventRepo.listByMatch(pool, matchId);
+export async function listByMatch(matchId, { limit, offset } = {}) {
+  return matchEventRepo.listByMatch(pool, matchId, { limit, offset });
 }
 
 export async function update({ matchId, eventId, eventType, competitionId, inscriptionId, linkedMemberId, displayName, minute, suspensionMatches, notes, extraJson }) {

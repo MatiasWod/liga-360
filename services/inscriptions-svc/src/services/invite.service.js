@@ -18,10 +18,10 @@ async function generateUniqueInviteToken(type) {
   throw Object.assign(new Error('INVITE_TOKEN_GENERATION_FAILED'), { statusCode: 500, code: 'INVITE_TOKEN_GENERATION_FAILED' });
 }
 
-export async function listInvites({ competitionId, tournamentId }) {
+export async function listInvites({ competitionId, tournamentId, limit, offset }) {
   const invites = competitionId
-    ? await inviteRepo.listByCompetition(pool, competitionId)
-    : await inviteRepo.listByTournament(pool, tournamentId);
+    ? await inviteRepo.listByCompetition(pool, competitionId, { limit, offset })
+    : await inviteRepo.listByTournament(pool, tournamentId, { limit, offset });
   return { invites };
 }
 

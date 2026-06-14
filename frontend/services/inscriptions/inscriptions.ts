@@ -1,8 +1,11 @@
 import { authHeaders, INSCRIPTIONS_BASE, parseResponse, TEAMS_BASE } from './client';
+import { PAGE_MAX_LIMIT } from '../pagination';
 import type { InscriptionItem, TeamOption } from './types';
 
+// Estas listas alimentan cómputo (brackets, fixtures, standings): se necesitan completas,
+// así que piden el tope del backend (1000) en vez de depender del default (200).
 export async function listTournamentInscriptions(tournamentId: string): Promise<InscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}&limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones');
@@ -10,7 +13,7 @@ export async function listTournamentInscriptions(tournamentId: string): Promise<
 }
 
 export async function listCompetitionInscriptions(competitionId: string): Promise<InscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?competitionId=${encodeURIComponent(competitionId)}`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?competitionId=${encodeURIComponent(competitionId)}&limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones de la competicion');

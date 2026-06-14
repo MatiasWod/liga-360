@@ -1,4 +1,5 @@
 import * as userService from '../services/user.service.js';
+import { parsePagination } from '@liga360/shared';
 import { logger } from '../logger.js';
 
 // El id viene como string en la URL; en DB es SERIAL (number).
@@ -11,9 +12,10 @@ function parseUserId(req, res) {
   return userId;
 }
 
-export async function listUsers(_req, res, next) {
+export async function listUsers(req, res, next) {
   try {
-    const users = await userService.listUsers();
+    const { limit, offset } = parsePagination(req.query);
+    const users = await userService.listUsers({ limit, offset });
     return res.json({ users });
   } catch (err) {
     next(err);

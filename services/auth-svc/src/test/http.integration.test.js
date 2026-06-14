@@ -119,6 +119,22 @@ describe('auth-svc HTTP integration', () => {
     assert.ok(!('password' in target));
   });
 
+  test('GET /users?limit=1 respeta el límite y offset pagina', async () => {
+    const page1 = await httpReq('GET', '/users?limit=1&offset=0', null, authHeader(adminToken));
+    assert.equal(page1.status, 200);
+    assert.equal(page1.body.users.length, 1);
+    const page2 = await httpReq('GET', '/users?limit=1&offset=1', null, authHeader(adminToken));
+    assert.equal(page2.status, 200);
+    assert.equal(page2.body.users.length, 1);
+    assert.notEqual(page1.body.users[0].id, page2.body.users[0].id);
+  });
+
+  test('GET /users con limit/offset inválidos clampea (no 400)', async () => {
+    const res = await httpReq('GET', '/users?limit=-5&offset=abc', null, authHeader(adminToken));
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.users));
+  });
+
   test('POST /users/:id/ban banea y bloquea el login con 403 BANNED', async () => {
     const res = await httpReq('POST', `/users/${userId}/ban`, null, authHeader(adminToken));
     assert.equal(res.status, 200);

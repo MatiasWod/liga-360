@@ -15,12 +15,13 @@ export async function create(client, {
   return r.rows[0];
 }
 
-export async function listByMatch(client, matchId) {
+export async function listByMatch(client, matchId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
     `SELECT * FROM "MatchEvent"
      WHERE match_id = $1
-     ORDER BY COALESCE(minute, 999999) ASC, created_at ASC`,
-    [matchId]
+     ORDER BY COALESCE(minute, 999999) ASC, created_at ASC, id ASC
+     LIMIT $2 OFFSET $3`,
+    [matchId, limit, offset]
   );
   return r.rows;
 }
