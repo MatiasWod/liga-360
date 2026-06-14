@@ -96,10 +96,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated, onBackToPub
 
         <header className="relative border-b border-border-subtle bg-surface-1/90 backdrop-blur-sm px-6">
           <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
-            <div className="flex items-center gap-3">
-              <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
-              <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
-            </div>
+            {onBackToPublic ? (
+              <button
+                type="button"
+                onClick={onBackToPublic}
+                aria-label="Ir a la búsqueda de torneos"
+                className="flex items-center gap-3 justify-self-start rounded-lg p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
+              >
+                <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
+                <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
+                <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
+              </div>
+            )}
             <div aria-hidden="true" />
             <div className="flex items-center justify-self-end gap-2">
               {onBackToPublic && (

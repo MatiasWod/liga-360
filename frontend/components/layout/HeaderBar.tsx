@@ -25,10 +25,15 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <header className="border-b border-border-subtle bg-surface-1 px-6">
       <div className="grid h-16 w-full grid-cols-[240px_minmax(0,1fr)_240px] items-center gap-4">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navItems[0] && onNavigate(navItems[0].id)}
+          aria-label="Ir al inicio"
+          className="flex items-center gap-3 justify-self-start rounded-lg p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
+        >
           <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
           <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
-        </div>
+        </button>
 
         <nav className="min-w-0 flex items-center justify-center gap-2 overflow-x-auto whitespace-nowrap">
           {navItems.map((item) => {
@@ -70,12 +75,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
               >
                 Mi perfil
-              </button>
-              <button
-                type="button"
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-2"
-              >
-                Configuracion
               </button>
               <button
                 type="button"

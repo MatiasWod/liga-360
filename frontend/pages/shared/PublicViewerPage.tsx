@@ -43,6 +43,17 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
     setTab(next);
   }
 
+  // Logo/título → volver a la vista de búsqueda (limpia selección y filtros).
+  function goToSearch() {
+    setSelectedId(null);
+    setSelectedSeries(null);
+    setOpenEditionAsHistory(false);
+    setSelectedOrganizer(null);
+    setTab('activos');
+    setSearchTerm('');
+    window.scrollTo({ top: 0 });
+  }
+
   function handleSelectOrganizer(organizer: string | null) {
     setSelectedOrganizer(organizer);
     setSelectedId(null);
@@ -77,10 +88,15 @@ export const PublicViewerPage: React.FC<PublicViewerPageProps> = ({ onGoToAuth }
     <div className="min-h-screen bg-surface-0 text-text-primary">
       <header className="border-b border-border-subtle bg-surface-1 px-4 sm:px-6 lg:px-8">
         <div className="grid h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={goToSearch}
+            aria-label="Ir a la búsqueda de torneos"
+            className="flex items-center gap-3 justify-self-start rounded-lg p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/60"
+          >
             <img src="/logoTransparent.png" alt="LIGA360" className="h-10 w-auto" />
             <span className="text-xl font-semibold tracking-wide text-text-primary">LIGA360</span>
-          </div>
+          </button>
           <div aria-hidden="true" className="hidden lg:block" />
           <button
             type="button"

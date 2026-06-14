@@ -15,6 +15,7 @@ import { ParticipantTournamentsPage } from './pages/participant/ParticipantTourn
 import { AgendaPage } from './pages/shared/AgendaPage';
 import { PublicViewerPage } from './pages/shared/PublicViewerPage';
 import { PlaceholderPage } from './pages/shared/PlaceholderPage';
+import { ErrorPage } from './pages/shared/ErrorPage';
 import { TeamPublicViewPage } from './pages/shared/TeamPublicViewPage';
 import { subscribeOpenTeam } from './services/teams/teamNav';
 import { TeamHomePage } from './pages/team/TeamHomePage';
@@ -50,6 +51,9 @@ export const App: React.FC = () => {
     const match = window.location.pathname.match(/^\/equipo\/(\d+)$/);
     return match ? match[1] : null;
   });
+  // Pathname en estado: fuente de verdad reactiva para el ruteo. Sin esto, navigate() podía
+  // cambiar la URL sin re-render (p. ej. desde el 404, cuando activeNav/viewTeamId no cambiaban).
+  const [pathname, setPathname] = React.useState(window.location.pathname);
 
   function navigate(id: NavItemId) {
     setActiveNav(id);
@@ -58,6 +62,7 @@ export const App: React.FC = () => {
     if (window.location.pathname !== path) {
       window.history.pushState({ nav: id }, '', path);
     }
+    setPathname(path);
   }
 
   React.useEffect(() => {
@@ -66,6 +71,7 @@ export const App: React.FC = () => {
       setViewTeamId(teamMatch ? teamMatch[1] : null);
       const id = (e.state?.nav as NavItemId) || 'inicio';
       setActiveNav(NAV_IDS.includes(id) ? id : 'inicio');
+      setPathname(window.location.pathname);
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -134,6 +140,11 @@ export const App: React.FC = () => {
     ];
   }, [currentRole]);
 
+  // Ruta de nivel superior reconocida (home, /verify, /invite/:token, /equipo/:id o un tab).
+  // Cualquier otra es 404 (se evalúa en cada render: navigate actualiza window.location).
+  const topSegment = pathname.replace(/^\//, '').split('/')[0];
+  const isKnownRoute = topSegment === '' || ['verify', 'invite', 'equipo', ...NAV_IDS].includes(topSegment);
+
   React.useEffect(() => {
     if (!user) return;
     if (!user.isVerified) return;
@@ -165,10 +176,11 @@ export const App: React.FC = () => {
   }, [user, currentRole]);
 
   React.useEffect(() => {
+    if (!isKnownRoute) return; // no autoredirigir cuando estamos mostrando el 404
     if (!navItems.some((item) => item.id === activeNav)) {
       navigate(navItems[0]?.id || 'inicio');
     }
-  }, [activeNav, navItems]);
+  }, [activeNav, navItems, isKnownRoute]);
 
   React.useEffect(() => {
     if (!user || !activeTeamId) return;
@@ -230,6 +242,11 @@ export const App: React.FC = () => {
 
   if (window.location.pathname === '/verify') {
     return <VerifyEmailPage />;
+  }
+
+  // 404: ruta de nivel superior no reconocida. Vuelve al primer destino según el rol.
+  if (!isKnownRoute) {
+    return <ErrorPage code={404} onAction={() => navigate(navItems[0]?.id ?? 'inicio')} />;
   }
 
   if (inviteToken) {
