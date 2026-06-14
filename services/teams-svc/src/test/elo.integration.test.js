@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = 'testsecret-elo';
 const POSTGRES_URL =
-  process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@127.0.0.1:5432/liga360_teams';
+  process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://liga:liga@127.0.0.1:55432/liga360_teams';
 
 let mockInscriptions = [];
 let mockServer;
@@ -62,14 +62,18 @@ function startMockInscriptions() {
   return new Promise((resolve) => {
     mockServer = http.createServer((req, res) => {
       const url = new URL(req.url || '/', 'http://127.0.0.1');
-      if (req.method === 'GET' && url.pathname === '/inscriptions/lookup') {
-        const ids = new Set(url.searchParams.getAll('ids').map((id) => Number(id)));
+      if (req.method === 'GET' && url.pathname === '/inscriptions' && url.searchParams.has('ids')) {
+        const ids = new Set(
+          String(url.searchParams.get('ids') || '')
+            .split(',')
+            .map((id) => Number(id.trim()))
+        );
         const rows = mockInscriptions.filter((row) => ids.has(Number(row.id)));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ inscriptions: rows }));
         return;
       }
-      if (req.method === 'PATCH' && /^\/internal\/inscriptions\/\d+\/tournament-rating$/.test(url.pathname)) {
+      if (req.method === 'PATCH' && /^\/inscriptions\/\d+\/tournament-rating$/.test(url.pathname)) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
         return;
@@ -87,7 +91,13 @@ function serviceToken() {
 
 describe('ELO process-match (integración)', () => {
   before(async () => {
+    // env.js congela los valores en el primer import: TODO process.env relevante
+    // tiene que estar seteado antes de importar config/db.js o app.js.
+    const mockPort = await startMockInscriptions();
     process.env.POSTGRES_URL = POSTGRES_URL;
+    process.env.JWT_SECRET = JWT_SECRET;
+    process.env.INSCRIPTIONS_SVC_URL = `http://127.0.0.1:${mockPort}`;
+
     try {
       ({ pool, closePool } = await import('../config/db.js'));
       await pool.query('SELECT 1');
@@ -97,22 +107,18 @@ describe('ELO process-match (integración)', () => {
       return;
     }
 
-    const mockPort = await startMockInscriptions();
-    process.env.JWT_SECRET = JWT_SECRET;
-    process.env.INSCRIPTIONS_SVC_URL = `http://127.0.0.1:${mockPort}`;
-
     const { createApp } = await import('../app.js');
     const app = createApp();
     server = app.listen(0, '127.0.0.1');
     await new Promise((resolve) => server.once('listening', resolve));
     baseUrl = `http://127.0.0.1:${server.address().port}`;
 
-    const ownerToken = jwt.sign({ sub: 88001, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+    const ownerToken = jwt.sign({ sub: 88001, type: 'team', isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
     const homeRes = await httpReq('POST', '/teams', { name: 'ELO Home FC' }, authHeader(ownerToken));
     assert.equal(homeRes.status, 201);
     teamHomeId = homeRes.body.team.id;
 
-    const awayOwner = jwt.sign({ sub: 88002, type: 'team' }, JWT_SECRET, { expiresIn: '1h' });
+    const awayOwner = jwt.sign({ sub: 88002, type: 'team', isVerified: true }, JWT_SECRET, { expiresIn: '1h' });
     const awayRes = await httpReq('POST', '/teams', { name: 'ELO Away FC' }, authHeader(awayOwner));
     assert.equal(awayRes.status, 201);
     teamAwayId = awayRes.body.team.id;
@@ -139,10 +145,9 @@ describe('ELO process-match (integración)', () => {
     if (!dbReady) return t.skip('DB no disponible');
 
     const res = await httpReq(
-      'POST',
-      '/internal/elo/process-match',
+      'PUT',
+      '/matches/elo-skip-draft/elo',
       {
-        matchId: 'elo-skip-draft',
         tournamentId: 't-draft',
         tournamentStatus: 'draft',
         homeInscriptionId: String(HOME_INSC_ID),
@@ -161,7 +166,6 @@ describe('ELO process-match (integración)', () => {
     if (!dbReady) return t.skip('DB no disponible');
 
     const payload = {
-      matchId: MATCH_ID,
       tournamentId: 't-elo-integration',
       tournamentStatus: 'published',
       homeInscriptionId: String(HOME_INSC_ID),
@@ -170,7 +174,7 @@ describe('ELO process-match (integración)', () => {
       awayScore: 1,
     };
 
-    const first = await httpReq('POST', '/internal/elo/process-match', payload, authHeader(serviceToken()));
+    const first = await httpReq('PUT', `/matches/${MATCH_ID}/elo`, payload, authHeader(serviceToken()));
     assert.equal(first.status, 200);
     assert.equal(first.body.processed, true);
 
@@ -178,7 +182,7 @@ describe('ELO process-match (integración)', () => {
     const homeElo = Number(afterFirst.rows[0].elo);
     assert.ok(homeElo > 1200, `home elo esperado > 1200, obtuvo ${homeElo}`);
 
-    const second = await httpReq('POST', '/internal/elo/process-match', payload, authHeader(serviceToken()));
+    const second = await httpReq('PUT', `/matches/${MATCH_ID}/elo`, payload, authHeader(serviceToken()));
     assert.equal(second.status, 200);
     assert.equal(second.body.processed, true);
 
@@ -196,10 +200,9 @@ describe('ELO process-match (integración)', () => {
     const eloBefore = Number(before.rows[0].elo);
 
     const res = await httpReq(
-      'POST',
-      '/internal/elo/process-match',
+      'PUT',
+      `/matches/${MATCH_ID}/elo`,
       {
-        matchId: MATCH_ID,
         tournamentId: 't-elo-integration',
         tournamentStatus: 'published',
         homeInscriptionId: String(HOME_INSC_ID),

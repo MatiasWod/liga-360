@@ -64,20 +64,25 @@ describe('teams-svc HTTP (sin DB)', () => {
     assert.equal(r.status, 401);
   });
 
+  test('POST /participants sin token → 401', async () => {
+    const r = await req('POST', '/participants', { firstName: 'Juan', lastName: 'Pérez' });
+    assert.equal(r.status, 401);
+  });
+
   test('POST /participants sin firstName → 400 VALIDATION_ERROR', async () => {
-    const r = await req('POST', '/participants', { lastName: 'Pérez' });
+    const r = await req('POST', '/participants', { lastName: 'Pérez' }, bearer({ sub: 1, type: 'team', isVerified: true }));
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 
   test('POST /participants con DNI inválido → 400', async () => {
-    const r = await req('POST', '/participants', { firstName: 'Juan', lastName: 'Pérez', dni: '123' });
+    const r = await req('POST', '/participants', { firstName: 'Juan', lastName: 'Pérez', dni: '123' }, bearer({ sub: 1, type: 'team', isVerified: true }));
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 
   test('POST /teams/participants (alias nginx) sin firstName → 400 (no 404)', async () => {
-    const r = await req('POST', '/teams/participants', { lastName: 'X' });
+    const r = await req('POST', '/teams/participants', { lastName: 'X' }, bearer({ sub: 1, type: 'team', isVerified: true }));
     assert.equal(r.status, 400);
   });
 
@@ -96,28 +101,28 @@ describe('teams-svc HTTP (sin DB)', () => {
     assert.equal(r.status, 401);
   });
 
-  test('POST /internal/elo/process-match sin token → 401', async () => {
-    const r = await req('POST', '/internal/elo/process-match', { matchId: 'm-1', tournamentId: 't-1' });
+  test('PUT /matches/:matchId/elo sin token → 401', async () => {
+    const r = await req('PUT', '/matches/m-1/elo', { tournamentId: 't-1' });
     assert.equal(r.status, 401);
     assert.equal(r.body.error.code, 'UNAUTHORIZED');
   });
 
-  test('POST /internal/elo/process-match con token organizer → 403', async () => {
+  test('PUT /matches/:matchId/elo con token organizer → 403', async () => {
     const r = await req(
-      'POST',
-      '/internal/elo/process-match',
-      { matchId: 'm-1', tournamentId: 't-1' },
+      'PUT',
+      '/matches/m-1/elo',
+      { tournamentId: 't-1' },
       bearer({ sub: 1, type: 'organizer' })
     );
     assert.equal(r.status, 403);
     assert.equal(r.body.error.code, 'FORBIDDEN');
   });
 
-  test('POST /internal/elo/process-match sin matchId → 400', async () => {
+  test('PUT /matches/:matchId/elo sin tournamentId → 400', async () => {
     const r = await req(
-      'POST',
-      '/internal/elo/process-match',
-      { tournamentId: 't-1' },
+      'PUT',
+      '/matches/m-1/elo',
+      {},
       bearer({ type: 'service', iss: 'test' })
     );
     assert.equal(r.status, 400);

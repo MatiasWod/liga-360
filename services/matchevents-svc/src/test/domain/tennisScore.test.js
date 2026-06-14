@@ -1,43 +1,37 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  computeSetsWon,
-  normalizeTennisSetsInput,
-  validateTennisScorePayload,
-} from '../../domain/tennisScore.js';
+import { validateTennisSetExtra } from '../../domain/tennisScore.js';
 
-describe('tennisScore domain', () => {
-  test('ignora filas vacías y calcula sets ganados', () => {
-    const normalized = normalizeTennisSetsInput([
-      { setNumber: 1, homeGames: 6, awayGames: 4 },
-      { setNumber: 2, homeGames: '', awayGames: '' },
-      { setNumber: 3, homeGames: 7, awayGames: 5 },
-    ]);
-    assert.equal(normalized.ok, true);
-    assert.equal(normalized.sets.length, 2);
-    assert.deepEqual(computeSetsWon(normalized.sets), { home: 2, away: 0 });
+describe('tennisScore domain (validación de un set vía /events)', () => {
+  test('acepta un set válido y normaliza', () => {
+    const r = validateTennisSetExtra({ setNumber: 1, homeGames: 6, awayGames: 4 });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.value, { setNumber: 1, homeGames: 6, awayGames: 4 });
   });
 
   test('rechaza games iguales en un set', () => {
-    const normalized = normalizeTennisSetsInput([{ setNumber: 1, homeGames: 6, awayGames: 6 }]);
-    assert.equal(normalized.ok, false);
-    assert.match(normalized.error, /empatado/);
+    const r = validateTennisSetExtra({ setNumber: 1, homeGames: 6, awayGames: 6 });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /empatado/);
   });
 
-  test('rechaza fila parcialmente completada', () => {
-    const normalized = normalizeTennisSetsInput([{ setNumber: 1, homeGames: 6, awayGames: '' }]);
-    assert.equal(normalized.ok, false);
+  test('rechaza set parcialmente completado', () => {
+    const r = validateTennisSetExtra({ setNumber: 1, homeGames: 6, awayGames: '' });
+    assert.equal(r.ok, false);
   });
 
-  test('rechaza finalizar sin sets', () => {
-    const validated = validateTennisScorePayload({ status: 'completed', sets: [] });
-    assert.equal(validated.ok, false);
-    assert.match(validated.error, /al menos un set/);
+  test('rechaza setNumber fuera de rango', () => {
+    assert.equal(validateTennisSetExtra({ setNumber: 0, homeGames: 6, awayGames: 4 }).ok, false);
+    assert.equal(validateTennisSetExtra({ setNumber: 4, homeGames: 6, awayGames: 4 }).ok, false);
   });
 
-  test('acepta status live sin sets', () => {
-    const validated = validateTennisScorePayload({ status: 'live', sets: [] });
-    assert.equal(validated.ok, true);
-    assert.deepEqual(validated.setsWon, { home: 0, away: 0 });
+  test('rechaza games negativos o no enteros', () => {
+    assert.equal(validateTennisSetExtra({ setNumber: 1, homeGames: -1, awayGames: 4 }).ok, false);
+    assert.equal(validateTennisSetExtra({ setNumber: 1, homeGames: 6.5, awayGames: 4 }).ok, false);
+  });
+
+  test('rechaza extra_json ausente', () => {
+    assert.equal(validateTennisSetExtra(undefined).ok, false);
+    assert.equal(validateTennisSetExtra(null).ok, false);
   });
 });

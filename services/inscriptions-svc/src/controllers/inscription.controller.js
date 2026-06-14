@@ -106,22 +106,45 @@ export async function associate(req, res, next) {
   }
 }
 
-export async function listByTournament(req, res, next) {
+/**
+ * GET /inscriptions — colección con filtros por query param (REST: la colección es del
+ * servicio; nada de sub-recursos bajo prefijos ajenos como /tournaments o /teams).
+ * - ?ids=1,2                          → lookup público por ids (frontend compone mano a mano)
+ * - ?teamId=N                         → historial cross-torneo de un equipo (público)
+ * - ?tournamentId=X[&competitionId=Y] → listado por torneo (requiere token)
+ * - ?competitionId=Y                  → listado por competencia (requiere token)
+ */
+export async function list(req, res, next) {
   try {
-    const tournamentId = String(req.params.id || '').trim();
+    const idsRaw = String(req.query?.ids || '').trim();
+    const teamIdRaw = req.query?.teamId;
+    const tournamentId = String(req.query?.tournamentId || '').trim();
     const competitionId = String(req.query?.competitionId || '').trim();
-    if (!tournamentId) return validationError(res, [{ field: 'id', message: 'tournamentId requerido' }]);
-    res.json(await inscriptionService.listByTournament({ tournamentId, competitionId }));
-  } catch (e) {
-    next(e);
-  }
-}
 
-export async function listByCompetition(req, res, next) {
-  try {
-    const competitionId = String(req.params.id || '').trim();
-    if (!competitionId) return validationError(res, [{ field: 'id', message: 'competitionId requerido' }]);
-    res.json(await inscriptionService.listByCompetition({ competitionId }));
+    if (idsRaw) {
+      const ids = idsRaw.split(',').map((s) => Number(s.trim())).filter((n) => n > 0);
+      return res.json(await inscriptionService.lookupByIds({ ids }));
+    }
+
+    if (teamIdRaw != null && teamIdRaw !== '') {
+      const teamId = Number(teamIdRaw);
+      if (!teamId) return validationError(res, [{ field: 'teamId', message: 'teamId invalido' }]);
+      return res.json(await inscriptionService.listByTeam({ teamId }));
+    }
+
+    if (tournamentId || competitionId) {
+      if (!req.user) {
+        return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
+      }
+      if (tournamentId) {
+        return res.json(await inscriptionService.listByTournament({ tournamentId, competitionId }));
+      }
+      return res.json(await inscriptionService.listByCompetition({ competitionId }));
+    }
+
+    return validationError(res, [
+      { field: 'query', message: 'filtro requerido: ids, teamId, tournamentId o competitionId' },
+    ]);
   } catch (e) {
     next(e);
   }
@@ -138,24 +161,3 @@ export async function getById(req, res, next) {
   }
 }
 
-/** Historial cross-torneo de un equipo (público). */
-export async function listByTeam(req, res, next) {
-  try {
-    const teamId = Number(req.params.teamId);
-    if (!teamId) return validationError(res, [{ field: 'teamId', message: 'teamId invalido' }]);
-    res.json(await inscriptionService.listByTeam({ teamId }));
-  } catch (e) {
-    next(e);
-  }
-}
-
-/** Lookup público por ids (frontend compone mano a mano). */
-export async function lookupByIds(req, res, next) {
-  try {
-    const raw = String(req.query?.ids || '').trim();
-    const ids = raw ? raw.split(',').map((s) => Number(s.trim())).filter((n) => n > 0) : [];
-    res.json(await inscriptionService.lookupByIds({ ids }));
-  } catch (e) {
-    next(e);
-  }
-}

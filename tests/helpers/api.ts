@@ -242,7 +242,7 @@ export async function listTournamentInscriptions(
   session: Session,
   tournamentId: string
 ) {
-  const response = await request.get(`${INSCRIPTIONS_BASE}/tournaments/${encodeURIComponent(tournamentId)}/inscriptions`, {
+  const response = await request.get(`${INSCRIPTIONS_BASE}/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}`, {
     headers: {
       Authorization: `Bearer ${session.token}`,
     },

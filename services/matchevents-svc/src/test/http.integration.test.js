@@ -99,7 +99,7 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
   test('GET stats/scorers agrega por playerKey incluyendo legacy', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/${TID}/stats/scorers`);
+      const r = await req('GET', `/stats/scorers?tournamentId=${TID}`);
       assert.equal(r.status, 200);
       const juan = r.body.find((s) => s.playerKey === 'member:100');
       assert.equal(juan.goals, 2);
@@ -119,17 +119,17 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
   test('GET stats/scorers filtra por competitionId (excluye legacy NULL)', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/${TID}/stats/scorers?competitionId=${CID}`);
+      const r = await req('GET', `/stats/scorers?tournamentId=${TID}&competitionId=${CID}`);
       assert.equal(r.status, 200);
       assert.equal(r.body.some((s) => s.displayName === 'Sin Atribuir'), false);
       assert.equal(r.body.find((s) => s.playerKey === 'member:100').goals, 2);
     })();
   });
 
-  test('GET /tournaments/stats/scorers agrega goles cross-torneo', (t) => {
+  test('GET /stats/scorers?tournamentIds= agrega goles cross-torneo', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/stats/scorers?tournamentIds=${TID},${TID2}`);
+      const r = await req('GET', `/stats/scorers?tournamentIds=${TID},${TID2}`);
       assert.equal(r.status, 200);
       const juan = r.body.find((s) => s.playerKey === 'member:100');
       assert.equal(juan.goals, 3);
@@ -139,7 +139,7 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
   test('GET stats/cards suma amarillas, rojas y fechas de suspensión', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/${TID}/stats/cards`);
+      const r = await req('GET', `/stats/cards?tournamentId=${TID}`);
       assert.equal(r.status, 200);
       const juan = r.body.find((s) => s.playerKey === 'member:100');
       assert.equal(juan.yellowCards, 1);
@@ -153,7 +153,7 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
   test('GET stats/teams agrega por inscripción (sin legacy NULL)', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/${TID}/stats/teams`);
+      const r = await req('GET', `/stats/teams?tournamentId=${TID}`);
       assert.equal(r.status, 200);
       const team10 = r.body.find((s) => s.inscriptionId === 10);
       assert.equal(team10.goals, 2);
@@ -165,10 +165,10 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
     })();
   });
 
-  test('GET /tournaments/:id/events?inscriptionId= devuelve eventos del equipo', (t) => {
+  test('GET /stats?tournamentId=&inscriptionId= devuelve eventos del equipo', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', `/tournaments/${TID}/events?inscriptionId=10`);
+      const r = await req('GET', `/stats?tournamentId=${TID}&inscriptionId=10`);
       assert.equal(r.status, 200);
       assert.equal(r.body.length, 4);
       assert.equal(r.body.every((e) => e.inscription_id === 10), true);
@@ -189,10 +189,10 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
     })();
   });
 
-  test('GET /participants/:memberId/stats devuelve totales y desglose por torneo', (t) => {
+  test('GET /stats/participants/:memberId devuelve totales y desglose por torneo', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     return (async () => {
-      const r = await req('GET', '/participants/100/stats');
+      const r = await req('GET', '/stats/participants/100', null, { Authorization: `Bearer ${organizerToken}` });
       assert.equal(r.status, 200);
       assert.equal(r.body.memberId, 100);
       assert.equal(r.body.totals.goals >= 2, true);
@@ -265,21 +265,30 @@ describe('matchevents-svc HTTP (integración con DB)', () => {
     })();
   });
 
-  test('GET events incluye tennis_set con extra_json (lectura pública)', (t) => {
+  test('POST /events tennis_set crea el set y GET lo devuelve con extra_json', (t) => {
     if (!dbAvailable) return t.skip('sin DB');
     const MATCH_T = `m-itest-tennis-${Date.now()}`;
     return (async () => {
-      await pool.query(
-        `INSERT INTO "MatchEvent"(match_id, tournament_id, competition_id, event_type, display_name, extra_json)
-         VALUES ($1, $2, $3, 'tennis_set', 'Set 1', $4::jsonb)`,
-        [MATCH_T, TID, CID, JSON.stringify({ setNumber: 1, homeGames: 6, awayGames: 4 })]
+      const created = await req(
+        'POST',
+        `/matches/${MATCH_T}/events`,
+        { event_type: 'tennis_set', tournament_id: TID, competition_id: CID, extra_json: { setNumber: 1, homeGames: 6, awayGames: 4 } },
+        { Authorization: `Bearer ${organizerToken}` }
       );
+      assert.equal(created.status, 201);
+      assert.equal(created.body.event_type, 'tennis_set');
+      assert.equal(created.body.display_name, 'Set 1');
+
       const r = await req('GET', `/matches/${MATCH_T}/events`);
       assert.equal(r.status, 200);
       const setEv = r.body.find((e) => e.event_type === 'tennis_set');
       assert.ok(setEv);
       assert.equal(setEv.extra_json.homeGames, 6);
       assert.equal(setEv.extra_json.awayGames, 4);
+
+      // DELETE vía /events/:eventId (mismo CRUD genérico)
+      const del = await req('DELETE', `/matches/${MATCH_T}/events/${setEv.id}`, null, { Authorization: `Bearer ${organizerToken}` });
+      assert.equal(del.status, 200);
       await pool.query('DELETE FROM "MatchEvent" WHERE match_id = $1', [MATCH_T]);
     })();
   });

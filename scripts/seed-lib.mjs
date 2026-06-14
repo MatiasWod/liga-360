@@ -309,7 +309,7 @@ export async function markTournamentPublished(token, tournamentId, tournamentMet
 }
 
 export async function listTournamentInscriptions(token, tournamentId) {
-  const data = await httpJson(`${INSCRIPTIONS_URL}/tournaments/${tournamentId}/inscriptions`, {
+  const data = await httpJson(`${INSCRIPTIONS_URL}/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data.inscriptions || [];

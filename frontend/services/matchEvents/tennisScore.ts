@@ -1,5 +1,3 @@
-import { API_ENDPOINTS } from '../config';
-import { authHeaders } from '../http';
 import type { MatchEvent } from './types';
 
 export type TennisSetInput = {
@@ -12,19 +10,6 @@ export type TennisSetDetail = {
   setNumber: number;
   homeGames: number;
   awayGames: number;
-};
-
-export type SaveTennisScorePayload = {
-  tournament_id: string;
-  competition_id?: string | null;
-  status: string;
-  sets: TennisSetInput[];
-};
-
-export type SaveTennisScoreResponse = {
-  setsWon: { home: number; away: number };
-  match: { id: string; homeScore: number | null; awayScore: number | null; status: string };
-  events: MatchEvent[];
 };
 
 export const EMPTY_TENNIS_SET_ROWS: TennisSetInput[] = [
@@ -68,24 +53,42 @@ export function formatTennisSetLine(set: TennisSetDetail): string {
   return `Set ${set.setNumber}: ${set.homeGames}–${set.awayGames}`;
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
-  const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error((json as { error?: { message?: string } })?.error?.message || `HTTP ${res.status}`);
-  }
-  return json as T;
+/** Filas con ambos games cargados (las que se persisten como eventos tennis_set). */
+export function filledTennisSets(sets: TennisSetInput[]): TennisSetDetail[] {
+  return sets
+    .filter((s) => s.homeGames !== '' && s.awayGames !== '')
+    .map((s) => ({ setNumber: s.setNumber, homeGames: Number(s.homeGames), awayGames: Number(s.awayGames) }));
 }
 
-const base = () => API_ENDPOINTS.matchEvents;
+/**
+ * Valida las filas del formulario antes de persistir. Devuelve el mensaje de error o null.
+ * Reglas: no se permite un set a medias (un solo lado cargado), games enteros no negativos
+ * y un set no puede terminar empatado.
+ */
+export function validateTennisSets(sets: TennisSetInput[]): string | null {
+  for (const s of sets) {
+    const homeEmpty = s.homeGames === '';
+    const awayEmpty = s.awayGames === '';
+    if (homeEmpty !== awayEmpty) return `Completá ambos games del set ${s.setNumber}`;
+    if (!homeEmpty && !awayEmpty) {
+      const h = Number(s.homeGames);
+      const a = Number(s.awayGames);
+      if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) {
+        return `Games inválidos en el set ${s.setNumber}`;
+      }
+      if (h === a) return `El set ${s.setNumber} no puede terminar empatado`;
+    }
+  }
+  return null;
+}
 
-export async function saveTennisScore(
-  matchId: string,
-  payload: SaveTennisScorePayload
-): Promise<SaveTennisScoreResponse> {
-  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/tennis-score`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
-  return handleResponse<SaveTennisScoreResponse>(res);
+/** Sets ganados por cada lado (el marcador del partido en tenis = sets ganados). */
+export function computeSetsWon(sets: TennisSetInput[]): { home: number; away: number } {
+  let home = 0;
+  let away = 0;
+  for (const s of filledTennisSets(sets)) {
+    if (s.homeGames > s.awayGames) home += 1;
+    else if (s.awayGames > s.homeGames) away += 1;
+  }
+  return { home, away };
 }

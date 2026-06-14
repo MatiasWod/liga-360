@@ -4,6 +4,14 @@ definitions:
   services:
     docker:
       memory: 3072
+    # Postgres real para las suites de integración (DB-per-service). Crea liga360_auth;
+    # las otras 3 DBs y las migraciones se aplican en el step de tests.
+    postgres:
+      image: postgres:16-alpine
+      variables:
+        POSTGRES_DB: liga360_auth
+        POSTGRES_USER: liga
+        POSTGRES_PASSWORD: liga
 
   caches:
     npm: .npm
@@ -82,17 +90,35 @@ definitions:
           - self.hosted
         name: Unit + Integration Tests
         image: node:20-alpine
+        services:
+          - postgres
         caches:
           - npm
         script:
-          # Las suites unit/integration no requieren Postgres (los servicios SQL aíslan el acceso
-          # a datos en repos y se testean sin DB). Las migraciones por servicio viven en
-          # database/migrations-{auth,teams,inscriptions} y corren en deploy (Jobs db-migrate-*).
           # NOTA: npm ci en la raíz ya instala todos los workspaces (packages/*, services/*),
           # incluyendo @liga360/shared. No usar npm install --prefix porque rompe la resolución
           # de workspaces locales e intenta buscar @liga360/shared en el registry.
+          # database/ NO es workspace → su npm ci es aparte (trae node-pg-migrate).
+          - apk add --no-cache postgresql-client
           - npm ci --cache .npm --prefer-offline
-          - npm run test:ci
+          - npm ci --cache .npm --prefer-offline --prefix database
+          # Unit (frontend + servicios sin DB): feedback rápido antes de tocar Postgres.
+          - npm run test:unit
+          # Postgres real para integración. El servicio crea liga360_auth; el resto acá.
+          - until pg_isready -h 127.0.0.1 -U liga; do echo "esperando postgres..."; sleep 1; done
+          - export PGPASSWORD=liga
+          - for db in liga360_teams liga360_inscriptions liga360_matchevents; do psql -h 127.0.0.1 -U liga -d postgres -c "CREATE DATABASE $db"; done
+          - DATABASE_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_auth npm run migrate:auth --prefix database
+          - DATABASE_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_teams npm run migrate:teams --prefix database
+          - DATABASE_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_inscriptions npm run migrate:inscriptions --prefix database
+          - DATABASE_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_matchevents npm run migrate:matchevents --prefix database
+          # Integración: cada servicio apunta a SU base (POSTGRES_URL explícito; el default varía).
+          # tournaments-svc es GraphQL/Neo4j: su integración no usa Postgres.
+          - POSTGRES_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_auth npm test --prefix services/auth-svc
+          - POSTGRES_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_teams npm test --prefix services/teams-svc
+          - POSTGRES_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_inscriptions npm test --prefix services/inscriptions-svc
+          - POSTGRES_URL=postgresql://liga:liga@127.0.0.1:5432/liga360_matchevents npm test --prefix services/matchevents-svc
+          - npm test --prefix services/tournaments-svc
 
     - step: &docker-build-push
         runs-on:

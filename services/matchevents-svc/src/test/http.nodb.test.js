@@ -53,13 +53,19 @@ describe('matchevents-svc HTTP (sin DB)', () => {
     assert.notEqual(r.status, 401);
   });
 
-  test('GET /tournaments/:id/stats/scorers sin token es público (no 401)', async () => {
-    const r = await req('GET', '/tournaments/t1/stats/scorers');
+  test('GET /stats/scorers?tournamentId= sin token es público (no 401)', async () => {
+    const r = await req('GET', '/stats/scorers?tournamentId=t1');
     assert.notEqual(r.status, 401);
   });
 
-  test('GET /tournaments/:id/events sin inscriptionId → 400', async () => {
-    const r = await req('GET', '/tournaments/t1/events');
+  test('GET /stats/scorers sin tournamentId(s) → 400', async () => {
+    const r = await req('GET', '/stats/scorers');
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'VALIDATION_ERROR');
+  });
+
+  test('GET /stats sin inscriptionId → 400', async () => {
+    const r = await req('GET', '/stats?tournamentId=t1');
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
@@ -90,7 +96,7 @@ describe('matchevents-svc HTTP (sin DB)', () => {
   });
 
   test('PUT presences con entries inválidas → 400', async () => {
-    const teamToken = jwt.sign({ sub: 42, type: 'team' }, 'devsecret');
+    const teamToken = jwt.sign({ sub: 42, type: 'team', isVerified: true }, 'devsecret');
     const r = await req(
       'PUT',
       '/matches/m1/presences',
@@ -101,7 +107,7 @@ describe('matchevents-svc HTTP (sin DB)', () => {
   });
 
   test('PUT presences con team y servicios caídos → 503 (nunca permite por degradación)', async () => {
-    const teamToken = jwt.sign({ sub: 42, type: 'team' }, 'devsecret');
+    const teamToken = jwt.sign({ sub: 42, type: 'team', isVerified: true }, 'devsecret');
     const r = await req(
       'PUT',
       '/matches/m1/presences',
@@ -138,33 +144,32 @@ describe('matchevents-svc HTTP (sin DB)', () => {
     assert.equal(r.status, 400);
   });
 
-  test('PUT /tennis-score sin token → 401', async () => {
-    const r = await req('PUT', '/matches/m1/tennis-score', { tournament_id: 't1', status: 'completed', sets: [] });
+  test('POST /events tennis_set sin token → 401', async () => {
+    const r = await req('POST', '/matches/m1/events', {
+      event_type: 'tennis_set', tournament_id: 't1', extra_json: { setNumber: 1, homeGames: 6, awayGames: 4 },
+    });
     assert.equal(r.status, 401);
   });
 
-  test('PUT /tennis-score con sets empatados → 400', async () => {
+  test('POST /events tennis_set con games empatados → 400', async () => {
     const r = await req(
-      'PUT',
-      '/matches/m1/tennis-score',
-      {
-        tournament_id: 't1',
-        status: 'completed',
-        sets: [{ setNumber: 1, homeGames: 6, awayGames: 6 }],
-      },
+      'POST',
+      '/matches/m1/events',
+      { event_type: 'tennis_set', tournament_id: 't1', extra_json: { setNumber: 1, homeGames: 6, awayGames: 6 } },
       { Authorization: `Bearer ${organizerToken}` }
     );
     assert.equal(r.status, 400);
     assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 
-  test('PUT /tennis-score sin tournament_id → 400', async () => {
+  test('POST /events tennis_set sin extra_json → 400 (no exige jugador/inscripción)', async () => {
     const r = await req(
-      'PUT',
-      '/matches/m1/tennis-score',
-      { status: 'completed', sets: [{ setNumber: 1, homeGames: 6, awayGames: 4 }] },
+      'POST',
+      '/matches/m1/events',
+      { event_type: 'tennis_set', tournament_id: 't1' },
       { Authorization: `Bearer ${organizerToken}` }
     );
     assert.equal(r.status, 400);
+    assert.equal(r.body.error.code, 'VALIDATION_ERROR');
   });
 });

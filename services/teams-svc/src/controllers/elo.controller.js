@@ -6,7 +6,7 @@ function validationError(res, details) {
 
 export async function processMatch(req, res, next) {
   try {
-    const matchId = String(req.body?.matchId || '').trim();
+    const matchId = String(req.params.matchId || '').trim();
     const tournamentId = String(req.body?.tournamentId || '').trim();
     const tournamentStatus = String(req.body?.tournamentStatus || '').trim();
     const homeInscriptionId = String(req.body?.homeInscriptionId || '').trim();

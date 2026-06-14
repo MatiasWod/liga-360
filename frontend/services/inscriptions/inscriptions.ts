@@ -2,7 +2,7 @@ import { authHeaders, INSCRIPTIONS_BASE, parseResponse, TEAMS_BASE } from './cli
 import type { InscriptionItem, TeamOption } from './types';
 
 export async function listTournamentInscriptions(tournamentId: string): Promise<InscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/tournaments/${encodeURIComponent(tournamentId)}/inscriptions`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?tournamentId=${encodeURIComponent(tournamentId)}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones');
@@ -10,7 +10,7 @@ export async function listTournamentInscriptions(tournamentId: string): Promise<
 }
 
 export async function listCompetitionInscriptions(competitionId: string): Promise<InscriptionItem[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/competitions/${encodeURIComponent(competitionId)}/inscriptions`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/inscriptions?competitionId=${encodeURIComponent(competitionId)}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar las inscripciones de la competicion');

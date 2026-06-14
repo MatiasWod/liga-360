@@ -5,10 +5,20 @@ function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
 }
 
+/**
+ * GET /stats/scorers — un solo recurso con filtros:
+ * ?tournamentId=X[&competitionId][&limit] (por torneo) o ?tournamentIds=t1,t2[&limit] (cross-torneo).
+ */
 export async function scorers(req, res, next) {
   try {
-    const { tournamentId } = req.params;
-    if (!tournamentId) return validationError(res, 'tournamentId requerido');
+    const multiRaw = String(req.query?.tournamentIds || '').trim();
+    if (multiRaw) {
+      const tournamentIds = multiRaw.split(',').map((s) => s.trim()).filter(Boolean);
+      const { limit } = req.query;
+      return res.json(await statsService.getScorersMulti({ tournamentIds, limit }));
+    }
+    const tournamentId = String(req.query?.tournamentId || '').trim();
+    if (!tournamentId) return validationError(res, 'tournamentId o tournamentIds requerido');
     const { competitionId, limit } = req.query;
     res.json(await statsService.getScorers({ tournamentId, competitionId: competitionId || null, limit }));
   } catch (e) {
@@ -16,22 +26,9 @@ export async function scorers(req, res, next) {
   }
 }
 
-/** Goleadores agregados cross-torneo: ?tournamentIds=t1,t2&limit=50 */
-export async function scorersMulti(req, res, next) {
-  try {
-    const raw = String(req.query?.tournamentIds || '').trim();
-    const tournamentIds = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
-    if (!tournamentIds.length) return validationError(res, 'tournamentIds requerido');
-    const { limit } = req.query;
-    res.json(await statsService.getScorersMulti({ tournamentIds, limit }));
-  } catch (e) {
-    next(e);
-  }
-}
-
 export async function cards(req, res, next) {
   try {
-    const { tournamentId } = req.params;
+    const tournamentId = String(req.query?.tournamentId || '').trim();
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     const { competitionId } = req.query;
     res.json(await statsService.getCards({ tournamentId, competitionId: competitionId || null }));
@@ -42,7 +39,7 @@ export async function cards(req, res, next) {
 
 export async function teams(req, res, next) {
   try {
-    const { tournamentId } = req.params;
+    const tournamentId = String(req.query?.tournamentId || '').trim();
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     const { competitionId } = req.query;
     res.json(await statsService.getTeamStats({ tournamentId, competitionId: competitionId || null }));
@@ -65,7 +62,7 @@ export async function participantStats(req, res, next) {
 
 export async function eventsByInscription(req, res, next) {
   try {
-    const { tournamentId } = req.params;
+    const tournamentId = String(req.query?.tournamentId || '').trim();
     const { inscriptionId } = req.query;
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     if (!inscriptionId) return validationError(res, 'inscriptionId requerido');

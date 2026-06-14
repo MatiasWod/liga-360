@@ -18,7 +18,7 @@
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:integration": "npm run test --prefix services/inscriptions-svc && npm run test --prefix services/tournaments-svc",
+    "test:integration": "npm run test --prefix services/auth-svc && npm run test --prefix services/teams-svc && npm run test --prefix services/inscriptions-svc && npm run test --prefix services/matchevents-svc && npm run test --prefix services/tournaments-svc",
     "setup:e2e": "npx playwright install chromium",
     "start": "node index.js",
     "test:e2e": "playwright test --project=critical",
