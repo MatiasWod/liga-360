@@ -1,11 +1,14 @@
 import React from 'react';
 import {
+  computeSetsWon,
   EMPTY_TENNIS_SET_ROWS,
-  saveTennisScore,
+  filledTennisSets,
   tennisSetsToFormRows,
+  validateTennisSets,
   type TennisSetInput,
 } from '../../services/matchEvents/tennisScore';
-import { listMatchEvents } from '../../services/matchEvents/matchEvents';
+import { createMatchEvent, deleteMatchEvent, listMatchEvents } from '../../services/matchEvents/matchEvents';
+import { updateMatchResult } from '../../services/tournaments/matchResult';
 import type { SportScoreLabels } from '../../modules/tournaments-list/sportScoreLabels';
 
 const MATCH_STATUS_OPTIONS = [
@@ -85,21 +88,39 @@ export const TennisScoreForm: React.FC<TennisScoreFormProps> = ({
   }
 
   async function handleSave() {
+    const validationMessage = validateTennisSets(sets);
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
     setSaving(true);
     setError('');
     setSuccess(false);
     try {
+      const filled = filledTennisSets(sets);
       const effectiveStatus =
-        status === 'scheduled' &&
-        sets.some((row) => row.homeGames !== '' && row.awayGames !== '')
-          ? 'completed'
-          : status;
-      await saveTennisScore(matchId, {
-        tournament_id: tournamentId,
-        competition_id: competitionId ?? null,
-        status: effectiveStatus,
-        sets,
-      });
+        status === 'scheduled' && filled.length > 0 ? 'completed' : status;
+
+      // Los sets son eventos del partido: se reemplazan vía el CRUD genérico /events.
+      // (Borrar + recrear: el form representa el set completo del partido.)
+      const existing = (await listMatchEvents(matchId)).filter((e) => e.event_type === 'tennis_set');
+      for (const ev of existing) {
+        await deleteMatchEvent(matchId, ev.id);
+      }
+      for (const set of filled) {
+        await createMatchEvent(matchId, {
+          event_type: 'tennis_set',
+          tournament_id: tournamentId,
+          competition_id: competitionId ?? null,
+          display_name: `Set ${set.setNumber}`,
+          extra_json: { setNumber: set.setNumber, homeGames: set.homeGames, awayGames: set.awayGames },
+        });
+      }
+
+      // El marcador del partido en tenis = sets ganados; se persiste en tournaments-svc.
+      const setsWon = computeSetsWon(sets);
+      await updateMatchResult(matchId, setsWon.home, setsWon.away, effectiveStatus);
+
       setSuccess(true);
       await onSaved?.();
     } catch (e) {

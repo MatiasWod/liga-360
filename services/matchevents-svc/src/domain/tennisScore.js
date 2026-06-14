@@ -1,4 +1,4 @@
-/** Validaci�n de un set de tenis individual (event_type='tennis_set' v�a /events). L�gica pura. */
+/** Validacion de un set de tenis individual (event_type='tennis_set' via /events). Logica pura. */
 
 export const TENNIS_SET_EVENT_TYPE = 'tennis_set';
 export const MAX_TENNIS_SET_ROWS = 3;
@@ -20,7 +20,7 @@ export function validateTennisSetExtra(extra) {
   const awayGames = parseNonNegativeInt(extra?.awayGames);
 
   if (!Number.isInteger(setNumber) || setNumber < 1 || setNumber > MAX_TENNIS_SET_ROWS) {
-    return { ok: false, error: `setNumber inv�lido (1-${MAX_TENNIS_SET_ROWS})` };
+    return { ok: false, error: `setNumber invalido (1-${MAX_TENNIS_SET_ROWS})` };
   }
   if (homeGames === null || awayGames === null) {
     return { ok: false, error: 'homeGames y awayGames son requeridos' };
