@@ -186,42 +186,47 @@ const LIST_COLS = `i.id, i.tournament_id, i.competition_id, i.competitor_kind, i
   i.linked_team_id, i.linked_participant_user_id, i.status, i.source, i.weight, i.tournament_rating,
   i.created_by_user_id, i.reviewed_by_user_id, i.created_at, i.updated_at`;
 
-export async function listByTournament(client, tournamentId, competitionId = null) {
+// ORDER BY created_at DESC con desempate por id para que el paginado por offset sea estable.
+export async function listByTournament(client, tournamentId, competitionId = null, { limit = 200, offset = 0 } = {}) {
   if (competitionId) {
     const r = await client.query(
       `SELECT ${LIST_COLS} FROM "Inscription" i
        WHERE i.tournament_id = $1 AND i.competition_id = $2
-       ORDER BY i.created_at DESC`,
-      [tournamentId, competitionId]
+       ORDER BY i.created_at DESC, i.id DESC
+       LIMIT $3 OFFSET $4`,
+      [tournamentId, competitionId, limit, offset]
     );
     return r.rows;
   }
   const r = await client.query(
     `SELECT ${LIST_COLS} FROM "Inscription" i
      WHERE i.tournament_id = $1
-     ORDER BY i.created_at DESC`,
-    [tournamentId]
+     ORDER BY i.created_at DESC, i.id DESC
+     LIMIT $2 OFFSET $3`,
+    [tournamentId, limit, offset]
   );
   return r.rows;
 }
 
-export async function listByCompetition(client, competitionId) {
+export async function listByCompetition(client, competitionId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
     `SELECT ${LIST_COLS} FROM "Inscription" i
      WHERE i.competition_id = $1
-     ORDER BY i.created_at DESC`,
-    [competitionId]
+     ORDER BY i.created_at DESC, i.id DESC
+     LIMIT $2 OFFSET $3`,
+    [competitionId, limit, offset]
   );
   return r.rows;
 }
 
 /** Todas las inscripciones históricas de un equipo (incluye rechazadas). */
-export async function listByTeam(client, teamId) {
+export async function listByTeam(client, teamId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
     `SELECT ${LIST_COLS} FROM "Inscription" i
      WHERE i.linked_team_id = $1
-     ORDER BY i.created_at DESC`,
-    [Number(teamId)]
+     ORDER BY i.created_at DESC, i.id DESC
+     LIMIT $2 OFFSET $3`,
+    [Number(teamId), limit, offset]
   );
   return r.rows;
 }

@@ -23,18 +23,18 @@ export async function create(client, {
   return r.rows[0];
 }
 
-export async function listByCompetition(client, competitionId) {
+export async function listByCompetition(client, competitionId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
-    `SELECT ${COLS} FROM "Invite" WHERE competition_id = $1 ORDER BY created_at DESC`,
-    [competitionId]
+    `SELECT ${COLS} FROM "Invite" WHERE competition_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`,
+    [competitionId, limit, offset]
   );
   return r.rows;
 }
 
-export async function listByTournament(client, tournamentId) {
+export async function listByTournament(client, tournamentId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
-    `SELECT ${COLS} FROM "Invite" WHERE tournament_id = $1 ORDER BY created_at DESC`,
-    [tournamentId]
+    `SELECT ${COLS} FROM "Invite" WHERE tournament_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`,
+    [tournamentId, limit, offset]
   );
   return r.rows;
 }

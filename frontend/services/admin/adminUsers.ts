@@ -1,4 +1,5 @@
 import { AUTH_BASE, authHeaders, parseJsonResponse } from '../teams/client';
+import { appendPageParams, type PageOpts } from '../pagination';
 
 /** Usuario como lo expone auth-svc al admin (GET /users). Nunca incluye password. */
 export interface AdminUser {
@@ -10,8 +11,9 @@ export interface AdminUser {
   bannedAt: string | null;
 }
 
-export async function listUsers(): Promise<AdminUser[]> {
-  const res = await fetch(`${AUTH_BASE}/users`, { headers: authHeaders() });
+export async function listUsers(opts?: PageOpts): Promise<AdminUser[]> {
+  const qs = appendPageParams(new URLSearchParams(), opts).toString();
+  const res = await fetch(`${AUTH_BASE}/users${qs ? `?${qs}` : ''}`, { headers: authHeaders() });
   const json = await parseJsonResponse(res, 'No se pudieron cargar los usuarios');
   return json.users;
 }

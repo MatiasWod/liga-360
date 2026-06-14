@@ -291,13 +291,13 @@ async function hydrateInscriptionsWithTeams(rows) {
   });
 }
 
-export async function listByTournament({ tournamentId, competitionId }) {
-  const rows = await inscriptionRepo.listByTournament(pool, tournamentId, competitionId || null);
+export async function listByTournament({ tournamentId, competitionId, limit, offset }) {
+  const rows = await inscriptionRepo.listByTournament(pool, tournamentId, competitionId || null, { limit, offset });
   return { tournamentId, competitionId: competitionId || null, inscriptions: await hydrateInscriptionsWithTeams(rows) };
 }
 
-export async function listByCompetition({ competitionId }) {
-  const rows = await inscriptionRepo.listByCompetition(pool, competitionId);
+export async function listByCompetition({ competitionId, limit, offset }) {
+  const rows = await inscriptionRepo.listByCompetition(pool, competitionId, { limit, offset });
   return { competitionId, inscriptions: await hydrateInscriptionsWithTeams(rows) };
 }
 
@@ -309,10 +309,10 @@ export async function getById({ inscriptionId }) {
 }
 
 /** Historial cross-torneo de un equipo (público). Incluye rechazadas. */
-export async function listByTeam({ teamId }) {
+export async function listByTeam({ teamId, limit, offset }) {
   const tid = Number(teamId);
   if (!tid) throw badRequest('teamId invalido');
-  const rows = await inscriptionRepo.listByTeam(pool, tid);
+  const rows = await inscriptionRepo.listByTeam(pool, tid, { limit, offset });
   return { teamId: tid, inscriptions: rows };
 }
 

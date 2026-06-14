@@ -23,9 +23,10 @@ export async function findById(id) {
   return r.rows[0] || null;
 }
 
-export async function findAll() {
+export async function findAll({ limit, offset } = {}) {
   const r = await pool.query(
-      'SELECT id, username, email, type, "isVerified", banned_at FROM "Users" ORDER BY id'
+      'SELECT id, username, email, type, "isVerified", banned_at FROM "Users" ORDER BY id LIMIT $1 OFFSET $2',
+      [limit, offset]
   );
   return r.rows;
 }

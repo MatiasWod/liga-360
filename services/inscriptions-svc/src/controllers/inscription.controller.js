@@ -1,6 +1,7 @@
 import * as inscriptionService from '../services/inscription.service.js';
 import { normalizeCompetitionId } from '../domain/competition.js';
 import { validateCreateInscription } from '../schema/inscription.schema.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, details) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details } });
@@ -121,15 +122,18 @@ export async function list(req, res, next) {
     const tournamentId = String(req.query?.tournamentId || '').trim();
     const competitionId = String(req.query?.competitionId || '').trim();
 
+    // ?ids es un lookup keyed: devuelve exactamente los ids pedidos, sin paginar.
     if (idsRaw) {
       const ids = idsRaw.split(',').map((s) => Number(s.trim())).filter((n) => n > 0);
       return res.json(await inscriptionService.lookupByIds({ ids }));
     }
 
+    const { limit, offset } = parsePagination(req.query);
+
     if (teamIdRaw != null && teamIdRaw !== '') {
       const teamId = Number(teamIdRaw);
       if (!teamId) return validationError(res, [{ field: 'teamId', message: 'teamId invalido' }]);
-      return res.json(await inscriptionService.listByTeam({ teamId }));
+      return res.json(await inscriptionService.listByTeam({ teamId, limit, offset }));
     }
 
     if (tournamentId || competitionId) {
@@ -137,9 +141,9 @@ export async function list(req, res, next) {
         return next(Object.assign(new Error('token requerido'), { statusCode: 401, code: 'UNAUTHORIZED' }));
       }
       if (tournamentId) {
-        return res.json(await inscriptionService.listByTournament({ tournamentId, competitionId }));
+        return res.json(await inscriptionService.listByTournament({ tournamentId, competitionId, limit, offset }));
       }
-      return res.json(await inscriptionService.listByCompetition({ competitionId }));
+      return res.json(await inscriptionService.listByCompetition({ competitionId, limit, offset }));
     }
 
     return validationError(res, [

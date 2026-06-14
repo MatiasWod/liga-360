@@ -6,6 +6,7 @@ import { FilterDropdown } from '../../components/ui/FilterDropdown';
 import { SearchField } from '../../components/ui/SearchField';
 import { Table } from '../../components/ui/Table';
 import { banUser, listUsers, unbanUser, type AdminUser } from '../../services/admin/adminUsers';
+import { useInfiniteList } from '../../hooks/useInfiniteList';
 import {
   BAN_FILTER_OPTIONS,
   filterAdminUsers,
@@ -17,26 +18,22 @@ import {
 } from './adminUsersFilters';
 
 export const AdminUsersPage: React.FC = () => {
-  const [users, setUsers] = React.useState<AdminUser[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
+  const {
+    items: users,
+    loading,
+    loadingMore,
+    error: loadError,
+    hasMore,
+    sentinelRef,
+    setItems: setUsers,
+  } = useInfiniteList<AdminUser>((opts) => listUsers(opts));
+  const [actionError, setActionError] = React.useState('');
   const [query, setQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState<AdminUserTypeFilter>('all');
   const [banFilter, setBanFilter] = React.useState<AdminUserBanFilter>('all');
   // Id del usuario con acción de ban/unban en vuelo (deshabilita su botón).
   const [busyUserId, setBusyUserId] = React.useState<number | null>(null);
-
-  React.useEffect(() => {
-    (async () => {
-      try {
-        setUsers(await listUsers());
-      } catch (err: any) {
-        setError(err?.message || 'No se pudieron cargar los usuarios');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const error = actionError || loadError;
 
   const visibleUsers = React.useMemo(
     () => filterAdminUsers(users, query, typeFilter, banFilter),
@@ -49,12 +46,12 @@ export const AdminUsersPage: React.FC = () => {
       return;
     }
     setBusyUserId(user.id);
-    setError('');
+    setActionError('');
     try {
       const updated = banning ? await banUser(user.id) : await unbanUser(user.id);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
     } catch (err: any) {
-      setError(err?.message || 'No se pudo actualizar el usuario');
+      setActionError(err?.message || 'No se pudo actualizar el usuario');
     } finally {
       setBusyUserId(null);
     }
@@ -148,6 +145,15 @@ export const AdminUsersPage: React.FC = () => {
             })}
           </Table>
         )}
+
+        {/* Sentinela de scroll infinito: al entrar al viewport carga la próxima página. */}
+        <div ref={sentinelRef} aria-hidden="true" />
+        {loadingMore ? (
+          <p className="mt-3 text-center text-xs text-text-muted">Cargando más usuarios…</p>
+        ) : null}
+        {!loading && !hasMore && users.length > 0 ? (
+          <p className="mt-3 text-center text-xs text-text-subtle">No hay más usuarios.</p>
+        ) : null}
       </div>
     </Card>
   );
