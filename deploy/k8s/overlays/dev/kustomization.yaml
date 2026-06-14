@@ -13,7 +13,7 @@ images:
     newTag: 04d1364dd398412118caa81b47c3395804451a5d
   - name: liga360-frontend
     newName: bcanevaro/liga360-frontend
-    newTag: 0a1f40bf25de81ed28c27da3c4fd9b5d7baafd9f
+    newTag: d1940e0bd92dfade94b705fc002168a01217f77c
   - name: liga360-gateway
     newName: bcanevaro/liga360-gateway
     newTag: 871510f6c005ce23ba65a6ac9243d1d137c0af06
