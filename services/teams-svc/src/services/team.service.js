@@ -10,13 +10,13 @@ function notFound(message) {
   return Object.assign(new Error(message), { statusCode: 404, code: 'NOT_FOUND' });
 }
 
-export async function listTeams({ onlyMine, userId }) {
+export async function listTeams({ onlyMine, userId, limit, offset }) {
   if (!onlyMine) {
-    return { teams: await teamRepo.listAll(pool) };
+    return { teams: await teamRepo.listAll(pool, { limit, offset }) };
   }
   // El profileId del usuario es un lookup local (misma DB tras la fusión identity→teams).
   const profile = await profileRepo.findByUserId(pool, userId);
-  return { teams: await teamRepo.listMine(pool, userId, profile?.id ?? null) };
+  return { teams: await teamRepo.listMine(pool, userId, profile?.id ?? null, { limit, offset }) };
 }
 
 export async function createTeam({ name, badgeUrl, ownerUserId }) {

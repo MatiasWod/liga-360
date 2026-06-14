@@ -4,13 +4,16 @@ import { buildInviteCodeCandidate } from '../domain/invite.js';
 const TEAM_COLS = 'id, name, owner_user_id, badge_url, invite_code, elo, created_at, updated_at';
 const TEAM_COLS_T = 't.id, t.name, t.owner_user_id, t.badge_url, t.invite_code, t.elo, t.created_at, t.updated_at';
 
-export async function listAll(client) {
-  const r = await client.query(`SELECT ${TEAM_COLS} FROM "Team" ORDER BY id DESC`);
+export async function listAll(client, { limit = 200, offset = 0 } = {}) {
+  const r = await client.query(
+    `SELECT ${TEAM_COLS} FROM "Team" ORDER BY id DESC LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
   return r.rows;
 }
 
 /** Equipos del usuario: propios (owner) ∪ vinculados vía Participant.person_profile_id. */
-export async function listMine(client, userId, profileId) {
+export async function listMine(client, userId, profileId, { limit = 200, offset = 0 } = {}) {
   const r = await client.query(
     `WITH owned AS (
        SELECT ${TEAM_COLS_T} FROM "Team" t WHERE t.owner_user_id = $1
@@ -27,8 +30,9 @@ export async function listMine(client, userId, profileId) {
        UNION
        SELECT * FROM linked
      ) q
-     ORDER BY id DESC`,
-    [userId, profileId ?? null]
+     ORDER BY id DESC
+     LIMIT $3 OFFSET $4`,
+    [userId, profileId ?? null, limit, offset]
   );
   return r.rows;
 }

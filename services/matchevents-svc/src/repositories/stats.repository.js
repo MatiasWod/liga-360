@@ -33,10 +33,13 @@ const PRESENCE_CTE = (compFilter) => `
   )
 `;
 
-export async function scorers(client, { tournamentId, competitionId = null, limit = 50 }) {
+export async function scorers(client, { tournamentId, competitionId = null, limit = 200, offset = 0 }) {
   const params = [tournamentId];
   const compFilter = competitionFilter(competitionId, params);
-  params.push(Number(limit) || 50);
+  params.push(limit);
+  const limIdx = params.length;
+  params.push(offset);
+  const offIdx = params.length;
   const r = await client.query(
     `WITH ${PRESENCE_CTE(compFilter)},
      ev AS (
@@ -52,19 +55,18 @@ export async function scorers(client, { tournamentId, competitionId = null, limi
      )
      SELECT ev.*, presences.matches_played
      FROM ev LEFT JOIN presences USING (player_key)
-     ORDER BY ev.goals DESC, ev.display_name ASC
-     LIMIT $${params.length}`,
+     ORDER BY ev.goals DESC, ev.display_name ASC, ev.player_key ASC
+     LIMIT $${limIdx} OFFSET $${offIdx}`,
     params
   );
   return r.rows;
 }
 
 /** Goleadores agregados cross-torneo (sin filtro por competencia). */
-export async function scorersMulti(client, { tournamentIds = [], limit = 50 }) {
+export async function scorersMulti(client, { tournamentIds = [], limit = 200, offset = 0 }) {
   const ids = [...new Set(tournamentIds.map((id) => String(id || '').trim()).filter(Boolean))];
   if (!ids.length) return [];
-  const params = [ids];
-  params.push(Number(limit) || 50);
+  const params = [ids, limit, offset];
   const r = await client.query(
     `WITH presences AS (
        SELECT ${PLAYER_KEY_SQL} AS player_key, COUNT(*)::int AS matches_played
@@ -84,16 +86,20 @@ export async function scorersMulti(client, { tournamentIds = [], limit = 50 }) {
      )
      SELECT ev.*, presences.matches_played
      FROM ev LEFT JOIN presences USING (player_key)
-     ORDER BY ev.goals DESC, ev.display_name ASC
-     LIMIT $2`,
+     ORDER BY ev.goals DESC, ev.display_name ASC, ev.player_key ASC
+     LIMIT $2 OFFSET $3`,
     params
   );
   return r.rows;
 }
 
-export async function cards(client, { tournamentId, competitionId = null }) {
+export async function cards(client, { tournamentId, competitionId = null, limit = 200, offset = 0 }) {
   const params = [tournamentId];
   const compFilter = competitionFilter(competitionId, params);
+  params.push(limit);
+  const limIdx = params.length;
+  params.push(offset);
+  const offIdx = params.length;
   const r = await client.query(
     `WITH ${PRESENCE_CTE(compFilter)},
      ev AS (
@@ -111,15 +117,20 @@ export async function cards(client, { tournamentId, competitionId = null }) {
      )
      SELECT ev.*, presences.matches_played
      FROM ev LEFT JOIN presences USING (player_key)
-     ORDER BY ev.red_cards DESC, ev.yellow_cards DESC, ev.display_name ASC`,
+     ORDER BY ev.red_cards DESC, ev.yellow_cards DESC, ev.display_name ASC, ev.player_key ASC
+     LIMIT $${limIdx} OFFSET $${offIdx}`,
     params
   );
   return r.rows;
 }
 
-export async function teamStats(client, { tournamentId, competitionId = null }) {
+export async function teamStats(client, { tournamentId, competitionId = null, limit = 200, offset = 0 }) {
   const params = [tournamentId];
   const compFilter = competitionFilter(competitionId, params);
+  params.push(limit);
+  const limIdx = params.length;
+  params.push(offset);
+  const offIdx = params.length;
   const r = await client.query(
     `SELECT inscription_id,
             COUNT(*) FILTER (WHERE event_type = 'goal')::int AS goals,
@@ -128,18 +139,20 @@ export async function teamStats(client, { tournamentId, competitionId = null }) 
      FROM "MatchEvent"
      WHERE tournament_id = $1 AND inscription_id IS NOT NULL${compFilter}
      GROUP BY inscription_id
-     ORDER BY inscription_id`,
+     ORDER BY inscription_id
+     LIMIT $${limIdx} OFFSET $${offIdx}`,
     params
   );
   return r.rows;
 }
 
-export async function eventsByInscription(client, { tournamentId, inscriptionId }) {
+export async function eventsByInscription(client, { tournamentId, inscriptionId, limit = 200, offset = 0 }) {
   const r = await client.query(
     `SELECT * FROM "MatchEvent"
      WHERE tournament_id = $1 AND inscription_id = $2
-     ORDER BY created_at ASC, COALESCE(minute, 999999) ASC`,
-    [tournamentId, Number(inscriptionId)]
+     ORDER BY created_at ASC, COALESCE(minute, 999999) ASC, id ASC
+     LIMIT $3 OFFSET $4`,
+    [tournamentId, Number(inscriptionId), limit, offset]
   );
   return r.rows;
 }

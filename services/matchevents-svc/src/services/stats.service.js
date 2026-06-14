@@ -23,13 +23,13 @@ function toPlayerRow(row) {
   };
 }
 
-export async function getScorers({ tournamentId, competitionId, limit }) {
-  const rows = await statsRepo.scorers(pool, { tournamentId, competitionId, limit });
+export async function getScorers({ tournamentId, competitionId, limit, offset }) {
+  const rows = await statsRepo.scorers(pool, { tournamentId, competitionId, limit, offset });
   return rows.map((r) => ({ ...toPlayerRow(r), goals: r.goals }));
 }
 
-export async function getScorersMulti({ tournamentIds, limit }) {
-  const rows = await statsRepo.scorersMulti(pool, { tournamentIds, limit });
+export async function getScorersMulti({ tournamentIds, limit, offset }) {
+  const rows = await statsRepo.scorersMulti(pool, { tournamentIds, limit, offset });
   return rows.map((r) => ({
     ...toPlayerRow(r),
     goals: r.goals,
@@ -37,8 +37,8 @@ export async function getScorersMulti({ tournamentIds, limit }) {
   }));
 }
 
-export async function getCards({ tournamentId, competitionId }) {
-  const rows = await statsRepo.cards(pool, { tournamentId, competitionId });
+export async function getCards({ tournamentId, competitionId, limit, offset }) {
+  const rows = await statsRepo.cards(pool, { tournamentId, competitionId, limit, offset });
   return rows.map((r) => ({
     ...toPlayerRow(r),
     yellowCards: r.yellow_cards,
@@ -69,8 +69,8 @@ export async function getParticipantStats({ memberId, teamId = null }) {
   return { memberId: Number(memberId), totals, byTournament };
 }
 
-export async function getTeamStats({ tournamentId, competitionId }) {
-  const rows = await statsRepo.teamStats(pool, { tournamentId, competitionId });
+export async function getTeamStats({ tournamentId, competitionId, limit, offset }) {
+  const rows = await statsRepo.teamStats(pool, { tournamentId, competitionId, limit, offset });
   return rows.map((r) => ({
     inscriptionId: Number(r.inscription_id),
     goals: r.goals,
@@ -79,6 +79,6 @@ export async function getTeamStats({ tournamentId, competitionId }) {
   }));
 }
 
-export async function getEventsByInscription({ tournamentId, inscriptionId }) {
-  return statsRepo.eventsByInscription(pool, { tournamentId, inscriptionId });
+export async function getEventsByInscription({ tournamentId, inscriptionId, limit, offset }) {
+  return statsRepo.eventsByInscription(pool, { tournamentId, inscriptionId, limit, offset });
 }

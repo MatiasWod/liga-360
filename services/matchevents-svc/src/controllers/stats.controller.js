@@ -1,5 +1,6 @@
 import * as statsService from '../services/stats.service.js';
 import { sanitizeEventForViewer } from '../domain/matchEvent.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -7,20 +8,21 @@ function validationError(res, message) {
 
 /**
  * GET /stats/scorers — un solo recurso con filtros:
- * ?tournamentId=X[&competitionId][&limit] (por torneo) o ?tournamentIds=t1,t2[&limit] (cross-torneo).
+ * ?tournamentId=X[&competitionId] (por torneo) o ?tournamentIds=t1,t2 (cross-torneo).
+ * limit/offset paginan (limit = top-N efectivo, default 200, máx 1000).
  */
 export async function scorers(req, res, next) {
   try {
+    const { limit, offset } = parsePagination(req.query);
     const multiRaw = String(req.query?.tournamentIds || '').trim();
     if (multiRaw) {
       const tournamentIds = multiRaw.split(',').map((s) => s.trim()).filter(Boolean);
-      const { limit } = req.query;
-      return res.json(await statsService.getScorersMulti({ tournamentIds, limit }));
+      return res.json(await statsService.getScorersMulti({ tournamentIds, limit, offset }));
     }
     const tournamentId = String(req.query?.tournamentId || '').trim();
     if (!tournamentId) return validationError(res, 'tournamentId o tournamentIds requerido');
-    const { competitionId, limit } = req.query;
-    res.json(await statsService.getScorers({ tournamentId, competitionId: competitionId || null, limit }));
+    const { competitionId } = req.query;
+    res.json(await statsService.getScorers({ tournamentId, competitionId: competitionId || null, limit, offset }));
   } catch (e) {
     next(e);
   }
@@ -31,7 +33,8 @@ export async function cards(req, res, next) {
     const tournamentId = String(req.query?.tournamentId || '').trim();
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     const { competitionId } = req.query;
-    res.json(await statsService.getCards({ tournamentId, competitionId: competitionId || null }));
+    const { limit, offset } = parsePagination(req.query);
+    res.json(await statsService.getCards({ tournamentId, competitionId: competitionId || null, limit, offset }));
   } catch (e) {
     next(e);
   }
@@ -42,7 +45,8 @@ export async function teams(req, res, next) {
     const tournamentId = String(req.query?.tournamentId || '').trim();
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     const { competitionId } = req.query;
-    res.json(await statsService.getTeamStats({ tournamentId, competitionId: competitionId || null }));
+    const { limit, offset } = parsePagination(req.query);
+    res.json(await statsService.getTeamStats({ tournamentId, competitionId: competitionId || null, limit, offset }));
   } catch (e) {
     next(e);
   }
@@ -66,7 +70,8 @@ export async function eventsByInscription(req, res, next) {
     const { inscriptionId } = req.query;
     if (!tournamentId) return validationError(res, 'tournamentId requerido');
     if (!inscriptionId) return validationError(res, 'inscriptionId requerido');
-    const events = await statsService.getEventsByInscription({ tournamentId, inscriptionId });
+    const { limit, offset } = parsePagination(req.query);
+    const events = await statsService.getEventsByInscription({ tournamentId, inscriptionId, limit, offset });
     const isOrganizer = req.user?.type === 'organizer';
     res.json(events.map((ev) => sanitizeEventForViewer(ev, isOrganizer)));
   } catch (e) {

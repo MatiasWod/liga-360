@@ -1,8 +1,9 @@
 import { authHeaders, INSCRIPTIONS_BASE, parseResponse } from './client';
+import { PAGE_MAX_LIMIT } from '../pagination';
 import type { TournamentInvite } from './types';
 
 export async function listTournamentInvites(tournamentId: string): Promise<TournamentInvite[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/invites?tournamentId=${encodeURIComponent(tournamentId)}`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/invites?tournamentId=${encodeURIComponent(tournamentId)}&limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar invitaciones');
@@ -10,7 +11,7 @@ export async function listTournamentInvites(tournamentId: string): Promise<Tourn
 }
 
 export async function listCompetitionInvites(competitionId: string): Promise<TournamentInvite[]> {
-  const res = await fetch(`${INSCRIPTIONS_BASE}/invites?competitionId=${encodeURIComponent(competitionId)}`, {
+  const res = await fetch(`${INSCRIPTIONS_BASE}/invites?competitionId=${encodeURIComponent(competitionId)}&limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   const json = await parseResponse(res, 'No se pudieron cargar invitaciones');

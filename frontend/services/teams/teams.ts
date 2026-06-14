@@ -1,9 +1,11 @@
 import type { TeamInfo, TeamParticipant } from '../../types/domain';
 import { authHeaders, parseJsonResponse, TEAMS_BASE } from './client';
+import { PAGE_MAX_LIMIT } from '../pagination';
 import { readSessionUser } from './session';
 
 export async function getMyTeams(): Promise<TeamInfo[]> {
-  const res = await fetch(`${TEAMS_BASE}?mine=true`, { headers: authHeaders() });
+  // Equipos del usuario completos (alimentan la selección de equipo activo): pide el tope.
+  const res = await fetch(`${TEAMS_BASE}?mine=true&limit=${PAGE_MAX_LIMIT}`, { headers: authHeaders() });
   const json = await parseJsonResponse(res, 'No se pudieron cargar los equipos');
   const me = readSessionUser();
   return (json.teams || []).map((team: any) => ({

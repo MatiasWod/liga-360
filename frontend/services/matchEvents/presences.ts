@@ -1,5 +1,6 @@
 import { API_ENDPOINTS } from '../config';
 import { authHeaders } from '../http';
+import { PAGE_MAX_LIMIT } from '../pagination';
 
 /** Presencia de un partido (ADR-0002): snapshot opt-in cargado por el equipo. */
 export interface MatchPresence {
@@ -37,9 +38,9 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // matchevents-svc: mismas rutas /matches/:id que los eventos.
 const base = () => API_ENDPOINTS.matchEvents;
 
-/** Lectura pública de presencias del partido. */
+/** Lectura pública de presencias del partido (completas: alimentan el editor de plantilla). */
 export async function listMatchPresences(matchId: string): Promise<MatchPresence[]> {
-  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences`, {
+  const res = await fetch(`${base()}/${encodeURIComponent(matchId)}/presences?limit=${PAGE_MAX_LIMIT}`, {
     headers: authHeaders(),
   });
   return handleResponse<MatchPresence[]>(res);

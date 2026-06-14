@@ -1,5 +1,6 @@
 import * as presenceService from '../services/presence.service.js';
 import { normalizePresenceEntries } from '../domain/presence.js';
+import { parsePagination } from '@liga360/shared';
 
 function validationError(res, message) {
   return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
@@ -9,7 +10,8 @@ export async function list(req, res, next) {
   try {
     const { matchId } = req.params;
     if (!matchId) return validationError(res, 'matchId requerido');
-    res.json(await presenceService.listByMatch(matchId));
+    const { limit, offset } = parsePagination(req.query);
+    res.json(await presenceService.listByMatch(matchId, { limit, offset }));
   } catch (e) {
     next(e);
   }
