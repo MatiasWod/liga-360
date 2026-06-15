@@ -2,6 +2,10 @@
 
 Monorepo con frontend React y backend en microservicios para gestión de torneos, equipos, participantes, inscripciones e invitaciones.
 
+## Documentación de la API
+
+La API REST está documentada en SwaggerHub: https://app.swaggerhub.com/apis-docs/MATIASWODTKE/liga-360/2.0.0#/
+
 ## Stack del proyecto
 
 - Frontend: React + Vite + Tailwind (`frontend/`)
@@ -21,6 +25,23 @@ Monorepo con frontend React y backend en microservicios para gestión de torneos
 - Docker Desktop encendido
 - Docker Compose
 
+## Configuración (`.env`)
+
+Copiar el ejemplo y ajustar lo necesario:
+
+```bash
+cp .env.example .env
+```
+
+Variables relevantes:
+
+- **PostgreSQL / Neo4j**: credenciales de las bases.
+- **`JWT_SECRET`**: secreto compartido para firmar/validar los JWT. Generar uno propio en cualquier entorno real (`openssl rand -hex 64`).
+- **Admin bootstrap (`ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD`)**: auth-svc crea este usuario admin al arrancar (no hay registro de admins). Cambiar fuera de dev local.
+- **Mail (`SMTP_*`, `FRONTEND_URL`)**: envío de los mails de verificación de cuenta. Si `SMTP_HOST` queda vacío, no se manda el mail y el registro igual funciona.
+
+Para desarrollo local los defaults del `.env.example` alcanzan.
+
 ## Arranque rápido
 
 ### Opción recomendada (todo en Docker)
@@ -31,6 +52,8 @@ docker compose up -d --build
 
 Abrir frontend en: http://localhost:5173
 
+Usuario admin por defecto (dev): `admin` / `admin123`.
+
 ## Health checks rápidos
 
 ```bash
@@ -39,6 +62,7 @@ curl -s http://localhost:4001/health
 curl -s http://localhost:4002/health
 curl -s http://localhost:4003/health
 curl -s http://localhost:4004/health
+curl -s http://localhost:4006/health
 ```
 
 ## Flujo mínimo sugerido
