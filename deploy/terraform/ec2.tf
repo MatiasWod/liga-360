@@ -379,3 +379,4 @@ resource "aws_lb_target_group_attachment" "attach_30443" {
   target_id        = aws_instance.k3s_node.id
 }
 
+
