@@ -3,10 +3,8 @@
 Monorepo con frontend React y backend en microservicios para gestión de torneos, equipos, participantes, inscripciones e invitaciones.
 
 ## Integrantes
-- Juan Segundo Arnaude - Legajo: 62184
-- Ian James Arnott - Legajo: 61267
+- Bruno Baumgart - Legajo: 62161
 - Bautista Ignacio Canevaro - Legajo: 62179
-- Juan Adolfo Rosauer Herrmann - Legajo: 61240
 - Matías Wodtke - Legajo: 62098
 
 ## Documentación de la API
