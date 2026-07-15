@@ -2,6 +2,13 @@
 
 Monorepo con frontend React y backend en microservicios para gestión de torneos, equipos, participantes, inscripciones e invitaciones.
 
+## Integrantes
+- Juan Segundo Arnaude - Legajo: 62184
+- Ian James Arnott - Legajo: 61267
+- Bautista Ignacio Canevaro - Legajo: 62179
+- Juan Adolfo Rosauer Herrmann - Legajo: 61240
+- Matías Wodtke - Legajo: 62098
+
 ## Documentación de la API
 
 La API REST está documentada en SwaggerHub: https://app.swaggerhub.com/apis-docs/MATIASWODTKE/liga-360/2.0.0#/
